@@ -1,0 +1,52 @@
+{
+  "name": "productexchange_backend",
+  "version": "1.0.0",
+  "description": "ProductExchange Backend API",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write src/**/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tuananh3232/ProductExchange_Backend.git"
+  },
+  "keywords": [
+    "express",
+    "nodejs",
+    "backend",
+    "rest-api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tuananh3232/ProductExchange_Backend/issues"
+  },
+  "homepage": "https://github.com/tuananh3232/ProductExchange_Backend#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.0",
+    "morgan": "^1.10.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "prettier": "^3.2.5",
+    "supertest": "^7.2.2"
+  }
+}
