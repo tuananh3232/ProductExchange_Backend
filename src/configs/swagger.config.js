@@ -10,8 +10,8 @@ const swaggerDefinition = {
     contact: { name: 'Dev Team', email: 'dev@productexchange.vn' },
   },
   servers: [
-    { url: `http://localhost:${env.port}${env.apiPrefix}`, description: 'Development' },
-    { url: `https://api.productexchange.vn${env.apiPrefix}`, description: 'Production' },
+    { url: `http://localhost:${env.port}`, description: 'Development' },
+    { url: 'https://api.productexchange.vn', description: 'Production' },
   ],
   components: {
     securitySchemes: {
@@ -34,7 +34,11 @@ const swaggerDefinition = {
             properties: { url: { type: 'string' }, publicId: { type: 'string' } },
           },
           phone: { type: 'string', example: '0901234567' },
-          role: { type: 'string', enum: ['user', 'admin'] },
+          role: { type: 'string', enum: ['user', 'admin', 'seller', 'shop_owner', 'staff', 'delivery'] },
+          roles: {
+            type: 'array',
+            items: { type: 'string' },
+          },
           rating: {
             type: 'object',
             properties: { average: { type: 'number' }, count: { type: 'integer' } },
@@ -66,6 +70,150 @@ const swaggerDefinition = {
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
+      Shop: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          name: { type: 'string', example: 'Shop Anh Decor' },
+          slug: { type: 'string', example: 'shop-anh-decor' },
+          description: { type: 'string' },
+          logo: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' },
+              publicId: { type: 'string' },
+            },
+          },
+          phone: { type: 'string', example: '0901234567' },
+          email: { type: 'string', example: 'shop@example.com' },
+          address: {
+            type: 'object',
+            properties: {
+              province: { type: 'string' },
+              district: { type: 'string' },
+              detail: { type: 'string' },
+            },
+          },
+          owner: { $ref: '#/components/schemas/User' },
+          staff: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/User' },
+          },
+          staffPermissions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                staffUser: { $ref: '#/components/schemas/User' },
+                permissions: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                updatedBy: { $ref: '#/components/schemas/User' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          isActive: { type: 'boolean' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Order: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          buyer: { $ref: '#/components/schemas/User' },
+          shop: { $ref: '#/components/schemas/Shop' },
+          product: { $ref: '#/components/schemas/Product' },
+          deliveryStaff: { $ref: '#/components/schemas/User' },
+          quantity: { type: 'integer' },
+          unitPrice: { type: 'number' },
+          totalAmount: { type: 'number' },
+          status: { type: 'string', enum: ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled'] },
+          shippingAddress: {
+            type: 'object',
+            properties: {
+              recipientName: { type: 'string' },
+              phone: { type: 'string' },
+              province: { type: 'string' },
+              district: { type: 'string' },
+              detail: { type: 'string' },
+            },
+          },
+          history: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                status: { type: 'string' },
+                note: { type: 'string' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Delivery: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          order: { $ref: '#/components/schemas/Order' },
+          shop: { $ref: '#/components/schemas/Shop' },
+          buyer: { $ref: '#/components/schemas/User' },
+          deliveryStaff: { $ref: '#/components/schemas/User' },
+          status: { type: 'string', enum: ['assigned', 'accepted', 'picked_up', 'in_transit', 'delivered', 'failed'] },
+          history: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                status: { type: 'string' },
+                note: { type: 'string' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Payment: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          order: { $ref: '#/components/schemas/Order' },
+          buyer: { $ref: '#/components/schemas/User' },
+          amount: { type: 'number' },
+          provider: { type: 'string', example: 'vnpay' },
+          method: { type: 'string', example: 'vnpay' },
+          status: { type: 'string', enum: ['unpaid', 'pending_payment', 'paid', 'failed', 'cancelled'] },
+          transactionRef: { type: 'string' },
+          bankCode: { type: 'string' },
+          responseCode: { type: 'string' },
+          vnpTransactionNo: { type: 'string' },
+          paidAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Permission: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          code: { type: 'string', example: 'product:create' },
+          name: { type: 'string', example: 'Tạo sản phẩm' },
+        },
+      },
+      Role: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          code: { type: 'string', example: 'shop_owner' },
+          name: { type: 'string', example: 'Shop Owner' },
+          permissions: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/Permission' },
+          },
+        },
+      },
       // ===== Category =====
       Category: {
         type: 'object',
@@ -86,6 +234,18 @@ const swaggerDefinition = {
           offeredProduct: { $ref: '#/components/schemas/Product' },
           message: { type: 'string' },
           status: { type: 'string', enum: ['pending', 'accepted', 'rejected', 'cancelled', 'completed'] },
+          history: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                status: { type: 'string' },
+                note: { type: 'string' },
+                updatedBy: { $ref: '#/components/schemas/User' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
@@ -120,6 +280,11 @@ const swaggerDefinition = {
           success: { type: 'boolean', example: false },
           message: { type: 'string', example: 'Đã xảy ra lỗi' },
           error: { type: 'string', example: 'Error message in English' },
+          details: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Thông tin lỗi chi tiết, thường dùng cho validation',
+          },
         },
       },
     },
@@ -132,4 +297,22 @@ const options = {
   apis: ['./src/routes/*.js', './src/controllers/*.js'], // JSDoc annotations
 };
 
-export const swaggerSpec = swaggerJsdoc(options);
+const rawSwaggerSpec = swaggerJsdoc(options);
+const normalizedApiPrefix = env.apiPrefix && env.apiPrefix !== '/'
+  ? env.apiPrefix.replace(/\/+$/, '')
+  : '';
+
+const prefixedPaths = Object.fromEntries(
+  Object.entries(rawSwaggerSpec.paths || {}).map(([path, pathItem]) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const finalPath = normalizedApiPrefix
+      ? `${normalizedApiPrefix}${normalizedPath}`
+      : normalizedPath;
+    return [finalPath, pathItem];
+  })
+);
+
+export const swaggerSpec = {
+  ...rawSwaggerSpec,
+  paths: prefixedPaths,
+};
