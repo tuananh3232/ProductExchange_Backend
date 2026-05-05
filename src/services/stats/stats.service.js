@@ -2,7 +2,6 @@ import mongoose from 'mongoose'
 import Order from '../../models/order.model.js'
 import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
-import Delivery from '../../models/delivery.model.js'
 import Payment from '../../models/payment.model.js'
 import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -10,7 +9,7 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 import ERRORS from '../../constants/error.constant.js'
 import { PERMISSIONS } from '../../constants/permission.constant.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
-import { DELIVERY_STATUS, ORDER_STATUS, PAYMENT_STATUS, PRODUCT_STATUS } from '../../constants/status.constant.js'
+import { ORDER_STATUS, PAYMENT_STATUS, PRODUCT_STATUS } from '../../constants/status.constant.js'
 
 const TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -278,14 +277,12 @@ const buildAdminOverview = async (query = {}) => {
     revenueSummary,
     orderRows,
     productRows,
-    deliveryRows,
     totalShops,
     totalUsers,
   ] = await Promise.all([
     getRevenueSummary({ match: paidAtMatch }),
     aggregateStatusSummary(Order, createdAtMatch),
     aggregateStatusSummary(Product, createdAtMatch),
-    aggregateStatusSummary(Delivery, createdAtMatch),
     Shop.countDocuments({ ...createdAtMatch, isActive: true }),
     User.countDocuments({ ...createdAtMatch, isActive: true }),
   ])
@@ -297,11 +294,9 @@ const buildAdminOverview = async (query = {}) => {
       users: totalUsers,
       orders: await Order.countDocuments({ ...createdAtMatch, isActive: true }),
       products: await Product.countDocuments({ ...createdAtMatch, isActive: true }),
-      deliveries: await Delivery.countDocuments({ ...createdAtMatch, isActive: true }),
     },
     orders: fillStatusSummary(Object.values(ORDER_STATUS), orderRows),
     products: fillStatusSummary(Object.values(PRODUCT_STATUS), productRows),
-    deliveries: fillStatusSummary(Object.values(DELIVERY_STATUS), deliveryRows),
   }
 }
 
@@ -327,11 +322,10 @@ const buildShopOverview = async (shopId, userContext, query = {}) => {
   const paidAtMatch = parseDateFilter(query, 'paidAt')
   const shopObjectId = toObjectId(shopId)
 
-  const [revenueSummary, orderRows, productRows, deliveryRows, topProducts, revenueSeries] = await Promise.all([
+  const [revenueSummary, orderRows, productRows, topProducts, revenueSeries] = await Promise.all([
     getRevenueSummary({ match: paidAtMatch, shopId }),
     aggregateStatusSummary(Order, { ...createdAtMatch, shop: shopObjectId }),
     aggregateStatusSummary(Product, { ...createdAtMatch, shop: shopObjectId }),
-    aggregateStatusSummary(Delivery, { ...createdAtMatch, shop: shopObjectId }),
     getTopProducts({ match: paidAtMatch, shopId }),
     getRevenueSeries({ match: paidAtMatch, shopId, period: query.period }),
   ])
@@ -372,30 +366,12 @@ const buildShopOverview = async (shopId, userContext, query = {}) => {
     totals: {
       orders: await Order.countDocuments({ ...createdAtMatch, shop: shopObjectId, isActive: true }),
       products: await Product.countDocuments({ ...createdAtMatch, shop: shopObjectId, isActive: true }),
-      deliveries: await Delivery.countDocuments({ ...createdAtMatch, shop: shopObjectId, isActive: true }),
       staff: (shop.staff || []).length,
     },
     orders: fillStatusSummary(Object.values(ORDER_STATUS), orderRows),
     products: fillStatusSummary(Object.values(PRODUCT_STATUS), productRows),
-    deliveries: fillStatusSummary(Object.values(DELIVERY_STATUS), deliveryRows),
     staff,
     topProducts,
-  }
-}
-
-const buildShopRevenue = async (shopId, userContext, query = {}) => {
-  await assertShopPermission({
-    user: userContext,
-    shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
-    message: 'Bạn không có quyền xem thống kê của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
-  })
-
-  const paidAtMatch = parseDateFilter(query, 'paidAt')
-  return {
-    summary: await getRevenueSummary({ match: paidAtMatch, shopId }),
-    series: await getRevenueSeries({ match: paidAtMatch, shopId, period: query.period }),
   }
 }
 
@@ -475,60 +451,6 @@ const buildShopStaff = async (shopId, userContext) => {
   }
 }
 
-const buildShopDeliveries = async (shopId, userContext, query = {}) => {
-  await assertShopPermission({
-    user: userContext,
-    shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
-    message: 'Bạn không có quyền xem thống kê của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
-  })
-
-  const createdAtMatch = parseDateFilter(query, 'createdAt')
-  const shopObjectId = toObjectId(shopId)
-  const statusRows = await aggregateStatusSummary(Delivery, { ...createdAtMatch, shop: shopObjectId })
-  const topStaff = await Delivery.aggregate([
-    { $match: { ...createdAtMatch, shop: shopObjectId } },
-    {
-      $group: {
-        _id: '$deliveryStaff',
-        deliveryCount: { $sum: 1 },
-        deliveredCount: {
-          $sum: {
-            $cond: [{ $eq: ['$status', DELIVERY_STATUS.DELIVERED] }, 1, 0],
-          },
-        },
-      },
-    },
-    { $sort: { deliveryCount: -1 } },
-    { $limit: 5 },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'staff',
-      },
-    },
-    { $unwind: '$staff' },
-    {
-      $project: {
-        _id: 0,
-        staffId: '$_id',
-        staffName: '$staff.name',
-        staffEmail: '$staff.email',
-        deliveryCount: 1,
-        deliveredCount: 1,
-      },
-    },
-  ])
-
-  return {
-    summary: fillStatusSummary(Object.values(DELIVERY_STATUS), statusRows),
-    topStaff,
-  }
-}
-
 export const getAdminRevenue = async (query = {}) => {
   const paidAtMatch = parseDateFilter(query, 'paidAt')
   return {
@@ -550,9 +472,7 @@ export const getAdminTopProducts = async (query = {}) => {
 export {
   buildAdminOverview as getAdminOverview,
   buildShopOverview as getShopOverview,
-  buildShopRevenue as getShopRevenue,
   buildShopProducts as getShopProducts,
   buildShopOrders as getShopOrders,
   buildShopStaff as getShopStaff,
-  buildShopDeliveries as getShopDeliveries,
 }

@@ -42,14 +42,14 @@ describe('Payment API', () => {
     buyer = await User.create({
       name: 'Payment Buyer',
       email: 'payment-buyer@example.com',
-      password: 'password123',
+          password: '123456',
       roles: ['user'],
     });
 
     shopOwner = await User.create({
       name: 'Payment Shop Owner',
       email: 'payment-owner@example.com',
-      password: 'password123',
+          password: '123456',
       roles: ['shop_owner'],
     });
 

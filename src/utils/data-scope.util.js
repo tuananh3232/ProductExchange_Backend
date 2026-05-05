@@ -28,12 +28,6 @@ export const canAccessByShop = (user, shopId) => {
   return includesId(userShopIds, shopId);
 };
 
-export const canAccessByDelivery = (user, deliveryAssigneeId) => {
-  if (!deliveryAssigneeId) return false;
-  if (!hasRole(user, ROLES.DELIVERY)) return false;
-  return user && user._id && user._id.toString() === deliveryAssigneeId.toString();
-};
-
 export const canAccessShopPermission = async (user, shopId, permissionKey) => {
   if (!shopId || !permissionKey) return false;
   if (isAdmin(user)) return true;
@@ -84,7 +78,6 @@ export const assertDataScope = ({
   user,
   ownerId,
   shopId,
-  deliveryAssigneeId,
   message = 'Bạn không có quyền truy cập dữ liệu này',
   errorCode = ERRORS.AUTH.FORBIDDEN,
 }) => {
@@ -92,9 +85,8 @@ export const assertDataScope = ({
 
   const passOwner = canAccessByOwner(user, ownerId);
   const passShop = canAccessByShop(user, shopId);
-  const passDelivery = canAccessByDelivery(user, deliveryAssigneeId);
 
-  if (passOwner || passShop || passDelivery) {
+  if (passOwner || passShop) {
     return;
   }
 

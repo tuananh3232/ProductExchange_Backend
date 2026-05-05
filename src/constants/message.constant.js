@@ -28,27 +28,6 @@ const MESSAGES = {
     IMAGE_REMOVED: 'Xóa ảnh sản phẩm thành công',
   },
 
-  // Exchange
-  EXCHANGE: {
-    CREATED: 'Gửi đề xuất trao đổi thành công',
-    FETCHED: 'Lấy danh sách đề xuất thành công',
-    DETAIL_FETCHED: 'Lấy chi tiết đề xuất thành công',
-    ACCEPTED: 'Chấp nhận đề xuất trao đổi thành công',
-    REJECTED: 'Từ chối đề xuất trao đổi',
-    CANCELLED: 'Hủy đề xuất trao đổi thành công',
-    COMPLETED: 'Xác nhận hoàn tất trao đổi thành công',
-  },
-
-  // User
-  USER: {
-    FETCHED: 'Lấy danh sách người dùng thành công',
-    DETAIL_FETCHED: 'Lấy thông tin người dùng thành công',
-    UPDATED: 'Cập nhật người dùng thành công',
-    DELETED: 'Xóa người dùng thành công',
-    BANNED: 'Khóa tài khoản thành công',
-    UNBANNED: 'Mở khóa tài khoản thành công',
-  },
-
   SHOP: {
     CREATED: 'Đăng ký shop thành công',
     FETCHED: 'Lấy danh sách shop thành công',
@@ -70,15 +49,6 @@ const MESSAGES = {
     STATUS_UPDATED: 'Cập nhật trạng thái đơn hàng thành công',
   },
 
-  DELIVERY: {
-    ASSIGNED: 'Gán đơn cho nhân viên giao hàng thành công',
-    FETCHED: 'Lấy danh sách đơn giao hàng thành công',
-    DETAIL_FETCHED: 'Lấy chi tiết đơn giao hàng thành công',
-    ACCEPTED: 'Nhân viên giao hàng đã nhận đơn',
-    PICKED_UP: 'Cập nhật trạng thái lấy hàng thành công',
-    STATUS_UPDATED: 'Cập nhật trạng thái giao hàng thành công',
-    COMPLETED: 'Hoàn tất đơn giao thành công',
-  },
 
   STATS: {
     ADMIN_OVERVIEW_FETCHED: 'Lấy thống kê tổng quan hệ thống thành công',
@@ -90,7 +60,6 @@ const MESSAGES = {
     SHOP_PRODUCTS_FETCHED: 'Lấy thống kê sản phẩm shop thành công',
     SHOP_ORDERS_FETCHED: 'Lấy thống kê đơn hàng shop thành công',
     SHOP_STAFF_FETCHED: 'Lấy thống kê nhân sự shop thành công',
-    SHOP_DELIVERIES_FETCHED: 'Lấy thống kê giao hàng shop thành công',
   },
 
   PAYMENT: {
@@ -104,6 +73,13 @@ const MESSAGES = {
     ROLE_UPDATED: 'Cập nhật quyền cho vai trò thành công',
     USER_ROLES_UPDATED: 'Cập nhật vai trò người dùng thành công',
     SEED_SUCCESS: 'Khởi tạo dữ liệu RBAC thành công',
+  },
+  CATEGORY: {
+    CREATED: 'Tạo danh mục thành công',
+    FETCHED: 'Lấy danh sách danh mục thành công',
+    DETAIL_FETCHED: 'Lấy chi tiết danh mục thành công',
+    UPDATED: 'Cập nhật danh mục thành công',
+    DELETED: 'Xóa danh mục thành công',
   },
 };
 

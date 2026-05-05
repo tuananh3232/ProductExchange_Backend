@@ -8,11 +8,10 @@ import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
-  available: ['hidden', 'pending', 'sold', 'exchanged'],
+  available: ['hidden', 'pending', 'sold'],
   hidden: ['available'],
-  pending: ['available', 'hidden', 'sold', 'exchanged'],
+  pending: ['available', 'hidden', 'sold'],
   sold: [],
-  exchanged: [],
 }
 
 const normalizeQueryId = (value) => {

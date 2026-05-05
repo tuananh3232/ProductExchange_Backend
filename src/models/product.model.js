@@ -21,7 +21,7 @@ const productSchema = new mongoose.Schema(
     },
     listingType: {
       type: String,
-      enum: ['sell', 'exchange', 'both'],
+      enum: ['sell'],
       required: [true, 'Listing type is required'],
     },
     condition: {
@@ -61,11 +61,6 @@ const productSchema = new mongoose.Schema(
       default: 'available',
     },
     views: { type: Number, default: 0 },
-    exchangeFor: {
-      type: String,
-      default: '',
-      maxlength: [500, 'Exchange description must not exceed 500 characters'],
-    },
     isActive: { type: Boolean, default: true },
   },
   {

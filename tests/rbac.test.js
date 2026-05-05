@@ -24,7 +24,7 @@ describe('RBAC API', () => {
     const admin = await User.create({
       name: 'Admin',
       email: 'admin-rbac@example.com',
-      password: 'password123',
+      password: '12345',
       role: 'admin',
       roles: ['admin'],
     });
@@ -32,7 +32,7 @@ describe('RBAC API', () => {
     const user = await User.create({
       name: 'Normal User',
       email: 'user-rbac@example.com',
-      password: 'password123',
+      password: '12345',
       role: 'user',
       roles: ['user'],
     });

@@ -1,5 +1,6 @@
 import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
+import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -87,7 +88,8 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
 }
 
 export const createOrder = async (buyerId, payload) => {
-  const product = await Product.findById(payload.productId).select('_id owner shop status listingType price isActive title')
+  const productId = payload.productId || payload.product
+  const product = await Product.findById(productId).select('_id owner shop status listingType price isActive title')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
@@ -111,6 +113,13 @@ export const createOrder = async (buyerId, payload) => {
   const quantity = payload.quantity || 1
   const unitPrice = product.price
   const totalAmount = unitPrice * quantity
+  // If shippingAddress is not provided or empty, use buyer's profile address
+  let shippingAddress = payload.shippingAddress || {}
+  const isEmptyAddress = !shippingAddress || (!shippingAddress.province && !shippingAddress.district && !shippingAddress.detail)
+  if (isEmptyAddress) {
+    const buyer = await User.findById(buyerId).select('address')
+    if (buyer && buyer.address) shippingAddress = buyer.address
+  }
 
   const order = await orderRepo.create({
     buyer: buyerId,
@@ -120,7 +129,7 @@ export const createOrder = async (buyerId, payload) => {
     unitPrice,
     totalAmount,
     status: ORDER_STATUS.PENDING,
-    shippingAddress: payload.shippingAddress || {},
+    shippingAddress,
     note: payload.note || '',
     history: [
       {

@@ -25,7 +25,7 @@ describe('Admin API', () => {
     const admin = await User.create({
       name: 'Admin',
       email: 'admin@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'admin',
       roles: ['admin'],
     });
@@ -36,7 +36,7 @@ describe('Admin API', () => {
     const user = await User.create({
       name: 'Regular User',
       email: 'user@example.com',
-      password: 'password123',
+      password: '123456',
     });
     userId = user._id;
   });
@@ -59,7 +59,7 @@ describe('Admin API', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'user@example.com',
-          password: 'password123',
+          password: '12345',
         });
 
       expect(loginRes.statusCode).toBe(403);
@@ -128,7 +128,7 @@ describe('Admin API', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'user@example.com',
-          password: 'password123',
+          password: '12345',
         });
 
       expect(loginRes.statusCode).toBe(200);

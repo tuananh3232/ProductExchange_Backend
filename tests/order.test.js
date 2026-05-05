@@ -18,11 +18,7 @@ let shop;
 let product;
 let category;
 
-const createToken = async (userId, role = 'user') => {
-  const jwt = await import('jsonwebtoken');
-  const { env } = await import('../src/configs/env.config.js');
-  return jwt.default.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
-};
+import { createToken } from './fixtures/testData.js'
 
 describe('Order API', () => {
   beforeEach(async () => {
@@ -37,7 +33,7 @@ describe('Order API', () => {
     buyer = await User.create({
       name: 'Buyer',
       email: 'buyer-order@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'user',
       roles: ['user'],
     });
@@ -45,7 +41,7 @@ describe('Order API', () => {
     shopOwner = await User.create({
       name: 'Shop Owner',
       email: 'owner-order@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'shop_owner',
       roles: ['shop_owner'],
     });
@@ -53,7 +49,7 @@ describe('Order API', () => {
     staff = await User.create({
       name: 'Shop Staff',
       email: 'staff-order@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'staff',
       roles: ['staff'],
     });
@@ -61,7 +57,7 @@ describe('Order API', () => {
     outsider = await User.create({
       name: 'Outsider',
       email: 'outsider-order@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'user',
       roles: ['user'],
     });

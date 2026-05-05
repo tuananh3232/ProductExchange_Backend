@@ -7,8 +7,7 @@ import Category from '../src/models/category.model.js';
 import Product from '../src/models/product.model.js';
 import Order from '../src/models/order.model.js';
 import Payment from '../src/models/payment.model.js';
-import Delivery from '../src/models/delivery.model.js';
-import { PAYMENT_STATUS, ORDER_STATUS, DELIVERY_STATUS } from '../src/constants/status.constant.js';
+import { PAYMENT_STATUS, ORDER_STATUS } from '../src/constants/status.constant.js';
 import { env } from '../src/configs/env.config.js';
 
 jest.setTimeout(30000);
@@ -30,7 +29,6 @@ describe('Statistics API', () => {
 
   beforeEach(async () => {
     await Promise.all([
-      Delivery.deleteMany({}),
       Payment.deleteMany({}),
       Order.deleteMany({}),
       Product.deleteMany({}),
@@ -42,7 +40,7 @@ describe('Statistics API', () => {
     adminUser = await User.create({
       name: 'Stats Admin',
       email: 'stats-admin@example.com',
-      password: 'password123',
+      password: '123456',
       roles: ['admin'],
       role: 'admin',
     });
@@ -50,7 +48,7 @@ describe('Statistics API', () => {
     ownerUser = await User.create({
       name: 'Stats Owner',
       email: 'stats-owner@example.com',
-      password: 'password123',
+      password: '123456',
       roles: ['shop_owner'],
       role: 'shop_owner',
     });
@@ -58,7 +56,7 @@ describe('Statistics API', () => {
     buyerUser = await User.create({
       name: 'Stats Buyer',
       email: 'stats-buyer@example.com',
-      password: 'password123',
+      password: '123456',
       roles: ['user'],
     });
 
@@ -111,15 +109,7 @@ describe('Statistics API', () => {
       paidAt: new Date('2026-04-20T08:00:00.000Z'),
     });
 
-    await Delivery.create({
-      order: order._id,
-      shop: shop._id,
-      buyer: buyerUser._id,
-      deliveryStaff: ownerUser._id,
-      status: DELIVERY_STATUS.DELIVERED,
-      deliveredAt: new Date('2026-04-21T08:00:00.000Z'),
-      history: [{ status: DELIVERY_STATUS.DELIVERED, updatedBy: ownerUser._id, note: 'done' }],
-    });
+
   });
 
   afterAll(async () => {

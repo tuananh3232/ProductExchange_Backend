@@ -36,10 +36,13 @@ const router = Router()
  *         schema: { type: string }
  *       - in: query
  *         name: category
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           description: MongoDB ObjectId của category
+ *           example: 507f1f77bcf86cd799439011
  *       - in: query
  *         name: listingType
- *         schema: { type: string, enum: [sell, exchange, both] }
+ *         schema: { type: string, enum: [sell] }
  *       - in: query
  *         name: minPrice
  *         schema: { type: number }
@@ -67,12 +70,14 @@ const router = Router()
  *                 type: number
  *               listingType:
  *                 type: string
- *                 enum: [sell, exchange, both]
+ *                 enum: [sell]
  *               condition:
  *                 type: string
  *                 enum: [new, like_new, good, fair, poor]
  *               category:
  *                 type: string
+ *                 description: MongoDB ObjectId của category
+ *                 example: 507f1f77bcf86cd799439011
  *     responses:
  *       201:
  *         description: Thành công
@@ -176,7 +181,7 @@ export default router
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [available, pending, sold, exchanged, hidden]
+ *                 enum: [available, pending, sold, hidden]
  *     responses:
  *       200:
  *         description: Cập nhật trạng thái thành công

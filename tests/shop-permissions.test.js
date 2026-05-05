@@ -30,13 +30,13 @@ describe('Shop staff permissions', () => {
     const owner = await User.create({
       name: 'Shop Owner',
       email: 'shop-owner-perm@example.com',
-      password: 'password123',
+      password: '123456',
     });
 
     const staff = await User.create({
       name: 'Shop Staff',
       email: 'shop-staff-perm@example.com',
-      password: 'password123',
+      password: '123456',
     });
 
     ownerId = owner._id;
@@ -54,13 +54,6 @@ describe('Shop staff permissions', () => {
 
     expect(shopRes.statusCode).toBe(201);
     shopId = shopRes.body.data.shop._id;
-
-    const addStaffRes = await request(app)
-      .post(`/api/v1/shops/${shopId}/staff`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ staffUserId: staffId.toString() });
-
-    expect(addStaffRes.statusCode).toBe(200);
   });
 
   it('should let owner tick permissions for staff and staff create a product in the shop', async () => {
@@ -79,6 +72,14 @@ describe('Shop staff permissions', () => {
 
     expect(beforeAssignRes.statusCode).toBe(403);
     expect(beforeAssignRes.body.success).toBe(false);
+
+    const addStaffRes = await request(app)
+      .post(`/api/v1/shops/${shopId}/staff`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ staffUserId: staffId.toString() });
+
+    expect(addStaffRes.statusCode).toBe(200);
+    expect(addStaffRes.body.success).toBe(true);
 
     const updatePermRes = await request(app)
       .put(`/api/v1/shops/${shopId}/staff/${staffId}/permissions`)

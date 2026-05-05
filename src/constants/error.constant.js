@@ -22,19 +22,9 @@ const ERRORS = {
     NOT_FOUND: 'Product not found',
     NOT_OWNER: 'You are not the owner of this product',
     UNAVAILABLE: 'Product is not available',
-    CANNOT_EXCHANGE_OWN: 'Cannot exchange your own product',
-    ALREADY_SOLD: 'Product has already been sold or exchanged',
+    ALREADY_SOLD: 'Product has already been sold',
     INVALID_STATUS_TRANSITION: 'Invalid product status transition',
     IMAGE_NOT_FOUND: 'Product image not found',
-  },
-
-  // Exchange
-  EXCHANGE: {
-    NOT_FOUND: 'Exchange request not found',
-    NOT_AUTHORIZED: 'You are not authorized to modify this exchange',
-    ALREADY_RESPONDED: 'Exchange request has already been responded to',
-    OFFERED_NOT_AVAILABLE: 'Your offered product is not available for exchange',
-    DUPLICATE_REQUEST: 'An exchange request for this product already exists',
   },
 
   SHOP: {
@@ -52,15 +42,6 @@ const ERRORS = {
     INVALID_STATUS_TRANSITION: 'Invalid order status transition',
     NOT_READY_FOR_PAYMENT: 'Order is not ready for payment',
     ALREADY_PAID: 'Order has already been paid',
-  },
-
-  DELIVERY: {
-    NOT_FOUND: 'Delivery not found',
-    ORDER_NOT_READY: 'Order is not ready for delivery assignment',
-    STAFF_NOT_FOUND: 'Delivery staff not found',
-    NOT_ALLOWED_ASSIGN: 'You are not allowed to assign this delivery',
-    NOT_ASSIGNED_STAFF: 'You are not assigned to this delivery',
-    INVALID_STATUS_TRANSITION: 'Invalid delivery status transition',
   },
 
   PAYMENT: {

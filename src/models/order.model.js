@@ -46,12 +46,6 @@ const orderSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    deliveryStaff: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-      index: true,
-    },
     quantity: {
       type: Number,
       default: 1,

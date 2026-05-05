@@ -40,14 +40,25 @@ export default router
  *         application/json:
  *           schema:
  *             type: object
- *             required: [product, quantity, shippingAddress]
+ *             required: [productId]
  *             properties:
- *               product:
+ *               productId:
  *                 type: string
+ *                 description: ID sản phẩm (MongoDB ObjectId)
+ *                 example: 507f1f77bcf86cd799439011
  *               quantity:
  *                 type: integer
+ *                 example: 1
  *               shippingAddress:
  *                 type: object
+ *                 description: Nếu không cung cấp, API sẽ dùng địa chỉ trong profile của người mua (nếu có)
+ *                 properties:
+ *                   province:
+ *                     type: string
+ *                   district:
+ *                     type: string
+ *                   detail:
+ *                     type: string
  *               note:
  *                 type: string
  *     responses:

@@ -10,24 +10,14 @@ let productId;
 let categoryId;
 let token;
 let shopId;
+import { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } from './fixtures/testData.js'
 
-const TEST_CATEGORY = {
-  name: 'Điện thoại',
-  slug: 'dien-thoai',
-};
+const seedDecorCategories = async () => {
+  const createdCategories = await Category.insertMany(TEST_CATEGORIES)
+  return Object.fromEntries(createdCategories.map((category) => [category.slug, category]))
+}
 
-const TEST_PRODUCT = {
-  title: 'iPhone 14 Pro Max',
-  description: 'Điện thoại iPhone 14 Pro Max 256GB, máy còn mới, đầy đủ phụ kiện',
-  price: 25000000,
-  listingType: 'sell',
-  condition: 'like_new',
-  exchangeFor: 'iPad Pro',
-  location: {
-    province: 'Hà Nội',
-    district: 'Hoàn Kiếm',
-  },
-};
+const getPrimaryProductForCategory = (categorySlug) => TEST_PRODUCTS_BY_CATEGORY[categorySlug][0]
 
 describe('Product API', () => {
   beforeEach(async () => {
@@ -37,26 +27,19 @@ describe('Product API', () => {
     await Category.deleteMany({});
     await Shop.deleteMany({});
 
-    // Create category
-    const catRes = await Category.create(TEST_CATEGORY);
-    categoryId = catRes._id;
+    const categoriesBySlug = await seedDecorCategories()
+    categoryId = categoriesBySlug['do-trang-tri']._id;
 
     // Create user and get token
     const userRes = await User.create({
       name: 'Test User',
       email: 'test@example.com',
-      password: 'password123',
+      password: '123456',
     });
     userId = userRes._id;
 
     // Manually generate token since we're not going through auth endpoint
-    const jwt = await import('jsonwebtoken');
-    const { env } = await import('../src/configs/env.config.js');
-    token = jwt.default.sign(
-      { userId: userId.toString(), role: 'user' },
-      env.jwt.secret,
-      { expiresIn: env.jwt.expiresIn }
-    );
+    token = await createToken(userId, 'user')
 
     const shop = await Shop.create({
       name: 'Test Shop',
@@ -69,27 +52,29 @@ describe('Product API', () => {
 
   describe('POST /api/v1/products', () => {
     it('should create a product', async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const res = await request(app)
         .post('/api/v1/products')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          ...TEST_PRODUCT,
+          ...productData,
           category: categoryId,
           shop: shopId,
         });
 
       expect(res.statusCode).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.product.title).toBe(TEST_PRODUCT.title);
+      expect(res.body.data.product.title).toBe(productData.title);
       expect(res.body.data.product.owner).toBe(userId.toString());
       expect(res.body.data.product.shop).toBe(shopId.toString());
     });
 
     it('should fail without authentication', async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const res = await request(app)
         .post('/api/v1/products')
         .send({
-          ...TEST_PRODUCT,
+          ...productData,
           category: categoryId,
         });
 
@@ -98,11 +83,12 @@ describe('Product API', () => {
     });
 
     it('should fail with missing required fields', async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const res = await request(app)
         .post('/api/v1/products')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          title: TEST_PRODUCT.title,
+          title: productData.title,
           // Missing other required fields
         });
 
@@ -114,11 +100,17 @@ describe('Product API', () => {
   describe('GET /api/v1/products', () => {
     beforeEach(async () => {
       // Create test products
-      await Product.create({
-        ...TEST_PRODUCT,
-        owner: userId,
-        category: categoryId,
-      });
+      const categoriesBySlug = await seedDecorCategories()
+      const seedEntries = Object.entries(TEST_PRODUCTS_BY_CATEGORY)
+      await Promise.all(
+        seedEntries.map(([slug, products]) =>
+          Product.create({
+            ...products[0],
+            owner: userId,
+            category: categoriesBySlug[slug]._id,
+          })
+        )
+      )
     });
 
     it('should get products list', async () => {
@@ -142,9 +134,10 @@ describe('Product API', () => {
     });
 
     it('should search products by title', async () => {
+      const searchTerm = TEST_PRODUCTS_BY_CATEGORY['tranh-treo-tuong'][0].title.split(' ')[0];
       const res = await request(app)
         .get('/api/v1/products')
-        .query({ search: 'iPhone' });
+        .query({ search: searchTerm });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -153,8 +146,9 @@ describe('Product API', () => {
 
   describe('GET /api/v1/products/:id', () => {
     beforeEach(async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const product = await Product.create({
-        ...TEST_PRODUCT,
+        ...productData,
         owner: userId,
         category: categoryId,
       });
@@ -181,8 +175,9 @@ describe('Product API', () => {
 
   describe('PATCH /api/v1/products/:id', () => {
     beforeEach(async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const product = await Product.create({
-        ...TEST_PRODUCT,
+        ...productData,
         owner: userId,
         category: categoryId,
       });
@@ -208,7 +203,7 @@ describe('Product API', () => {
       const user2 = await User.create({
         name: 'Another User',
         email: 'other@example.com',
-        password: 'password123',
+        password: '123456',
       });
 
       const jwt = await import('jsonwebtoken');
@@ -231,8 +226,9 @@ describe('Product API', () => {
 
   describe('DELETE /api/v1/products/:id', () => {
     beforeEach(async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const product = await Product.create({
-        ...TEST_PRODUCT,
+        ...productData,
         owner: userId,
         category: categoryId,
       });
@@ -255,8 +251,9 @@ describe('Product API', () => {
 
   describe('PATCH /api/v1/products/:id/status', () => {
     beforeEach(async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const product = await Product.create({
-        ...TEST_PRODUCT,
+        ...productData,
         owner: userId,
         category: categoryId,
         shop: shopId,
@@ -290,8 +287,9 @@ describe('Product API', () => {
 
   describe('Product image APIs', () => {
     beforeEach(async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
       const product = await Product.create({
-        ...TEST_PRODUCT,
+        ...productData,
         owner: userId,
         category: categoryId,
         shop: shopId,

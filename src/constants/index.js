@@ -8,13 +8,8 @@ export {
   PRODUCT_STATUS,
   PRODUCT_STATUS_ENUM,
   PRODUCT_STATUS_DESCRIPTIONS,
-  EXCHANGE_STATUS,
-  EXCHANGE_STATUS_ENUM,
-  EXCHANGE_STATUS_DESCRIPTIONS,
   ORDER_STATUS,
   ORDER_STATUS_ENUM,
-  DELIVERY_STATUS,
-  DELIVERY_STATUS_ENUM,
 } from './status.constant.js';
 export { default as PERMISSIONS, ROLE_PERMISSION_MAP } from './permission.constant.js';
 export { default as HTTP_STATUS } from './http-status.constant.js';

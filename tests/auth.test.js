@@ -2,17 +2,11 @@ import request from 'supertest';
 import app from '../src/server.js';
 import User from '../src/models/user.model.js';
 import crypto from 'crypto';
-
-const TEST_USER = {
-  name: 'Test User',
-  email: 'test@example.com',
-  password: 'password123',
-  confirmPassword: 'password123',
-};
+import { TEST_USER } from './fixtures/testData.js'
 
 const LOGIN_USER = {
-  email: 'test@example.com',
-  password: 'password123',
+  email: TEST_USER.email,
+  password: TEST_USER.password,
 };
 
 describe('Auth API', () => {
@@ -83,7 +77,7 @@ describe('Auth API', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'invalid@example.com',
-          password: 'password123',
+          password: '123456',
         });
 
       expect(res.statusCode).toBe(401);
@@ -246,7 +240,7 @@ describe('Auth API', () => {
         .post('/api/v1/auth/change-password')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          currentPassword: 'password123',
+          currentPassword: '123456',
           newPassword: 'newpassword123',
           confirmNewPassword: 'newpassword123',
         });
@@ -285,7 +279,7 @@ describe('Auth API', () => {
         .post('/api/v1/auth/change-password')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          currentPassword: 'password123',
+          currentPassword: '123456',
           newPassword: 'newpassword123',
           confirmNewPassword: 'different',
         });

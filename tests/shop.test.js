@@ -11,11 +11,7 @@ let staffToken;
 let outsiderToken;
 let shopId;
 
-const createToken = async (userId, role = 'user') => {
-  const jwt = await import('jsonwebtoken');
-  const { env } = await import('../src/configs/env.config.js');
-  return jwt.default.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
-};
+import { createToken } from './fixtures/testData.js'
 
 describe('Shop API', () => {
   beforeEach(async () => {
@@ -24,7 +20,7 @@ describe('Shop API', () => {
     const owner = await User.create({
       name: 'Shop Owner Candidate',
       email: 'shop-owner@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'user',
       roles: ['user'],
     });
@@ -32,7 +28,7 @@ describe('Shop API', () => {
     const staff = await User.create({
       name: 'Shop Staff Candidate',
       email: 'shop-staff@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'user',
       roles: ['user'],
     });
@@ -40,7 +36,7 @@ describe('Shop API', () => {
     const outsider = await User.create({
       name: 'Other Shop Owner',
       email: 'shop-outsider@example.com',
-      password: 'password123',
+      password: '123456',
       role: 'shop_owner',
       roles: ['shop_owner'],
     });

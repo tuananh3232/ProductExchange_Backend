@@ -121,10 +121,8 @@ const router = Router({ mergeParams: true })
  */
 
 router.get('/overview', authenticate, statsController.shopOverview)
-router.get('/revenue', authenticate, statsController.shopRevenue)
 router.get('/products', authenticate, statsController.shopProducts)
 router.get('/orders', authenticate, statsController.shopOrders)
 router.get('/staff', authenticate, statsController.shopStaff)
-router.get('/deliveries', authenticate, statsController.shopDeliveries)
 
 export default router

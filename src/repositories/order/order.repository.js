@@ -7,14 +7,12 @@ export const findById = (id) =>
     .populate('buyer', 'name email avatar')
     .populate('shop', 'name slug owner staff')
     .populate('product', 'title price status images owner shop')
-    .populate('deliveryStaff', 'name email phone roles')
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
   Order.find(filter)
     .populate('buyer', 'name email avatar')
     .populate('shop', 'name slug')
     .populate('product', 'title price status images')
-    .populate('deliveryStaff', 'name email')
     .sort({ [sortBy]: sortOrder })
     .skip(skip)
     .limit(limit)
@@ -27,4 +25,3 @@ export const updateById = (id, data) =>
     .populate('buyer', 'name email avatar')
     .populate('shop', 'name slug owner staff')
     .populate('product', 'title price status images owner shop')
-    .populate('deliveryStaff', 'name email phone roles')

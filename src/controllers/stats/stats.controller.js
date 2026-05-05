@@ -5,11 +5,9 @@ import {
   getAdminRevenue,
   getAdminTopProducts,
   getAdminTopShops,
-  getShopDeliveries,
   getShopOrders,
   getShopOverview,
   getShopProducts,
-  getShopRevenue,
   getShopStaff,
 } from '../../services/stats/stats.service.js'
 
@@ -73,17 +71,6 @@ export const shopOverview = async (req, res, next) => {
   }
 }
 
-export const shopRevenue = async (req, res, next) => {
-  try {
-    const data = await getShopRevenue(req.params.id, req.user, req.query)
-    return sendSuccess(res, {
-      message: MESSAGES.STATS.SHOP_REVENUE_FETCHED,
-      data,
-    })
-  } catch (error) {
-    next(error)
-  }
-}
 
 export const shopProducts = async (req, res, next) => {
   try {
