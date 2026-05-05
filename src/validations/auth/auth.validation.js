@@ -74,3 +74,10 @@ export const verifyEmailSchema = Joi.object({
 export const googleLoginSchema = Joi.object({
   idToken: Joi.string().trim().required(),
 });
+
+export const rejectKycSchema = Joi.object({
+  rejectionReason: Joi.string().trim().min(5).max(500).required().messages({
+    'string.min': 'Lý do từ chối phải có ít nhất 5 ký tự',
+    'any.required': 'Lý do từ chối là bắt buộc',
+  }),
+});

@@ -92,6 +92,26 @@ const userSchema = new mongoose.Schema(
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },
     },
+    kyc: {
+      fullName: { type: String, default: '' },
+      idNumber: { type: String, default: '' },
+      frontImage: {
+        url: { type: String, default: '' },
+        publicId: { type: String, default: '' },
+      },
+      backImage: {
+        url: { type: String, default: '' },
+        publicId: { type: String, default: '' },
+      },
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+      },
+      rejectionReason: { type: String, default: '' },
+      submittedAt: { type: Date, default: null },
+      reviewedAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true, // Tự thêm createdAt, updatedAt

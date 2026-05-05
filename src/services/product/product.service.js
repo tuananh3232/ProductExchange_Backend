@@ -6,6 +6,7 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { assertDataScope, assertShopPermission } from '../../utils/data-scope.util.js'
 import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
+import { SHOP_STATUS } from '../../constants/status.constant.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -35,9 +36,12 @@ const normalizeQueryId = (value) => {
 const ensureShopWritable = async (shopId, userContext) => {
   if (!shopId) return null
 
-  const shop = await Shop.findById(shopId).select('_id owner staff isActive')
+  const shop = await Shop.findById(shopId).select('_id owner staff isActive status')
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  if (shop.status !== SHOP_STATUS.ACTIVE) {
+    throw new AppError('Shop chưa được kích hoạt, không thể thao tác sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
   }
 
   await assertShopPermission({

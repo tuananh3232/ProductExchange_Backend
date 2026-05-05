@@ -31,6 +31,13 @@ const ERRORS = {
     NOT_FOUND: 'Shop not found',
     SLUG_ALREADY_EXISTS: 'Shop slug already exists',
     INVALID_STAFF: 'Invalid shop staff',
+    NOT_DRAFT: 'Shop is not in draft status',
+    NOT_PENDING: 'Shop is not pending review',
+    NOT_ACTIVE: 'Shop is not active',
+    NOT_REJECTED: 'Shop is not in rejected status',
+    ALREADY_ACTIVE: 'Shop is already active',
+    SUSPENDED: 'Shop has been suspended',
+    INCOMPLETE_ONBOARDING: 'Shop profile is incomplete. Please fill in name, phone, email, and address before submitting',
   },
 
   ORDER: {
@@ -70,6 +77,14 @@ const ERRORS = {
     INTERNAL_SERVER: 'Internal server error',
     NOT_FOUND: 'Resource not found',
     TOO_MANY_REQUESTS: 'Too many requests, please try again later',
+  },
+
+  KYC: {
+    NOT_SUBMITTED: 'KYC has not been submitted',
+    NOT_APPROVED: 'KYC has not been approved',
+    NOT_PENDING: 'KYC is not in pending status',
+    ALREADY_APPROVED: 'KYC has already been approved',
+    IMAGE_REQUIRED: 'Front and back CCCD images are required',
   },
 
   RBAC: {

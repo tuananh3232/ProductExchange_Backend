@@ -1,4 +1,5 @@
 import * as userRepo from '../../repositories/user/user.repository.js'
+import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../providers/jwt.provider.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
@@ -264,6 +265,93 @@ export const sendVerificationEmail = async ({ email }) => {
   }
 
   return { issued: true }
+}
+
+export const submitKyc = async (userId, { fullName, idNumber }, files) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  if (user.kyc?.status === 'approved') {
+    throw new AppError('Hồ sơ KYC đã được xác minh, không thể cập nhật', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.ALREADY_APPROVED)
+  }
+
+  const frontBuffer = files?.frontImage?.[0]?.buffer
+  const backBuffer = files?.backImage?.[0]?.buffer
+  if (!frontBuffer || !backBuffer) {
+    throw new AppError('Vui lòng cung cấp ảnh mặt trước và mặt sau CCCD', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.IMAGE_REQUIRED)
+  }
+
+  if (user.kyc?.frontImage?.publicId) await deleteImage(user.kyc.frontImage.publicId)
+  if (user.kyc?.backImage?.publicId) await deleteImage(user.kyc.backImage.publicId)
+
+  const [frontImage, backImage] = await Promise.all([
+    uploadBuffer(frontBuffer, 'kyc'),
+    uploadBuffer(backBuffer, 'kyc'),
+  ])
+
+  user.kyc = {
+    fullName: fullName.trim(),
+    idNumber: idNumber.trim(),
+    frontImage,
+    backImage,
+    status: 'pending',
+    rejectionReason: '',
+    submittedAt: new Date(),
+    reviewedAt: null,
+  }
+
+  await user.save()
+  return user.toPublicJSON()
+}
+
+export const getMyKyc = async (userId) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+  return { kyc: user.kyc || { status: 'none' } }
+}
+
+export const adminGetUserKyc = async (userId) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+  return { user: user.toPublicJSON() }
+}
+
+export const adminApproveKyc = async (userId) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+  if (!user.kyc || user.kyc.status !== 'pending') {
+    throw new AppError('Hồ sơ KYC không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.NOT_PENDING)
+  }
+
+  user.kyc.status = 'approved'
+  user.kyc.reviewedAt = new Date()
+  user.kyc.rejectionReason = ''
+  await user.save()
+  return user.toPublicJSON()
+}
+
+export const adminRejectKyc = async (userId, rejectionReason) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+  if (!user.kyc || user.kyc.status !== 'pending') {
+    throw new AppError('Hồ sơ KYC không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.NOT_PENDING)
+  }
+
+  user.kyc.status = 'rejected'
+  user.kyc.reviewedAt = new Date()
+  user.kyc.rejectionReason = rejectionReason
+  await user.save()
+  return user.toPublicJSON()
 }
 
 export const verifyEmail = async ({ token }) => {

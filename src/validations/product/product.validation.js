@@ -7,7 +7,7 @@ export const createProductSchema = Joi.object({
   listingType: Joi.string().valid('sell').required(),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
   category: Joi.string().hex().length(24).required(), // MongoDB ObjectId
-  shop: Joi.string().hex().length(24).optional(),
+  shop: Joi.string().hex().length(24).required(),
   images: Joi.array()
     .items(
       Joi.object({

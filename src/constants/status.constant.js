@@ -2,6 +2,17 @@
  * Các trạng thái (statuses) trong hệ thống
  */
 
+// Trạng thái shop (onboarding workflow)
+export const SHOP_STATUS = {
+  DRAFT: 'draft',
+  PENDING_REVIEW: 'pending_review',
+  ACTIVE: 'active',
+  REJECTED: 'rejected',
+  SUSPENDED: 'suspended',
+};
+
+export const SHOP_STATUS_ENUM = Object.values(SHOP_STATUS);
+
 // Trạng thái sản phẩm
 export const PRODUCT_STATUS = {
   AVAILABLE: 'available',
@@ -43,6 +54,8 @@ export const PAYMENT_STATUS = {
 export const PAYMENT_STATUS_ENUM = Object.values(PAYMENT_STATUS);
 
 export default {
+  SHOP_STATUS,
+  SHOP_STATUS_ENUM,
   PRODUCT_STATUS,
   PRODUCT_STATUS_ENUM,
   PRODUCT_STATUS_DESCRIPTIONS,
