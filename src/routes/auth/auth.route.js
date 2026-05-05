@@ -55,6 +55,17 @@ const router = Router()
  *     responses:
  *       201:
  *         description: Đăng ký thành công
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Đăng ký tài khoản thành công
+ *               data:
+ *                 user:
+ *                   id: "..."
+ *                   name: "..."
+ *                   email: "..."
+ *                   role: user
  */
 router.post('/register', validate(registerSchema), authController.register)
 
