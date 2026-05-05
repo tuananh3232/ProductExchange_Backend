@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PRODUCT_STATUS_ENUM } from '../constants/status.constant.js';
 
 const productSchema = new mongoose.Schema(
   {
@@ -20,7 +21,7 @@ const productSchema = new mongoose.Schema(
     },
     listingType: {
       type: String,
-      enum: ['sell', 'exchange', 'both'],
+      enum: ['sell'],
       required: [true, 'Listing type is required'],
     },
     condition: {
@@ -44,21 +45,22 @@ const productSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Owner is required'],
     },
+    shop: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shop',
+      default: null,
+      index: true,
+    },
     location: {
       province: { type: String, default: '' },
       district: { type: String, default: '' },
     },
     status: {
       type: String,
-      enum: ['available', 'pending', 'sold', 'exchanged', 'hidden'],
+      enum: PRODUCT_STATUS_ENUM,
       default: 'available',
     },
     views: { type: Number, default: 0 },
-    exchangeFor: {
-      type: String,
-      default: '',
-      maxlength: [500, 'Exchange description must not exceed 500 characters'],
-    },
     isActive: { type: Boolean, default: true },
   },
   {
@@ -70,6 +72,7 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ title: 'text', description: 'text' });
 productSchema.index({ category: 1, status: 1 });
 productSchema.index({ owner: 1 });
+productSchema.index({ shop: 1, status: 1 });
 productSchema.index({ listingType: 1, status: 1 });
 productSchema.index({ createdAt: -1 });
 

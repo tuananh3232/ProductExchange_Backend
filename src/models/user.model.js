@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { ROLE_ENUM, ROLES } from '../constants/role.constant.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -39,12 +40,45 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'admin'],
-      default: 'user',
+      enum: ROLE_ENUM,
+      default: ROLES.USER,
+    },
+    roles: {
+      type: [
+        {
+          type: String,
+          enum: ROLE_ENUM,
+        },
+      ],
+      default: [ROLES.USER],
     },
     isVerified: {
       type: Boolean,
       default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    emailVerificationToken: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    emailVerificationExpires: {
+      type: Date,
+      select: false,
+      default: null,
+    },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+      default: null,
     },
     isActive: {
       type: Boolean,
@@ -64,6 +98,28 @@ const userSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+// Giữ tương thích với code cũ: role đơn vẫn được duy trì từ danh sách roles
+userSchema.pre('validate', function () {
+  const declaredRole = this.role || ROLES.USER;
+  const normalizedRoles = Array.isArray(this.roles) ? [...new Set(this.roles.filter(Boolean))] : [];
+
+  if (!normalizedRoles.length) {
+    normalizedRoles.push(declaredRole);
+  } else if (normalizedRoles.length === 1 && normalizedRoles[0] === ROLES.USER && declaredRole !== ROLES.USER) {
+    normalizedRoles[0] = declaredRole;
+  } else if (declaredRole !== ROLES.USER && !normalizedRoles.includes(declaredRole)) {
+    normalizedRoles.unshift(declaredRole);
+  }
+
+  if (normalizedRoles.includes(ROLES.ADMIN)) {
+    this.role = ROLES.ADMIN;
+  } else {
+    this.role = declaredRole;
+  }
+
+  this.roles = normalizedRoles;
+});
 
 // Hash password trước khi lưu
 userSchema.pre('save', async function () {
