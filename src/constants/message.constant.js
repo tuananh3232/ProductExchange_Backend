@@ -38,6 +38,14 @@ const MESSAGES = {
     STAFF_REMOVED: 'Gỡ staff khỏi shop thành công',
     STAFF_PERMISSIONS_FETCHED: 'Lấy danh sách quyền staff thành công',
     STAFF_PERMISSIONS_UPDATED: 'Cập nhật quyền staff thành công',
+    SUBMITTED_FOR_REVIEW: 'Nộp shop để xét duyệt thành công',
+    MY_SHOPS_FETCHED: 'Lấy danh sách shop của tôi thành công',
+    ADMIN_SHOPS_FETCHED: 'Lấy danh sách shop (admin) thành công',
+    APPROVED: 'Duyệt shop thành công',
+    REJECTED: 'Từ chối shop thành công',
+    SUSPENDED: 'Đình chỉ shop thành công',
+    RESUBMITTED: 'Nộp lại shop để xét duyệt thành công',
+    UNSUSPENDED: 'Gỡ đình chỉ shop thành công',
   },
 
   ORDER: {
@@ -74,6 +82,13 @@ const MESSAGES = {
     USER_ROLES_UPDATED: 'Cập nhật vai trò người dùng thành công',
     SEED_SUCCESS: 'Khởi tạo dữ liệu RBAC thành công',
   },
+  KYC: {
+    SUBMITTED: 'Nộp hồ sơ xác minh danh tính thành công',
+    FETCHED: 'Lấy thông tin KYC thành công',
+    APPROVED: 'Xác minh danh tính thành công',
+    REJECTED: 'Từ chối hồ sơ xác minh danh tính thành công',
+  },
+
   CATEGORY: {
     CREATED: 'Tạo danh mục thành công',
     FETCHED: 'Lấy danh sách danh mục thành công',

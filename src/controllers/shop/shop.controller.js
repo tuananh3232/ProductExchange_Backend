@@ -94,3 +94,77 @@ export const updateStaffPermissions = async (req, res, next) => {
     next(error)
   }
 }
+
+export const getMyShops = async (req, res, next) => {
+  try {
+    const pagination = getPaginationParams(req.query)
+    const { shops, meta } = await shopService.getMyShops(req.user._id, req.query, pagination)
+    sendSuccess(res, { message: MESSAGES.SHOP.MY_SHOPS_FETCHED, data: { shops }, meta })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getAdminShops = async (req, res, next) => {
+  try {
+    const pagination = getPaginationParams(req.query)
+    const { shops, meta } = await shopService.getAdminShops(req.query, pagination)
+    sendSuccess(res, { message: MESSAGES.SHOP.ADMIN_SHOPS_FETCHED, data: { shops }, meta })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const approveShop = async (req, res, next) => {
+  try {
+    const shop = await shopService.approveShop(req.params.id)
+    sendSuccess(res, { message: MESSAGES.SHOP.APPROVED, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const rejectShop = async (req, res, next) => {
+  try {
+    const shop = await shopService.rejectShop(req.params.id, req.body.rejectionReason)
+    sendSuccess(res, { message: MESSAGES.SHOP.REJECTED, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const suspendShop = async (req, res, next) => {
+  try {
+    const shop = await shopService.suspendShop(req.params.id, req.body.reason)
+    sendSuccess(res, { message: MESSAGES.SHOP.SUSPENDED, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const resubmitForReview = async (req, res, next) => {
+  try {
+    const shop = await shopService.resubmitShop(req.params.id, req.user)
+    sendSuccess(res, { message: MESSAGES.SHOP.RESUBMITTED, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const unsuspendShop = async (req, res, next) => {
+  try {
+    const shop = await shopService.unsuspendShop(req.params.id)
+    sendSuccess(res, { message: MESSAGES.SHOP.UNSUSPENDED, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const submitForReview = async (req, res, next) => {
+  try {
+    const shop = await shopService.submitForReview(req.params.id, req.user)
+    sendSuccess(res, { message: MESSAGES.SHOP.SUBMITTED_FOR_REVIEW, data: { shop } })
+  } catch (error) {
+    next(error)
+  }
+}

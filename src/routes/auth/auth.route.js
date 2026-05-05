@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import { uploadKycImages } from '../../middlewares/upload.middleware.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import {
 	registerSchema,
@@ -334,6 +335,55 @@ router.post(
 	requirePermissions(PERMISSIONS.USER_UPDATE),
 	validate(changePasswordSchema),
 	authController.changePassword
+)
+
+/**
+ * @swagger
+ * /auth/kyc:
+ *   post:
+ *     summary: Nộp hồ sơ xác minh danh tính (CCCD)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [fullName, idNumber, frontImage, backImage]
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               idNumber:
+ *                 type: string
+ *               frontImage:
+ *                 type: string
+ *                 format: binary
+ *               backImage:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Nộp KYC thành công
+ *   get:
+ *     summary: Lấy trạng thái KYC của tôi
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Lấy KYC thành công
+ */
+router.post(
+  '/kyc',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_UPDATE),
+  uploadKycImages,
+  authController.submitKyc
+)
+
+router.get(
+  '/kyc',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_READ),
+  authController.getMyKyc
 )
 
 export default router

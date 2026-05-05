@@ -12,11 +12,20 @@ import {
 import PERMISSIONS from '../../constants/permission.constant.js'
 import shopStatsRoutes from './stats.route.js'
 
+
 const router = Router()
 
 router.use('/:id/stats', shopStatsRoutes)
 
 router.get('/', shopController.getShops)
+
+router.get(
+  '/mine',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_READ),
+  shopController.getMyShops
+)
+
 router.get('/:id', shopController.getShopById)
 
 router.post(
@@ -71,6 +80,20 @@ router.delete(
   authenticate,
   requirePermissions(PERMISSIONS.SHOP_MANAGE_STAFF),
   shopController.removeStaff
+)
+
+router.post(
+  '/:id/submit',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_UPDATE),
+  shopController.submitForReview
+)
+
+router.post(
+  '/:id/resubmit',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_UPDATE),
+  shopController.resubmitForReview
 )
 
 export default router
@@ -132,6 +155,28 @@ export default router
  *   name: Shops
  *   description: API quản lý shop
  *
+ * /shops/mine:
+ *   get:
+ *     summary: Lấy danh sách shop của tôi (owner)
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [draft, pending_review, active, rejected, suspended]
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách shop của tôi thành công
+ *
  * /shops:
  *   get:
  *     summary: Lấy danh sách shop
@@ -186,6 +231,31 @@ export default router
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               address:
+ *                 type: object
+ *                 properties:
+ *                   province:
+ *                     type: string
+ *                   district:
+ *                     type: string
+ *                   detail:
+ *                     type: string
  *     responses:
  *       200:
  *         description: Cập nhật shop thành công
@@ -236,4 +306,32 @@ export default router
  *     responses:
  *       200:
  *         description: Gỡ staff thành công
+ *
+ * /shops/{id}/submit:
+ *   post:
+ *     summary: Nộp shop để xét duyệt (draft → pending_review)
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Nộp shop thành công
+ *
+ * /shops/{id}/resubmit:
+ *   post:
+ *     summary: Nộp lại shop sau khi bị từ chối (rejected → pending_review)
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Nộp lại shop thành công
  */

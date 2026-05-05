@@ -124,8 +124,18 @@ const swaggerDefinition = {
               },
             },
           },
+          status: {
+            type: 'string',
+            enum: ['draft', 'pending_review', 'active', 'rejected', 'suspended'],
+            description: 'Trạng thái onboarding của shop',
+          },
+          rejectionReason: {
+            type: 'string',
+            description: 'Lý do từ chối (admin điền khi reject)',
+          },
           isActive: { type: 'boolean' },
           createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
         },
       },
       Order: {

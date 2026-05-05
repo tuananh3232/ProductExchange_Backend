@@ -6,6 +6,7 @@ import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { ROLES } from '../../constants/role.constant.js'
+import { SHOP_STATUS } from '../../constants/status.constant.js'
 
 const normalizeSlug = (name = '') =>
   name
@@ -71,6 +72,7 @@ export const createShop = async (ownerId, payload) => {
     slug,
     owner: ownerId,
     staff: [],
+    status: SHOP_STATUS.DRAFT,
   })
 
   const ownerRoles = new Set(ownerUser.roles || [ownerUser.role].filter(Boolean))
@@ -84,14 +86,14 @@ export const createShop = async (ownerId, payload) => {
 
 export const getShopById = async (shopId) => {
   const shop = await shopRepo.findById(shopId)
-  if (!shop || !shop.isActive) {
+  if (!shop || !shop.isActive || shop.status !== SHOP_STATUS.ACTIVE) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
   return shop
 }
 
 export const getShops = async (query, { page, limit, skip, sortBy, sortOrder }) => {
-  const filter = { isActive: true }
+  const filter = { isActive: true, status: SHOP_STATUS.ACTIVE }
 
   if (query.ownerId) filter.owner = query.ownerId
   if (query.search) filter.$text = { $search: query.search }
@@ -102,6 +104,44 @@ export const getShops = async (query, { page, limit, skip, sortBy, sortOrder }) 
   ])
 
   return { shops, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const submitForReview = async (shopId, userContext) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+
+  ensureShopOwnerAccess(shop, userContext)
+
+  const owner = await User.findById(userContext._id).select('kyc')
+  if (!owner?.kyc || owner.kyc.status === 'none') {
+    throw new AppError(
+      'Vui lòng nộp hồ sơ xác minh danh tính (CCCD) trước khi nộp shop',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.KYC.NOT_SUBMITTED
+    )
+  }
+
+  if (shop.status !== SHOP_STATUS.DRAFT) {
+    throw new AppError('Shop phải ở trạng thái draft mới có thể nộp xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_DRAFT)
+  }
+
+  const isComplete =
+    shop.phone?.trim() &&
+    shop.email?.trim() &&
+    shop.address?.province?.trim() &&
+    shop.address?.district?.trim()
+
+  if (!isComplete) {
+    throw new AppError(
+      'Thông tin shop chưa đầy đủ. Vui lòng điền phone, email, tỉnh/thành và quận/huyện trước khi nộp',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.INCOMPLETE_ONBOARDING
+    )
+  }
+
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.PENDING_REVIEW })
 }
 
 export const updateShop = async (shopId, userContext, payload) => {
@@ -219,6 +259,118 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
     assignedPermissions: assigned?.permissions || [],
     staffUserId,
   }
+}
+
+export const getMyShops = async (userId, query, { page, limit, skip, sortBy, sortOrder }) => {
+  const filter = { owner: userId, isActive: true }
+  if (query.status) filter.status = query.status
+
+  const [shops, total] = await Promise.all([
+    shopRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    shopRepo.countMany(filter),
+  ])
+  return { shops, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const getAdminShops = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+  const filter = { isActive: true }
+  if (query.status) filter.status = query.status
+  if (query.ownerId) filter.owner = query.ownerId
+  if (query.search) filter.$text = { $search: query.search }
+
+  const [shops, total] = await Promise.all([
+    shopRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    shopRepo.countMany(filter),
+  ])
+  return { shops, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const resubmitShop = async (shopId, userContext) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+
+  ensureShopOwnerAccess(shop, userContext)
+
+  const owner = await User.findById(userContext._id).select('kyc')
+  if (!owner?.kyc || owner.kyc.status === 'none') {
+    throw new AppError(
+      'Vui lòng nộp hồ sơ xác minh danh tính (CCCD) trước khi nộp lại shop',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.KYC.NOT_SUBMITTED
+    )
+  }
+
+  if (shop.status !== SHOP_STATUS.REJECTED) {
+    throw new AppError('Shop phải ở trạng thái bị từ chối mới có thể nộp lại', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_REJECTED)
+  }
+
+  const isComplete =
+    shop.phone?.trim() &&
+    shop.email?.trim() &&
+    shop.address?.province?.trim() &&
+    shop.address?.district?.trim()
+
+  if (!isComplete) {
+    throw new AppError(
+      'Thông tin shop chưa đầy đủ. Vui lòng điền phone, email, tỉnh/thành và quận/huyện trước khi nộp lại',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.INCOMPLETE_ONBOARDING
+    )
+  }
+
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.PENDING_REVIEW, rejectionReason: '' })
+}
+
+export const unsuspendShop = async (shopId) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  if (shop.status !== SHOP_STATUS.SUSPENDED) {
+    throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
+  }
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+}
+
+export const approveShop = async (shopId) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  if (shop.status !== SHOP_STATUS.PENDING_REVIEW) {
+    throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
+  }
+
+  const shopOwner = await User.findById(shop.owner?._id || shop.owner).select('kyc')
+  if (!shopOwner?.kyc || shopOwner.kyc.status !== 'approved') {
+    throw new AppError('Chủ shop chưa được xác minh danh tính (KYC), không thể duyệt shop', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.NOT_APPROVED)
+  }
+
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+}
+
+export const rejectShop = async (shopId, rejectionReason) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  if (shop.status !== SHOP_STATUS.PENDING_REVIEW) {
+    throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
+  }
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
+}
+
+export const suspendShop = async (shopId, reason) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  if (shop.status !== SHOP_STATUS.ACTIVE) {
+    throw new AppError('Chỉ có thể đình chỉ shop đang hoạt động', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
+  }
+  return shopRepo.updateById(shopId, { status: SHOP_STATUS.SUSPENDED, rejectionReason: reason })
 }
 
 export const updateStaffPermissions = async (shopId, userContext, staffUserId, permissionKeys = []) => {

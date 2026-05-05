@@ -162,6 +162,52 @@ export const sendVerificationEmail = async (req, res, next) => {
   }
 }
 
+export const submitKyc = async (req, res, next) => {
+  try {
+    const { fullName, idNumber } = req.body
+    const user = await authService.submitKyc(req.user._id, { fullName, idNumber }, req.files)
+    sendSuccess(res, { message: MESSAGES.KYC.SUBMITTED, data: { user } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getMyKyc = async (req, res, next) => {
+  try {
+    const result = await authService.getMyKyc(req.user._id)
+    sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const adminGetUserKyc = async (req, res, next) => {
+  try {
+    const result = await authService.adminGetUserKyc(req.params.userId)
+    sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const adminApproveKyc = async (req, res, next) => {
+  try {
+    const user = await authService.adminApproveKyc(req.params.userId)
+    sendSuccess(res, { message: MESSAGES.KYC.APPROVED, data: { user } })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const adminRejectKyc = async (req, res, next) => {
+  try {
+    const user = await authService.adminRejectKyc(req.params.userId, req.body.rejectionReason)
+    sendSuccess(res, { message: MESSAGES.KYC.REJECTED, data: { user } })
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const verifyEmail = async (req, res, next) => {
   try {
     const user = await authService.verifyEmail(req.body)

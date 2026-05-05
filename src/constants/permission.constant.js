@@ -40,6 +40,7 @@ export const PERMISSIONS = {
   // Admin
   ADMIN_MANAGE_USERS: 'admin:manage_users',
   ADMIN_MANAGE_PRODUCTS: 'admin:manage_products',
+  ADMIN_MANAGE_SHOPS: 'admin:manage_shops',
   ADMIN_MANAGE_ROLES: 'admin:manage_roles',
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',

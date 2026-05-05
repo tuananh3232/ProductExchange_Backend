@@ -61,6 +61,7 @@ const router = Router()
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [title, description, price, listingType, condition, category, shop]
  *             properties:
  *               title:
  *                 type: string
@@ -78,6 +79,10 @@ const router = Router()
  *                 type: string
  *                 description: MongoDB ObjectId của category
  *                 example: 507f1f77bcf86cd799439011
+ *               shop:
+ *                 type: string
+ *                 description: MongoDB ObjectId của shop (bắt buộc, shop phải đang active)
+ *                 example: 507f1f77bcf86cd799439012
  *     responses:
  *       201:
  *         description: Thành công
