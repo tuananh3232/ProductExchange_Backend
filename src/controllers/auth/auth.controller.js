@@ -56,27 +56,6 @@ export const logout = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.AUTH.LOGOUT_SUCCESS })
 })
 
-export const getMe = asyncHandler(async (req, res) => {
-  const user = await authService.getProfile(req.user._id)
-  sendSuccess(res, {
-    message: MESSAGES.AUTH.PROFILE_FETCHED,
-    data: { user: toUserResponse(user) },
-  })
-})
-
-export const updateProfile = asyncHandler(async (req, res) => {
-  const user = await authService.updateProfile(req.user._id, req.body)
-  sendSuccess(res, {
-    message: MESSAGES.AUTH.PROFILE_UPDATED,
-    data: { user: toUserResponse(user) },
-  })
-})
-
-export const changePassword = asyncHandler(async (req, res) => {
-  await authService.changePassword(req.user._id, req.body)
-  sendSuccess(res, { message: MESSAGES.AUTH.PASSWORD_CHANGED })
-})
-
 export const banUser = asyncHandler(async (req, res) => {
   const user = await authService.banUser(req.params.userId)
   sendSuccess(res, { message: MESSAGES.USER.BANNED, data: { user } })
@@ -105,17 +84,6 @@ export const sendVerificationEmail = asyncHandler(async (req, res) => {
   }
   const data = result.debugToken ? { debugToken: result.debugToken } : null
   return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT, data })
-})
-
-export const submitKyc = asyncHandler(async (req, res) => {
-  const { fullName, idNumber } = req.body
-  const user = await authService.submitKyc(req.user._id, { fullName, idNumber }, req.files)
-  sendSuccess(res, { message: MESSAGES.KYC.SUBMITTED, data: { user } })
-})
-
-export const getMyKyc = asyncHandler(async (req, res) => {
-  const result = await authService.getMyKyc(req.user._id)
-  sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
 })
 
 export const adminGetUserKyc = asyncHandler(async (req, res) => {
