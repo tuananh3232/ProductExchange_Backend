@@ -31,11 +31,13 @@
   },
   "homepage": "https://github.com/tuananh3232/ProductExchange_Backend#readme",
   "dependencies": {
+    "@payos/node": "^2.0.5",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.1",
     "google-auth-library": "^10.6.2",
     "helmet": "^7.1.0",
     "i": "^0.3.7",

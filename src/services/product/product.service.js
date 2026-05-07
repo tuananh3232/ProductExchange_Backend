@@ -2,7 +2,7 @@ import * as productRepo from '../../repositories/product/product.repository.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { buildPaginationMeta } from '../../utils/pagination.util.js'
+import { paginate } from '../../utils/pagination.util.js'
 import { assertDataScope, assertShopPermission } from '../../utils/data-scope.util.js'
 import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
@@ -31,6 +31,25 @@ const normalizeQueryId = (value) => {
   }
 
   return null
+}
+
+const assertProductAccess = async (product, userContext, permissionKey, message) => {
+  if (product.shop) {
+    await assertShopPermission({
+      user: userContext,
+      shopId: product.shop?._id || product.shop,
+      permissionKey,
+      message,
+      errorCode: ERRORS.PRODUCT.NOT_OWNER,
+    })
+  } else {
+    assertDataScope({
+      user: userContext,
+      ownerId: product.owner?._id,
+      message,
+      errorCode: ERRORS.PRODUCT.NOT_OWNER,
+    })
+  }
 }
 
 const ensureShopWritable = async (shopId, userContext) => {
@@ -90,15 +109,10 @@ const buildFilter = (query) => {
   return filter
 }
 
-export const getProducts = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+export const getProducts = async (query, pagination) => {
   const filter = buildFilter(query)
-
-  const [products, total] = await Promise.all([
-    productRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
-    productRepo.countMany(filter),
-  ])
-
-  return { products, meta: buildPaginationMeta(total, page, limit) }
+  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  return { products, meta }
 }
 
 export const getProductById = async (id) => {
@@ -127,22 +141,7 @@ export const updateProduct = async (productId, userContext, updateData) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (product.shop) {
-    await assertShopPermission({
-      user: userContext,
-      shopId: product.shop?._id || product.shop,
-      permissionKey: PERMISSIONS.PRODUCT_UPDATE,
-      message: 'Bạn không có quyền chỉnh sửa sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message: 'Bạn không có quyền chỉnh sửa sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  }
+  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
 
   if (Object.prototype.hasOwnProperty.call(updateData, 'shop')) {
     await ensureShopWritable(updateData.shop, userContext)
@@ -157,22 +156,7 @@ export const deleteProduct = async (productId, userContext) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (product.shop) {
-    await assertShopPermission({
-      user: userContext,
-      shopId: product.shop?._id || product.shop,
-      permissionKey: PERMISSIONS.PRODUCT_DELETE,
-      message: 'Bạn không có quyền xóa sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message: 'Bạn không có quyền xóa sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  }
+  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_DELETE, 'Bạn không có quyền xóa sản phẩm này')
 
   // Soft delete thay vì xóa thật
   await productRepo.updateById(productId, { isActive: false })
@@ -184,22 +168,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (product.shop) {
-    await assertShopPermission({
-      user: userContext,
-      shopId: product.shop?._id || product.shop,
-      permissionKey: PERMISSIONS.PRODUCT_UPDATE,
-      message: 'Bạn không có quyền cập nhật trạng thái sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message: 'Bạn không có quyền cập nhật trạng thái sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  }
+  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật trạng thái sản phẩm này')
 
   if (product.status === nextStatus) {
     return product
@@ -223,22 +192,7 @@ export const addProductImages = async (productId, userContext, images = []) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (product.shop) {
-    await assertShopPermission({
-      user: userContext,
-      shopId: product.shop?._id || product.shop,
-      permissionKey: PERMISSIONS.PRODUCT_UPDATE,
-      message: 'Bạn không có quyền cập nhật ảnh sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message: 'Bạn không có quyền cập nhật ảnh sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  }
+  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
 
   const existingIds = new Set((product.images || []).map((image) => image.publicId))
   const normalized = images.filter((image) => !existingIds.has(image.publicId))
@@ -258,22 +212,7 @@ export const removeProductImage = async (productId, userContext, publicId) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (product.shop) {
-    await assertShopPermission({
-      user: userContext,
-      shopId: product.shop?._id || product.shop,
-      permissionKey: PERMISSIONS.PRODUCT_UPDATE,
-      message: 'Bạn không có quyền cập nhật ảnh sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message: 'Bạn không có quyền cập nhật ảnh sản phẩm này',
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
-  }
+  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
 
   const existed = (product.images || []).some((image) => image.publicId === publicId)
   if (!existed) {

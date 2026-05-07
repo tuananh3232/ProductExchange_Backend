@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import PayOS from '@payos/node'
 import Order from '../../models/order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
@@ -6,6 +7,14 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { ORDER_STATUS, PAYMENT_STATUS } from '../../constants/status.constant.js'
 import { env } from '../../configs/env.config.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
+
+const getPayosClient = () => {
+  const { clientId, apiKey, checksumKey } = env.payment.payos
+  if (!clientId || !apiKey || !checksumKey) {
+    throw new AppError('PayOS chưa được cấu hình', HTTP_STATUS.INTERNAL_SERVER_ERROR, ERRORS.PAYMENT.PAYOS_NOT_CONFIGURED)
+  }
+  return new PayOS(clientId, apiKey, checksumKey)
+}
 
 const getClientIp = (req) =>
   req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -184,4 +193,149 @@ export const handleVnpayCallback = async (callbackPayload) => {
 export const buildReturnResponse = async (query) => {
   const result = await handleVnpayCallback(query)
   return result
+}
+
+const validateOrderForPayment = async (orderId, userContext) => {
+  const order = await Order.findById(orderId).populate('buyer', 'name email')
+  if (!order || !order.isActive) {
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+  if (!isBuyerOrAdmin(order, userContext)) {
+    throw new AppError('Bạn không có quyền thanh toán đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+  if (order.status !== ORDER_STATUS.DELIVERED) {
+    throw new AppError('Đơn hàng chưa đủ điều kiện để thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
+  }
+  if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+    throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)
+  }
+  return order
+}
+
+export const createPayosPayment = async (orderId, userContext) => {
+  const order = await validateOrderForPayment(orderId, userContext)
+  const payos = getPayosClient()
+
+  const existingPayment = await paymentRepo.findByOrder(order._id)
+  // PayOS orderCode phải là số nguyên dương, tối đa 9 chữ số
+  const orderCode = existingPayment?.transactionRef
+    ? parseInt(existingPayment.transactionRef.replace('PAYOS_', ''), 10)
+    : Date.now() % 1000000000
+  const transactionRef = `PAYOS_${orderCode}`
+  const amount = Math.round(Number(order.totalAmount))
+
+  const paymentPayload = {
+    order: order._id,
+    buyer: order.buyer._id || order.buyer,
+    amount,
+    provider: 'payos',
+    method: 'payos',
+    status: PAYMENT_STATUS.PENDING_PAYMENT,
+    transactionRef,
+  }
+
+  const payment = existingPayment
+    ? await paymentRepo.updateById(existingPayment._id, paymentPayload)
+    : await paymentRepo.create(paymentPayload)
+
+  await Order.findByIdAndUpdate(order._id, {
+    paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
+    paymentMethod: 'payos',
+    paymentProvider: 'payos',
+    paymentRef: transactionRef,
+  })
+
+  // PayOS giới hạn description tối đa 25 ký tự
+  const shortId = order._id.toString().slice(-8)
+  const paymentLink = await payos.createPaymentLink({
+    orderCode,
+    amount,
+    description: `Thanh toan #${shortId}`,
+    returnUrl: env.payment.payos.returnUrl,
+    cancelUrl: env.payment.payos.cancelUrl,
+  })
+
+  return { payment, paymentUrl: paymentLink.checkoutUrl }
+}
+
+export const handlePayosWebhook = async (webhookData) => {
+  const payos = getPayosClient()
+
+  let verifiedData
+  try {
+    verifiedData = payos.verifyPaymentWebhookData(webhookData)
+  } catch {
+    throw new AppError('Chữ ký PayOS không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.INVALID_SIGNATURE)
+  }
+
+  const transactionRef = `PAYOS_${verifiedData.orderCode}`
+  const payment = await paymentRepo.findByTransactionRef(transactionRef)
+  if (!payment) {
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  if (verifiedData.amount !== Number(payment.amount)) {
+    throw new AppError('Số tiền thanh toán không khớp', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
+  }
+
+  const nextStatus = webhookData.code === '00' ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.FAILED
+
+  const updatedPayment = await paymentRepo.updateById(payment._id, {
+    status: nextStatus,
+    responseCode: webhookData.code || '',
+    rawCallbackData: webhookData,
+    paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
+  })
+
+  const orderUpdate = {
+    paymentStatus: nextStatus,
+    paymentMethod: 'payos',
+    paymentProvider: 'payos',
+    paymentRef: transactionRef,
+  }
+
+  if (nextStatus === PAYMENT_STATUS.PAID) {
+    orderUpdate.paidAt = new Date()
+  }
+
+  await Order.findByIdAndUpdate(payment.order, orderUpdate)
+
+  return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
+}
+
+export const handlePayosReturn = async (query) => {
+  const { orderCode, cancel, code } = query
+  if (!orderCode) {
+    throw new AppError('Thiếu thông tin callback PayOS', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  const transactionRef = `PAYOS_${orderCode}`
+  const payment = await paymentRepo.findByTransactionRef(transactionRef)
+  if (!payment) {
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  // Chỉ cập nhật nếu vẫn đang pending (tránh ghi đè kết quả từ webhook)
+  if (payment.status === PAYMENT_STATUS.PENDING_PAYMENT) {
+    const isCancelled = cancel === 'true' || cancel === true
+    const nextStatus = isCancelled
+      ? PAYMENT_STATUS.CANCELLED
+      : code === '00'
+        ? PAYMENT_STATUS.PAID
+        : PAYMENT_STATUS.FAILED
+
+    await paymentRepo.updateById(payment._id, {
+      status: nextStatus,
+      responseCode: code || '',
+      paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
+    })
+
+    const orderUpdate = { paymentStatus: nextStatus }
+    if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
+    await Order.findByIdAndUpdate(payment.order, orderUpdate)
+
+    return { orderId: payment.order, status: nextStatus }
+  }
+
+  return { orderId: payment.order, status: payment.status }
 }

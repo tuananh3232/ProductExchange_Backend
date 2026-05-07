@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import { authRateLimit } from '../../middlewares/rate-limit.middleware.js'
 import { uploadKycImages } from '../../middlewares/upload.middleware.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import {
@@ -68,7 +69,7 @@ const router = Router()
  *                   email: "..."
  *                   role: user
  */
-router.post('/register', validate(registerSchema), authController.register)
+router.post('/register', authRateLimit, validate(registerSchema), authController.register)
 
 /**
  * @swagger
@@ -95,7 +96,7 @@ router.post('/register', validate(registerSchema), authController.register)
  *       200:
  *         description: Đăng nhập thành công
  */
-router.post('/login', validate(loginSchema), authController.login)
+router.post('/login', authRateLimit, validate(loginSchema), authController.login)
 
 /**
  * @swagger
@@ -118,7 +119,7 @@ router.post('/login', validate(loginSchema), authController.login)
  *       200:
  *         description: Đăng nhập Google thành công
  */
-router.post('/google/login', validate(googleLoginSchema), authController.googleLogin)
+router.post('/google/login', authRateLimit, validate(googleLoginSchema), authController.googleLogin)
 
 /**
  * @swagger
@@ -165,7 +166,7 @@ router.post('/refresh-token', validate(refreshTokenSchema), authController.refre
  *       200:
  *         description: Gửi yêu cầu thành công
  */
-router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword)
+router.post('/forgot-password', authRateLimit, validate(forgotPasswordSchema), authController.forgotPassword)
 
 /**
  * @swagger
@@ -192,7 +193,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), authController.f
  *       200:
  *         description: Đặt lại mật khẩu thành công
  */
-router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword)
+router.post('/reset-password', authRateLimit, validate(resetPasswordSchema), authController.resetPassword)
 
 /**
  * @swagger

@@ -33,3 +33,20 @@ export const buildPaginationMeta = (total, page, limit) => {
     },
   };
 };
+
+/**
+ * Runs findMany + countMany in parallel then builds pagination meta.
+ * Eliminates the repeated Promise.all + buildPaginationMeta pattern across services.
+ *
+ * @param {Object} repo - Repository with findMany(opts) and countMany(filter) methods
+ * @param {Object} filter - Mongoose query filter
+ * @param {{ page, limit, skip, sortBy, sortOrder }} pagination - From getPaginationParams()
+ * @returns {{ items: Array, meta: Object }}
+ */
+export const paginate = async (repo, filter, { page, limit, skip, sortBy, sortOrder }) => {
+  const [items, total] = await Promise.all([
+    repo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    repo.countMany(filter),
+  ]);
+  return { items, meta: buildPaginationMeta(total, page, limit) };
+};

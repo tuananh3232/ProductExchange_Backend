@@ -55,10 +55,11 @@ const ERRORS = {
 
   PAYMENT: {
     NOT_FOUND: 'Payment not found',
-    INVALID_SIGNATURE: 'Invalid VNPay signature',
+    INVALID_SIGNATURE: 'Invalid payment signature',
     AMOUNT_MISMATCH: 'Payment amount does not match order amount',
     ORDER_NOT_ELIGIBLE: 'Order is not eligible for payment',
     ALREADY_PAID: 'Order has already been paid',
+    PAYOS_NOT_CONFIGURED: 'PayOS is not configured',
   },
 
   STATS: {

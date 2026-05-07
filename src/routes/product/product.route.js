@@ -2,12 +2,14 @@ import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
 	addProductImagesSchema,
 	createProductSchema,
 	updateProductSchema,
 	updateStatusSchema,
 } from '../../validations/product/product.validation.js'
+import { productQuerySchema } from '../../validations/common/query.validation.js'
 const router = Router()
 
 /**
@@ -87,7 +89,7 @@ const router = Router()
  *       201:
  *         description: Thành công
  */
-router.get('/', productController.getProducts)
+router.get('/', validate(productQuerySchema, 'query'), productController.getProducts)
 router.post(
 	'/',
 	authenticate,
@@ -136,31 +138,35 @@ router.post(
  *       200:
  *         description: Thành công
  */
-router.get('/:id', productController.getProductById)
+router.get('/:id', validateObjectId('id'), productController.getProductById)
 router.patch(
 	'/:id',
+	validateObjectId('id'),
 	authenticate,
 	validate(updateProductSchema),
 	productController.updateProduct
 )
 router.patch(
 	'/:id/status',
+	validateObjectId('id'),
 	authenticate,
 	validate(updateStatusSchema),
 	productController.updateProductStatus
 )
 router.post(
 	'/:id/images',
+	validateObjectId('id'),
 	authenticate,
 	validate(addProductImagesSchema),
 	productController.addProductImages
 )
 router.delete(
 	'/:id/images/:publicId',
+	validateObjectId('id'),
 	authenticate,
 	productController.removeProductImage
 )
-router.delete('/:id', authenticate, productController.deleteProduct)
+router.delete('/:id', validateObjectId('id'), authenticate, productController.deleteProduct)
 
 export default router
 
