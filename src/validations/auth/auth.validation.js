@@ -68,8 +68,9 @@ export const sendVerificationEmailSchema = Joi.object({
 });
 
 export const verifyEmailSchema = Joi.object({
-  token: Joi.string().trim().required(),
-});
+  otp: Joi.string().trim().pattern(/^\d{6}$/),
+  token: Joi.string().trim(),
+}).or('otp', 'token');
 
 export const googleLoginSchema = Joi.object({
   idToken: Joi.string().trim().required(),

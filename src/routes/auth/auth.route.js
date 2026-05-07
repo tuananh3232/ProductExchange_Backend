@@ -198,7 +198,7 @@ router.post('/reset-password', validate(resetPasswordSchema), authController.res
  * @swagger
  * /auth/send-verification-email:
  *   post:
- *     summary: Gửi email xác minh tài khoản
+ *     summary: Gửi mã OTP xác minh tài khoản
  *     tags: [Auth]
  *     security: []
  *     requestBody:
@@ -213,7 +213,7 @@ router.post('/reset-password', validate(resetPasswordSchema), authController.res
  *                 type: string
  *     responses:
  *       200:
- *         description: Gửi email xác minh thành công
+ *         description: Gửi mã xác minh thành công
  */
 router.post('/send-verification-email', validate(sendVerificationEmailSchema), authController.sendVerificationEmail)
 
@@ -221,7 +221,7 @@ router.post('/send-verification-email', validate(sendVerificationEmailSchema), a
  * @swagger
  * /auth/verify-email:
  *   post:
- *     summary: Xác minh email bằng token
+ *     summary: Xác minh email bằng mã OTP
  *     tags: [Auth]
  *     security: []
  *     requestBody:

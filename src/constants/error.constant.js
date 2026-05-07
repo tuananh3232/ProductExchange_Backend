@@ -3,6 +3,7 @@ const ERRORS = {
   AUTH: {
     INVALID_CREDENTIALS: 'Invalid email or password',
     EMAIL_ALREADY_EXISTS: 'Email already in use',
+    EMAIL_NOT_VERIFIED: 'Email not verified',
     UNAUTHORIZED: 'Authentication required',
     FORBIDDEN: 'You do not have permission to perform this action',
     TOKEN_EXPIRED: 'Token has expired',
@@ -11,7 +12,8 @@ const ERRORS = {
     ACCOUNT_INACTIVE: 'Account has been deactivated',
     WRONG_PASSWORD: 'Current password is incorrect',
     RESET_TOKEN_INVALID: 'Reset password token is invalid or expired',
-    VERIFY_EMAIL_TOKEN_INVALID: 'Email verification token is invalid or expired',
+    VERIFY_EMAIL_CODE_INVALID: 'Email verification code is invalid or expired',
+    EMAIL_TRANSPORT_NOT_CONFIGURED: 'Email transport is not configured',
     GOOGLE_TOKEN_INVALID: 'Google token is invalid',
     GOOGLE_EMAIL_NOT_VERIFIED: 'Google email is not verified',
     GOOGLE_OAUTH_NOT_CONFIGURED: 'Google OAuth is not configured',

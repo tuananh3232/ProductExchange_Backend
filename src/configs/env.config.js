@@ -14,6 +14,7 @@ if (isProduction) {
 
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
+const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value);
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -35,6 +36,16 @@ export const env = {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
+
+  mail: {
+    host: process.env.SMTP_HOST || process.env.MAIL_HOST,
+    port: parseInt(process.env.SMTP_PORT || process.env.MAIL_PORT, 10) || 587,
+    secure: (process.env.SMTP_SECURE || process.env.MAIL_SECURE || 'false') === 'true',
+    user: process.env.SMTP_USER || process.env.MAIL_USER,
+    password: normalizeSecret(process.env.SMTP_PASS || process.env.MAIL_PASS),
+    from: process.env.SMTP_FROM || process.env.MAIL_FROM,
+    fromName: process.env.SMTP_FROM_NAME || process.env.MAIL_FROM_NAME || 'ProductExchange',
   },
 
   cors: {

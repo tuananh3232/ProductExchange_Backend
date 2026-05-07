@@ -11,7 +11,7 @@ const MESSAGES = {
     GOOGLE_LOGIN_SUCCESS: 'Đăng nhập Google thành công',
     FORGOT_PASSWORD_SENT: 'Nếu email tồn tại, hệ thống đã gửi hướng dẫn đặt lại mật khẩu',
     PASSWORD_RESET_SUCCESS: 'Đặt lại mật khẩu thành công',
-    VERIFICATION_EMAIL_SENT: 'Nếu email tồn tại, hệ thống đã gửi email xác minh',
+    VERIFICATION_EMAIL_SENT: 'Nếu email tồn tại, hệ thống đã gửi mã OTP xác minh',
     EMAIL_VERIFIED: 'Xác minh email thành công',
     EMAIL_ALREADY_VERIFIED: 'Email đã được xác minh trước đó',
   },

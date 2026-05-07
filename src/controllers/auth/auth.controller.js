@@ -6,11 +6,12 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 export const register = async (req, res, next) => {
   try {
-    const user = await authService.register(req.body)
+    const result = await authService.register(req.body)
     sendSuccess(res, {
       message: MESSAGES.AUTH.REGISTER_SUCCESS,
       data: {
-        user: toUserResponse(user),
+        user: toUserResponse(result.user),
+        ...(result.debugOtp ? { debugOtp: result.debugOtp } : {}),
       },
       statusCode: HTTP_STATUS.CREATED,
     })
@@ -155,7 +156,7 @@ export const sendVerificationEmail = async (req, res, next) => {
       return sendSuccess(res, { message: MESSAGES.AUTH.EMAIL_ALREADY_VERIFIED })
     }
 
-    const data = result.debugToken ? { debugToken: result.debugToken } : null
+    const data = result.debugOtp ? { debugOtp: result.debugOtp } : null
     return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT, data })
   } catch (error) {
     next(error)

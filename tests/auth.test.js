@@ -378,22 +378,23 @@ describe('Auth API', () => {
         .send(TEST_USER);
     });
 
-    it('should create verification token', async () => {
+    it('should create verification otp', async () => {
       const res = await request(app)
         .post('/api/v1/auth/send-verification-email')
         .send({ email: TEST_USER.email });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(res.body.data.debugOtp).toMatch(/^\d{6}$/);
 
       const user = await User.findOne({ email: TEST_USER.email }).select('+emailVerificationToken +emailVerificationExpires');
       expect(user.emailVerificationToken).toBeDefined();
       expect(user.emailVerificationExpires).toBeDefined();
     });
 
-    it('should verify email with valid token', async () => {
-      const rawToken = 'verify-token-123';
-      const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    it('should verify email with valid otp', async () => {
+      const rawOtp = '123456';
+      const hashedToken = crypto.createHash('sha256').update(rawOtp).digest('hex');
       await User.findOneAndUpdate(
         { email: TEST_USER.email },
         {
@@ -405,11 +406,36 @@ describe('Auth API', () => {
 
       const verifyRes = await request(app)
         .post('/api/v1/auth/verify-email')
-        .send({ token: rawToken });
+        .send({ otp: rawOtp });
 
       expect(verifyRes.statusCode).toBe(200);
       expect(verifyRes.body.success).toBe(true);
-      expect(verifyRes.body.data.user.isVerified).toBe(true);
+
+      const verifiedUser = await User.findOne({ email: TEST_USER.email });
+      expect(verifiedUser.isVerified).toBe(true);
+    });
+
+    it('should still verify email with token alias', async () => {
+      const rawOtp = '654321';
+      const hashedToken = crypto.createHash('sha256').update(rawOtp).digest('hex');
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        {
+          emailVerificationToken: hashedToken,
+          emailVerificationExpires: new Date(Date.now() + 10 * 60 * 1000),
+          isVerified: false,
+        }
+      );
+
+      const verifyRes = await request(app)
+        .post('/api/v1/auth/verify-email')
+        .send({ token: rawOtp });
+
+      expect(verifyRes.statusCode).toBe(200);
+      expect(verifyRes.body.success).toBe(true);
+
+      const verifiedUser = await User.findOne({ email: TEST_USER.email });
+      expect(verifiedUser.isVerified).toBe(true);
     });
   });
 });

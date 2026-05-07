@@ -4,6 +4,7 @@ import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '.
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
+import { sendVerificationOtpEmail } from '../../utils/mail.util.js'
 import { env } from '../../configs/env.config.js'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
@@ -12,8 +13,25 @@ const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
 
 const createRawToken = () => crypto.randomBytes(32).toString('hex')
+const createVerificationOtp = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0')
 const hashToken = (rawToken) => crypto.createHash('sha256').update(rawToken).digest('hex')
 const googleClient = new OAuth2Client()
+
+const dispatchVerificationOtp = async (user, otp) => {
+  const sent = await sendVerificationOtpEmail({
+    to: user.email,
+    name: user.name,
+    otp,
+  })
+
+  if (!sent && env.nodeEnv === 'production') {
+    throw new AppError(
+      'Chưa cấu hình gửi email xác minh',
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      ERRORS.AUTH.EMAIL_TRANSPORT_NOT_CONFIGURED
+    )
+  }
+}
 
 const issueAuthTokens = async (user) => {
   const payload = { userId: user._id.toString(), role: user.role }
@@ -36,7 +54,22 @@ export const register = async ({ name, email, password }) => {
   }
 
   const user = await userRepo.create({ name, email, password })
-  return user.toPublicJSON()
+
+  // Auto-generate verification OTP for email confirmation
+  const verificationOtp = createVerificationOtp()
+  user.emailVerificationToken = hashToken(verificationOtp)
+  user.emailVerificationExpires = new Date(Date.now() + VERIFY_EMAIL_EXPIRES_IN_MS)
+  await user.save()
+
+  await dispatchVerificationOtp(user, verificationOtp)
+
+  const result = { user: user.toPublicJSON() }
+
+  if (env.nodeEnv !== 'production') {
+    result.debugOtp = verificationOtp
+  }
+
+  return result
 }
 
 export const login = async ({ email, password }) => {
@@ -47,6 +80,10 @@ export const login = async ({ email, password }) => {
 
   if (!user.isActive) {
     throw new AppError('Tài khoản đã bị khóa', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.ACCOUNT_INACTIVE)
+  }
+
+  if (!user.isVerified) {
+    throw new AppError('Vui lòng xác thực email trước khi đăng nhập', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.EMAIL_NOT_VERIFIED)
   }
 
   return issueAuthTokens(user)
@@ -255,13 +292,15 @@ export const sendVerificationEmail = async ({ email }) => {
     return { issued: false, alreadyVerified: true }
   }
 
-  const rawToken = createRawToken()
-  user.emailVerificationToken = hashToken(rawToken)
+  const verificationOtp = createVerificationOtp()
+  user.emailVerificationToken = hashToken(verificationOtp)
   user.emailVerificationExpires = new Date(Date.now() + VERIFY_EMAIL_EXPIRES_IN_MS)
   await user.save()
 
+  await dispatchVerificationOtp(user, verificationOtp)
+
   if (env.nodeEnv !== 'production') {
-    return { issued: true, debugToken: rawToken }
+    return { issued: true, debugOtp: verificationOtp }
   }
 
   return { issued: true }
@@ -354,12 +393,13 @@ export const adminRejectKyc = async (userId, rejectionReason) => {
   return user.toPublicJSON()
 }
 
-export const verifyEmail = async ({ token }) => {
-  const hashed = hashToken(token)
+export const verifyEmail = async ({ token, otp }) => {
+  const verificationCode = otp || token
+  const hashed = hashToken(verificationCode)
   const user = await userRepo.findByEmailVerificationToken(hashed)
 
   if (!user) {
-    throw new AppError('Liên kết xác minh email không hợp lệ hoặc đã hết hạn', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.VERIFY_EMAIL_TOKEN_INVALID)
+    throw new AppError('Mã xác minh email không hợp lệ hoặc đã hết hạn', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.VERIFY_EMAIL_CODE_INVALID)
   }
 
   user.isVerified = true
