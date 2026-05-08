@@ -138,6 +138,31 @@ const swaggerDefinition = {
           updatedAt: { type: 'string', format: 'date-time' },
         },
       },
+      ShopInvitation: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          shop: { $ref: '#/components/schemas/Shop' },
+          invitee: { $ref: '#/components/schemas/User' },
+          inviter: { $ref: '#/components/schemas/User' },
+          role: {
+            type: 'string',
+            enum: ['STAFF', 'MANAGER'],
+          },
+          permissions: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'accepted', 'rejected', 'expired'],
+          },
+          expiresAt: { type: 'string', format: 'date-time' },
+          rejectionReason: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
       Order: {
         type: 'object',
         properties: {

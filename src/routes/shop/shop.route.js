@@ -11,6 +11,7 @@ import {
 } from '../../validations/shop/shop.validation.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import shopStatsRoutes from './stats.route.js'
+import shopInvitationRoutes from './shop-invitation.route.js'
 
 
 const router = Router()
@@ -96,7 +97,230 @@ router.post(
   shopController.resubmitForReview
 )
 
+// Invitation routes - must be after specific routes to avoid conflicts
+router.use('/', shopInvitationRoutes)
+
 export default router
+
+/**
+ * @swagger
+ * tags:
+ *   name: Shops
+ *   description: API quản lý shop
+ */
+
+/**
+ * @swagger
+ * /shops/{id}/staff:
+ *   post:
+ *     summary: Thêm staff vào shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [staffUserId]
+ *             properties:
+ *               staffUserId:
+ *                 type: string
+ *                 description: ID người dùng cần thêm làm staff
+ *     responses:
+ *       200:
+ *         description: Thêm staff vào shop thành công
+ *   delete:
+ *     summary: Xóa staff khỏi shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: staffUserId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xóa staff khỏi shop thành công
+ *
+ * /shops/{id}/staff/{staffUserId}/permissions:
+ *   get:
+ *     summary: Lấy danh sách quyền của staff trong shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: staffUserId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách quyền staff thành công
+ *   put:
+ *     summary: Cập nhật quyền của staff trong shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: staffUserId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [permissions]
+ *             properties:
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Cập nhật quyền staff thành công
+ *
+ * /shops/{id}/invitations:
+ *   post:
+ *     summary: Gửi lời mời tham gia shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [inviteeId]
+ *             properties:
+ *               inviteeId:
+ *                 type: string
+ *                 description: ID người dùng được mời
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Gửi lời mời tham gia shop thành công
+ *   get:
+ *     summary: Lấy danh sách lời mời của shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, accepted, rejected, expired]
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách lời mời thành công
+ *
+ * /shops/my/invitations:
+ *   get:
+ *     summary: Lấy danh sách lời mời đang chờ của tôi
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách lời mời của tôi thành công
+ *
+ * /shops/invitations/{invitationId}/action:
+ *   post:
+ *     summary: Chấp nhận hoặc từ chối lời mời tham gia shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invitationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [accept, reject]
+ *     responses:
+ *       200:
+ *         description: Xử lý lời mời tham gia shop thành công
+ *
+ * /shops/invitations/{invitationId}:
+ *   delete:
+ *     summary: Hủy lời mời tham gia shop
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invitationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Hủy lời mời tham gia shop thành công
+ */
 
 /**
  * @swagger

@@ -53,6 +53,24 @@ export const PAYMENT_STATUS = {
 
 export const PAYMENT_STATUS_ENUM = Object.values(PAYMENT_STATUS);
 
+// Trạng thái lời mời tham gia shop
+export const INVITATION_STATUS = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired',
+};
+
+export const INVITATION_STATUS_ENUM = Object.values(INVITATION_STATUS);
+
+// Trạng thái thành viên shop
+export const SHOP_MEMBER_STATUS = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+};
+
+export const SHOP_MEMBER_STATUS_ENUM = Object.values(SHOP_MEMBER_STATUS);
+
 export default {
   SHOP_STATUS,
   SHOP_STATUS_ENUM,
@@ -63,4 +81,8 @@ export default {
   ORDER_STATUS_ENUM,
   PAYMENT_STATUS,
   PAYMENT_STATUS_ENUM,
+  INVITATION_STATUS,
+  INVITATION_STATUS_ENUM,
+  SHOP_MEMBER_STATUS,
+  SHOP_MEMBER_STATUS_ENUM,
 };

@@ -40,6 +40,13 @@ const ERRORS = {
     ALREADY_ACTIVE: 'Shop is already active',
     SUSPENDED: 'Shop has been suspended',
     INCOMPLETE_ONBOARDING: 'Shop profile is incomplete. Please fill in name, phone, email, and address before submitting',
+    INVITATION_NOT_FOUND: 'Shop invitation not found',
+    INVITATION_ALREADY_ACCEPTED: 'Invitation has already been accepted',
+    INVITATION_ALREADY_REJECTED: 'Invitation has already been rejected',
+    INVITATION_EXPIRED: 'Invitation has expired',
+    ALREADY_STAFF: 'User is already a staff member of this shop',
+    CANNOT_INVITE_OWNER: 'Cannot invite the shop owner as staff',
+    CANNOT_INVITE_SELF: 'Cannot invite yourself to your own shop',
   },
 
   ORDER: {

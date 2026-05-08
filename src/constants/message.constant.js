@@ -46,6 +46,12 @@ const MESSAGES = {
     SUSPENDED: 'Đình chỉ shop thành công',
     RESUBMITTED: 'Nộp lại shop để xét duyệt thành công',
     UNSUSPENDED: 'Gỡ đình chỉ shop thành công',
+    INVITATION_SENT: 'Gửi lời mời tham gia shop thành công',
+    INVITATION_ACCEPTED: 'Chấp nhận lời mời tham gia shop thành công',
+    INVITATION_REJECTED: 'Từ chối lời mời tham gia shop thành công',
+    INVITATION_CANCELLED: 'Hủy lời mời tham gia shop thành công',
+    INVITATIONS_FETCHED: 'Lấy danh sách lời mời thành công',
+    MY_INVITATIONS_FETCHED: 'Lấy danh sách lời mời của tôi thành công',
   },
 
   ORDER: {

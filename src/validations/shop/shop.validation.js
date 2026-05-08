@@ -47,7 +47,18 @@ export const updateStaffPermissionsSchema = Joi.object({
   permissions: Joi.array()
     .items(Joi.string().valid(...Object.values(PERMISSIONS)))
     .default([]),
-})
+});
+
+export const sendInvitationSchema = Joi.object({
+  inviteeId: Joi.string().hex().length(24).required(),
+  permissions: Joi.array()
+    .items(Joi.string().valid(...Object.values(PERMISSIONS)))
+    .default([]),
+});
+
+export const invitationActionSchema = Joi.object({
+  action: Joi.string().valid('accept', 'reject').required(),
+});
 
 export const rejectShopSchema = Joi.object({
   rejectionReason: Joi.string().trim().min(5).max(500).required().messages({
