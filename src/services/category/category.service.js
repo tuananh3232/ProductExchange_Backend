@@ -2,16 +2,8 @@ import * as categoryRepo from '../../repositories/category/category.repository.j
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import ERRORS from '../../constants/error.constant.js'
-import { buildPaginationMeta } from '../../utils/pagination.util.js'
-
-const normalizeSlug = (name = '') =>
-  name
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
+import { paginate } from '../../utils/pagination.util.js'
+import { normalizeSlug } from '../../utils/slug.util.js'
 
 export const createCategory = async (payload) => {
   const slug = normalizeSlug(payload.slug || payload.name)
@@ -24,16 +16,12 @@ export const createCategory = async (payload) => {
   return category
 }
 
-export const getCategories = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+export const getCategories = async (query, pagination) => {
   const filter = { isActive: true }
   if (query.search) filter.$text = { $search: query.search }
 
-  const [categories, total] = await Promise.all([
-    categoryRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
-    categoryRepo.countMany(filter),
-  ])
-
-  return { categories, meta: buildPaginationMeta(total, page, limit) }
+  const { items: categories, meta } = await paginate(categoryRepo, filter, pagination)
+  return { categories, meta }
 }
 
 export const getCategoryById = async (id) => {

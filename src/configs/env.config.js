@@ -69,5 +69,12 @@ export const env = {
       returnUrl: process.env.VNPAY_RETURN_URL || `${appUrl}${apiPrefix}/payments/vnpay/return`,
       ipnUrl: process.env.VNPAY_IPN_URL || `${appUrl}${apiPrefix}/payments/vnpay/ipn`,
     },
+    payos: {
+      clientId: process.env.PAYOS_CLIENT_ID || '',
+      apiKey: process.env.PAYOS_API_KEY || '',
+      checksumKey: process.env.PAYOS_CHECKSUM_KEY || '',
+      returnUrl: process.env.PAYOS_RETURN_URL || `${appUrl}${apiPrefix}/payments/payos/return`,
+      cancelUrl: process.env.PAYOS_CANCEL_URL || `${appUrl}${apiPrefix}/payments/payos/cancel`,
+    },
   },
 };

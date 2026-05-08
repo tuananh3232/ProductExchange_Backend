@@ -8,6 +8,7 @@ import { env } from './configs/env.config.js'
 import { swaggerSpec } from './configs/swagger.config.js'
 import { connectDB } from './configs/database.config.js'
 import { errorHandler } from './middlewares/error.middleware.js'
+import { apiRateLimit } from './middlewares/rate-limit.middleware.js'
 import router from './routes/index.js'
 import { ensureRbacSeedData } from './services/rbac/rbac-seed.service.js'
 
@@ -18,8 +19,8 @@ const app = express()
 app.use(helmet({ contentSecurityPolicy: false }))
 app.use(cors(corsOptions))
 app.use(morgan('dev'))
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.json({ limit: '10kb' }))
+app.use(express.urlencoded({ extended: true, limit: '10kb' }))
 
 // Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -28,6 +29,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     persistAuthorization: true
   }
 }))
+
+// Global rate limit — applied to all API routes
+app.use(env.apiPrefix, apiRateLimit)
 
 // Routes
 app.use(env.apiPrefix, router)

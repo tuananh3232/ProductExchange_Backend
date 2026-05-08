@@ -79,6 +79,7 @@ const MESSAGES = {
   PAYMENT: {
     CREATED: 'Tạo yêu cầu thanh toán thành công',
     CALLBACK_PROCESSED: 'Xử lý kết quả thanh toán thành công',
+    WEBHOOK_PROCESSED: 'Xử lý webhook thanh toán thành công',
   },
 
   RBAC: {

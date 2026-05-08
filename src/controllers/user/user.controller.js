@@ -1,15 +1,37 @@
-import * as authController from '../../controllers/auth/auth.controller.js'
+import * as authService from '../../services/auth/auth.service.js'
+import { sendSuccess } from '../../utils/response.util.js'
+import { toUserResponse } from '../../utils/user.util.js'
+import { asyncHandler } from '../../utils/async-handler.util.js'
+import MESSAGES from '../../constants/message.constant.js'
 
-export const getMe = authController.getMe
-export const updateProfile = authController.updateProfile
-export const changePassword = authController.changePassword
-export const submitKyc = authController.submitKyc
-export const getMyKyc = authController.getMyKyc
+export const getMe = asyncHandler(async (req, res) => {
+  const user = await authService.getProfile(req.user._id)
+  sendSuccess(res, {
+    message: MESSAGES.AUTH.PROFILE_FETCHED,
+    data: { user: toUserResponse(user) },
+  })
+})
 
-export default {
-  getMe,
-  updateProfile,
-  changePassword,
-  submitKyc,
-  getMyKyc,
-}
+export const updateProfile = asyncHandler(async (req, res) => {
+  const user = await authService.updateProfile(req.user._id, req.body)
+  sendSuccess(res, {
+    message: MESSAGES.AUTH.PROFILE_UPDATED,
+    data: { user: toUserResponse(user) },
+  })
+})
+
+export const changePassword = asyncHandler(async (req, res) => {
+  await authService.changePassword(req.user._id, req.body)
+  sendSuccess(res, { message: MESSAGES.AUTH.PASSWORD_CHANGED })
+})
+
+export const submitKyc = asyncHandler(async (req, res) => {
+  const { fullName, idNumber } = req.body
+  const user = await authService.submitKyc(req.user._id, { fullName, idNumber }, req.files)
+  sendSuccess(res, { message: MESSAGES.KYC.SUBMITTED, data: { user } })
+})
+
+export const getMyKyc = asyncHandler(async (req, res) => {
+  const result = await authService.getMyKyc(req.user._id)
+  sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
+})

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import authRoutes from './auth/auth.route.js'
+import userRoutes from './user/user.route.js'
 import productRoutes from './product/product.route.js'
 import categoryRoutes from './category/category.route.js'
 import shopRoutes from './shop/shop.route.js'
@@ -11,6 +12,7 @@ import adminRbacRoutes from './admin/rbac.route.js'
 const router = Router()
 
 router.use('/auth', authRoutes)
+router.use('/users', userRoutes)
 router.use('/products', productRoutes)
 router.use('/categories', categoryRoutes)
 router.use('/shops', shopRoutes)

@@ -4,18 +4,10 @@ import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { buildPaginationMeta } from '../../utils/pagination.util.js'
+import { paginate } from '../../utils/pagination.util.js'
+import { normalizeSlug } from '../../utils/slug.util.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
-
-const normalizeSlug = (name = '') =>
-  name
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
 
 const ensureShopAccess = (shop, userContext) => {
   const roleSet = new Set(userContext?.roles || [])
@@ -92,18 +84,14 @@ export const getShopById = async (shopId) => {
   return shop
 }
 
-export const getShops = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+export const getShops = async (query, pagination) => {
   const filter = { isActive: true, status: SHOP_STATUS.ACTIVE }
 
   if (query.ownerId) filter.owner = query.ownerId
   if (query.search) filter.$text = { $search: query.search }
 
-  const [shops, total] = await Promise.all([
-    shopRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
-    shopRepo.countMany(filter),
-  ])
-
-  return { shops, meta: buildPaginationMeta(total, page, limit) }
+  const { items: shops, meta } = await paginate(shopRepo, filter, pagination)
+  return { shops, meta }
 }
 
 export const submitForReview = async (shopId, userContext) => {
@@ -261,28 +249,22 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
   }
 }
 
-export const getMyShops = async (userId, query, { page, limit, skip, sortBy, sortOrder }) => {
+export const getMyShops = async (userId, query, pagination) => {
   const filter = { owner: userId, isActive: true }
   if (query.status) filter.status = query.status
 
-  const [shops, total] = await Promise.all([
-    shopRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
-    shopRepo.countMany(filter),
-  ])
-  return { shops, meta: buildPaginationMeta(total, page, limit) }
+  const { items: shops, meta } = await paginate(shopRepo, filter, pagination)
+  return { shops, meta }
 }
 
-export const getAdminShops = async (query, { page, limit, skip, sortBy, sortOrder }) => {
-  const filter = { isActive: true }
+export const getAdminShops = async (query, pagination) => {
+  const filter = { isActive: true, status: { $ne: SHOP_STATUS.DRAFT } }
   if (query.status) filter.status = query.status
   if (query.ownerId) filter.owner = query.ownerId
   if (query.search) filter.$text = { $search: query.search }
 
-  const [shops, total] = await Promise.all([
-    shopRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
-    shopRepo.countMany(filter),
-  ])
-  return { shops, meta: buildPaginationMeta(total, page, limit) }
+  const { items: shops, meta } = await paginate(shopRepo, filter, pagination)
+  return { shops, meta }
 }
 
 export const resubmitShop = async (shopId, userContext) => {

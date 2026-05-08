@@ -2,14 +2,12 @@ import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { uploadKycImages } from '../../middlewares/upload.middleware.js'
+import { authRateLimit } from '../../middlewares/rate-limit.middleware.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import {
 	registerSchema,
 	loginSchema,
 	refreshTokenSchema,
-	changePasswordSchema,
-	updateProfileSchema,
 	forgotPasswordSchema,
 	resetPasswordSchema,
 	sendVerificationEmailSchema,
@@ -68,7 +66,7 @@ const router = Router()
  *                   email: "..."
  *                   role: user
  */
-router.post('/register', validate(registerSchema), authController.register)
+router.post('/register', authRateLimit, validate(registerSchema), authController.register)
 
 /**
  * @swagger
@@ -95,7 +93,7 @@ router.post('/register', validate(registerSchema), authController.register)
  *       200:
  *         description: Đăng nhập thành công
  */
-router.post('/login', validate(loginSchema), authController.login)
+router.post('/login', authRateLimit, validate(loginSchema), authController.login)
 
 /**
  * @swagger
@@ -118,7 +116,7 @@ router.post('/login', validate(loginSchema), authController.login)
  *       200:
  *         description: Đăng nhập Google thành công
  */
-router.post('/google/login', validate(googleLoginSchema), authController.googleLogin)
+router.post('/google/login', authRateLimit, validate(googleLoginSchema), authController.googleLogin)
 
 /**
  * @swagger
@@ -165,7 +163,7 @@ router.post('/refresh-token', validate(refreshTokenSchema), authController.refre
  *       200:
  *         description: Gửi yêu cầu thành công
  */
-router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword)
+router.post('/forgot-password', authRateLimit, validate(forgotPasswordSchema), authController.forgotPassword)
 
 /**
  * @swagger
@@ -192,7 +190,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), authController.f
  *       200:
  *         description: Đặt lại mật khẩu thành công
  */
-router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword)
+router.post('/reset-password', authRateLimit, validate(resetPasswordSchema), authController.resetPassword)
 
 /**
  * @swagger
@@ -251,139 +249,5 @@ router.post('/verify-email', validate(verifyEmailSchema), authController.verifyE
  *         description: Thành công
  */
 router.post('/logout', authenticate, requirePermissions(PERMISSIONS.AUTH_LOGOUT), authController.logout)
-
-/**
- * @swagger
- * /auth/me:
- *   get:
- *     summary: Lấy thông tin cá nhân
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Thành công
- */
-router.get('/me', authenticate, requirePermissions(PERMISSIONS.USER_READ), authController.getMe)
-
-/**
- * @swagger
- * /auth/profile:
- *   put:
- *     summary: Cập nhật thông tin cá nhân
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               phone:
- *                 type: string
- *               address:
- *                 type: object
- *                 properties:
- *                   province:
- *                     type: string
- *                   district:
- *                     type: string
- *                   detail:
- *                     type: string
- *     responses:
- *       200:
- *         description: Cập nhật thành công
- */
-router.put(
-	'/profile',
-	authenticate,
-	requirePermissions(PERMISSIONS.USER_UPDATE),
-	validate(updateProfileSchema),
-	authController.updateProfile
-)
-
-/**
- * @swagger
- * /auth/change-password:
- *   post:
- *     summary: Đổi mật khẩu
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *               - confirmNewPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *               newPassword:
- *                 type: string
- *               confirmNewPassword:
- *                 type: string
- *     responses:
- *       200:
- *         description: Đổi mật khẩu thành công
- */
-router.post(
-	'/change-password',
-	authenticate,
-	requirePermissions(PERMISSIONS.USER_UPDATE),
-	validate(changePasswordSchema),
-	authController.changePassword
-)
-
-/**
- * @swagger
- * /auth/kyc:
- *   post:
- *     summary: Nộp hồ sơ xác minh danh tính (CCCD)
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required: [fullName, idNumber, frontImage, backImage]
- *             properties:
- *               fullName:
- *                 type: string
- *               idNumber:
- *                 type: string
- *               frontImage:
- *                 type: string
- *                 format: binary
- *               backImage:
- *                 type: string
- *                 format: binary
- *     responses:
- *       200:
- *         description: Nộp KYC thành công
- *   get:
- *     summary: Lấy trạng thái KYC của tôi
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Lấy KYC thành công
- */
-router.post(
-  '/kyc',
-  authenticate,
-  requirePermissions(PERMISSIONS.USER_UPDATE),
-  uploadKycImages,
-  authController.submitKyc
-)
-
-router.get(
-  '/kyc',
-  authenticate,
-  requirePermissions(PERMISSIONS.USER_READ),
-  authController.getMyKyc
-)
 
 export default router
