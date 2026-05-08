@@ -4,7 +4,7 @@ import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '.
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { sendVerificationOtpEmail } from '../../utils/mail.util.js'
+import { sendPasswordOtpEmail, sendVerificationOtpEmail } from '../../utils/mail.util.js'
 import { env } from '../../configs/env.config.js'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
@@ -27,6 +27,23 @@ const dispatchVerificationOtp = async (user, otp) => {
   if (!sent && env.nodeEnv === 'production') {
     throw new AppError(
       'Chưa cấu hình gửi email xác minh',
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      ERRORS.AUTH.EMAIL_TRANSPORT_NOT_CONFIGURED
+    )
+  }
+}
+
+const dispatchPasswordOtp = async (user, otp, purpose) => {
+  const sent = await sendPasswordOtpEmail({
+    to: user.email,
+    name: user.name,
+    otp,
+    purpose,
+  })
+
+  if (!sent && env.nodeEnv === 'production') {
+    throw new AppError(
+      'Chưa cấu hình gửi email đặt lại mật khẩu',
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
       ERRORS.AUTH.EMAIL_TRANSPORT_NOT_CONFIGURED
     )
@@ -209,7 +226,7 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
     throw new AppError('Mật khẩu hiện tại không đúng', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.WRONG_PASSWORD)
   }
   user.password = newPassword
-  await user.save() // Kích hoạt pre-save hook hash password
+  await user.save()
 }
 
 export const updateProfile = async (userId, updateData) => {
@@ -256,23 +273,33 @@ export const forgotPassword = async ({ email }) => {
     return { issued: false }
   }
 
-  const rawToken = createRawToken()
+  if (!user.isVerified) {
+    return { issued: false }
+  }
+
+  const rawToken = createVerificationOtp()
   user.resetPasswordToken = hashToken(rawToken)
   user.resetPasswordExpires = new Date(Date.now() + RESET_PASSWORD_EXPIRES_IN_MS)
   await user.save()
 
+  await dispatchPasswordOtp(user, rawToken, 'đặt lại mật khẩu')
+
   if (env.nodeEnv !== 'production') {
-    return { issued: true, debugToken: rawToken }
+    return { issued: true, debugOtp: rawToken }
   }
 
   return { issued: true }
 }
 
-export const resetPassword = async ({ token, newPassword }) => {
-  const hashed = hashToken(token)
-  const user = await userRepo.findByResetPasswordToken(hashed)
-  if (!user) {
-    throw new AppError('Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.RESET_TOKEN_INVALID)
+export const resetPassword = async ({ email, otp, newPassword }) => {
+  const user = await userRepo.findByEmailWithResetPasswordToken(email)
+  if (!user || !user.resetPasswordToken || !user.resetPasswordExpires) {
+    throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.RESET_TOKEN_INVALID)
+  }
+
+  const hashed = hashToken(otp)
+  if (hashed !== user.resetPasswordToken) {
+    throw new AppError('Mã OTP không hợp lệ hoặc đã hết hạn', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.RESET_TOKEN_INVALID)
   }
 
   user.password = newPassword

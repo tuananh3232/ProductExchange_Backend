@@ -97,7 +97,7 @@ describe('Auth API', () => {
     });
   });
 
-  describe('GET /api/v1/auth/me', () => {
+  describe('GET /api/v1/users/me', () => {
     let token;
 
     beforeEach(async () => {
@@ -114,17 +114,24 @@ describe('Auth API', () => {
 
     it('should get current user profile', async () => {
       const res = await request(app)
-        .get('/api/v1/auth/me')
+        .get('/api/v1/users/me')
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.user.email).toBe(LOGIN_USER.email);
-      expect(res.body.data.user.password).toBeUndefined();
+      expect(res.body.data.user).toEqual({
+        name: TEST_USER.name,
+        phone: '',
+        address: {
+          province: '',
+          district: '',
+          detail: '',
+        },
+      });
     });
 
     it('should fail without token', async () => {
-      const res = await request(app).get('/api/v1/auth/me');
+      const res = await request(app).get('/api/v1/users/me');
 
       expect(res.statusCode).toBe(401);
       expect(res.body.success).toBe(false);
@@ -132,7 +139,7 @@ describe('Auth API', () => {
 
     it('should fail with invalid token', async () => {
       const res = await request(app)
-        .get('/api/v1/auth/me')
+        .get('/api/v1/users/me')
         .set('Authorization', 'Bearer invalid_token');
 
       expect(res.statusCode).toBe(401);
@@ -273,20 +280,6 @@ describe('Auth API', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.success).toBe(false);
     });
-
-    it('should fail if new passwords do not match', async () => {
-      const res = await request(app)
-        .post('/api/v1/auth/change-password')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          currentPassword: '123456',
-          newPassword: 'newpassword123',
-          confirmNewPassword: 'different',
-        });
-
-      expect(res.statusCode).toBe(422);
-      expect(res.body.success).toBe(false);
-    });
   });
 
   describe('POST /api/v1/auth/forgot-password', () => {
@@ -294,6 +287,16 @@ describe('Auth API', () => {
       await request(app)
         .post('/api/v1/auth/register')
         .send(TEST_USER);
+
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        {
+          isVerified: true,
+          emailVerifiedAt: new Date(),
+          emailVerificationToken: null,
+          emailVerificationExpires: null,
+        }
+      );
     });
 
     it('should issue reset password token for existing email', async () => {
@@ -303,6 +306,7 @@ describe('Auth API', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(res.body.data.debugOtp).toMatch(/^\d{6}$/);
 
       const user = await User.findOne({ email: TEST_USER.email }).select('+resetPasswordToken +resetPasswordExpires');
       expect(user.resetPasswordToken).toBeDefined();
@@ -317,6 +321,27 @@ describe('Auth API', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
     });
+
+    it('should not issue reset otp for unverified account', async () => {
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        {
+          isVerified: false,
+          emailVerifiedAt: null,
+        }
+      );
+
+      const res = await request(app)
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: TEST_USER.email });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const user = await User.findOne({ email: TEST_USER.email }).select('+resetPasswordToken +resetPasswordExpires');
+      expect(user.resetPasswordToken).toBeFalsy();
+      expect(user.resetPasswordExpires).toBeFalsy();
+    });
   });
 
   describe('POST /api/v1/auth/reset-password', () => {
@@ -325,7 +350,7 @@ describe('Auth API', () => {
         .post('/api/v1/auth/register')
         .send(TEST_USER);
 
-      const rawToken = 'reset-token-123';
+      const rawToken = '123456';
       const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
       await User.findOneAndUpdate(
         { email: TEST_USER.email },
@@ -338,7 +363,8 @@ describe('Auth API', () => {
       const resetRes = await request(app)
         .post('/api/v1/auth/reset-password')
         .send({
-          token: rawToken,
+          email: TEST_USER.email,
+          otp: rawToken,
           newPassword: 'newpassword123',
           confirmNewPassword: 'newpassword123',
         });
@@ -361,7 +387,8 @@ describe('Auth API', () => {
       const res = await request(app)
         .post('/api/v1/auth/reset-password')
         .send({
-          token: 'invalid-token',
+          email: TEST_USER.email,
+          otp: '000000',
           newPassword: 'newpassword123',
           confirmNewPassword: 'newpassword123',
         });

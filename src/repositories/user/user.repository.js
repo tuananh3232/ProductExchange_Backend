@@ -6,6 +6,8 @@ export const findByEmailWithPassword = (email) => User.findOne({ email }).select
 
 export const findById = (id) => User.findById(id)
 
+export const findByIdWithPassword = (id) => User.findById(id).select('+password')
+
 export const findByIdWithRefreshToken = (id) => User.findById(id).select('+refreshToken')
 
 export const create = (userData) => User.create(userData)
@@ -24,6 +26,15 @@ export const findByResetPasswordToken = (hashedToken) =>
     resetPasswordToken: hashedToken,
     resetPasswordExpires: { $gt: new Date() },
   }).select('+password +resetPasswordToken +resetPasswordExpires')
+
+export const findByEmailWithResetPasswordToken = (email) =>
+  User.findOne({
+    email,
+    resetPasswordExpires: { $gt: new Date() },
+  }).select('+password +resetPasswordToken +resetPasswordExpires')
+
+export const findByIdWithResetPasswordToken = (id) =>
+  User.findById(id).select('+password +resetPasswordToken +resetPasswordExpires')
 
 export const findByEmailVerificationToken = (hashedToken) =>
   User.findOne({

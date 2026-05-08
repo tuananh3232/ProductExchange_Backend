@@ -178,9 +178,11 @@ router.post('/forgot-password', authRateLimit, validate(forgotPasswordSchema), a
  *         application/json:
  *           schema:
  *             type: object
- *             required: [token, newPassword, confirmNewPassword]
+ *             required: [email, otp, newPassword, confirmNewPassword]
  *             properties:
- *               token:
+ *               email:
+ *                 type: string
+ *               otp:
  *                 type: string
  *               newPassword:
  *                 type: string

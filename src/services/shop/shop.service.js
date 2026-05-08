@@ -141,6 +141,21 @@ export const updateShop = async (shopId, userContext, payload) => {
   ensureShopAccess(shop, userContext)
 
   const updateData = { ...payload }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'address') && payload.address) {
+    updateData.address = {
+      ...(shop.address || {}),
+      ...payload.address,
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'logo') && payload.logo) {
+    updateData.logo = {
+      ...(shop.logo || {}),
+      ...payload.logo,
+    }
+  }
+
   if (payload.slug || payload.name) {
     const slug = normalizeSlug(payload.slug || payload.name)
     const existed = await shopRepo.findBySlug(slug)

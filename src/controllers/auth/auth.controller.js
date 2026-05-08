@@ -68,7 +68,7 @@ export const unbanUser = asyncHandler(async (req, res) => {
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const result = await authService.forgotPassword(req.body)
-  const data = result.debugToken ? { debugToken: result.debugToken } : null
+  const data = result.debugOtp ? { debugOtp: result.debugOtp } : null
   sendSuccess(res, { message: MESSAGES.AUTH.FORGOT_PASSWORD_SENT, data })
 })
 
@@ -82,7 +82,7 @@ export const sendVerificationEmail = asyncHandler(async (req, res) => {
   if (result.alreadyVerified) {
     return sendSuccess(res, { message: MESSAGES.AUTH.EMAIL_ALREADY_VERIFIED })
   }
-  const data = result.debugToken ? { debugToken: result.debugToken } : null
+  const data = result.debugOtp ? { debugOtp: result.debugOtp } : null
   return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT, data })
 })
 

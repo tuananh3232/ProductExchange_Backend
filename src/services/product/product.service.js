@@ -147,7 +147,15 @@ export const updateProduct = async (productId, userContext, updateData) => {
     await ensureShopWritable(updateData.shop, userContext)
   }
 
-  return productRepo.updateById(productId, updateData)
+  const nextUpdateData = { ...updateData }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
+    nextUpdateData.location = {
+      ...(product.location || {}),
+      ...updateData.location,
+    }
+  }
+
+  return productRepo.updateById(productId, nextUpdateData)
 }
 
 export const deleteProduct = async (productId, userContext) => {

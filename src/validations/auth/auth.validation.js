@@ -56,7 +56,8 @@ export const forgotPasswordSchema = Joi.object({
 });
 
 export const resetPasswordSchema = Joi.object({
-  token: Joi.string().trim().required(),
+  email: Joi.string().trim().lowercase().email().required(),
+  otp: Joi.string().trim().pattern(/^\d{6}$/).required(),
   newPassword: Joi.string().min(6).max(50).required(),
   confirmNewPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
     'any.only': 'Passwords do not match',
