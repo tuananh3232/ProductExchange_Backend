@@ -92,6 +92,7 @@ const MESSAGES = {
   KYC: {
     SUBMITTED: 'Nộp hồ sơ xác minh danh tính thành công',
     FETCHED: 'Lấy thông tin KYC thành công',
+    FETCHED_ALL: 'Lấy danh sách KYC thành công',
     APPROVED: 'Xác minh danh tính thành công',
     REJECTED: 'Từ chối hồ sơ xác minh danh tính thành công',
   },

@@ -41,3 +41,12 @@ export const findByEmailVerificationToken = (hashedToken) =>
     emailVerificationToken: hashedToken,
     emailVerificationExpires: { $gt: new Date() },
   }).select('+emailVerificationToken +emailVerificationExpires')
+
+export const findAllByKycStatus = (status, { skip, limit }) =>
+  User.find({ 'kyc.status': status })
+    .select('name email kyc createdAt')
+    .sort({ 'kyc.submittedAt': -1 })
+    .skip(skip)
+    .limit(limit)
+
+export const countByKycStatus = (status) => User.countDocuments({ 'kyc.status': status })

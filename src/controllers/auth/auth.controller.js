@@ -86,6 +86,14 @@ export const sendVerificationEmail = asyncHandler(async (req, res) => {
   return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT, data })
 })
 
+export const adminGetAllKyc = asyncHandler(async (req, res) => {
+  const { status } = req.query
+  const page = parseInt(req.query.page) || 1
+  const limit = parseInt(req.query.limit) || 20
+  const result = await authService.adminGetAllKyc({ status }, { page, limit })
+  sendSuccess(res, { message: MESSAGES.KYC.FETCHED_ALL, data: result })
+})
+
 export const adminGetUserKyc = asyncHandler(async (req, res) => {
   const result = await authService.adminGetUserKyc(req.params.userId)
   sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })

@@ -47,7 +47,7 @@ const assertUserExists = async (userId) => {
 }
 
 export const createShop = async (ownerId, payload) => {
-  const ownerUser = await assertUserExists(ownerId)
+  await assertUserExists(ownerId)
 
   const slug = normalizeSlug(payload.slug || payload.name)
   if (!slug) {
@@ -66,12 +66,6 @@ export const createShop = async (ownerId, payload) => {
     staff: [],
     status: SHOP_STATUS.DRAFT,
   })
-
-  const ownerRoles = new Set(ownerUser.roles || [ownerUser.role].filter(Boolean))
-  ownerRoles.add(ROLES.SHOP_OWNER)
-  ownerUser.roles = [...ownerRoles]
-  ownerUser.role = ownerRoles.has(ROLES.ADMIN) ? ROLES.ADMIN : ownerUser.role
-  await ownerUser.save()
 
   return shopRepo.findById(shop._id)
 }
@@ -139,6 +133,10 @@ export const updateShop = async (shopId, userContext, payload) => {
   }
 
   ensureShopAccess(shop, userContext)
+
+  if (shop.status === SHOP_STATUS.PENDING_REVIEW) {
+    throw new AppError('Không thể sửa thông tin shop khi đang chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.LOCKED_FOR_REVIEW)
+  }
 
   const updateData = { ...payload }
 
@@ -340,10 +338,18 @@ export const approveShop = async (shopId) => {
     throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
   }
 
-  const shopOwner = await User.findById(shop.owner?._id || shop.owner).select('kyc')
+  const shopOwner = await User.findById(shop.owner?._id || shop.owner).select('kyc roles role')
   if (!shopOwner?.kyc || shopOwner.kyc.status !== 'approved') {
     throw new AppError('Chủ shop chưa được xác minh danh tính (KYC), không thể duyệt shop', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.NOT_APPROVED)
   }
+
+  const ownerRoles = new Set(shopOwner.roles || [shopOwner.role].filter(Boolean))
+  ownerRoles.add(ROLES.SHOP_OWNER)
+  shopOwner.roles = [...ownerRoles]
+  if (!shopOwner.role || shopOwner.role === ROLES.USER) {
+    shopOwner.role = ROLES.SHOP_OWNER
+  }
+  await shopOwner.save()
 
   return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
 }

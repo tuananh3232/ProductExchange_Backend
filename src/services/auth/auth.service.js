@@ -380,6 +380,27 @@ export const getMyKyc = async (userId) => {
   return { kyc: user.kyc || { status: 'none' } }
 }
 
+export const adminGetAllKyc = async (query, pagination) => {
+  const status = query.status || 'pending'
+  const { page, limit } = pagination
+  const skip = (page - 1) * limit
+
+  const [users, total] = await Promise.all([
+    userRepo.findAllByKycStatus(status, { skip, limit }),
+    userRepo.countByKycStatus(status),
+  ])
+
+  return {
+    users,
+    meta: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  }
+}
+
 export const adminGetUserKyc = async (userId) => {
   const user = await userRepo.findById(userId)
   if (!user) {
