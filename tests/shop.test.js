@@ -85,6 +85,40 @@ describe('Shop API', () => {
     expect(updateRes.body.data.shop.description).toBe('Updated profile');
   });
 
+  it('should allow draft shop owner with user role to submit for review', async () => {
+    await User.findByIdAndUpdate(ownerId, {
+      kyc: {
+        fullName: 'Shop Owner Candidate',
+        idNumber: '079123456789',
+        status: 'pending',
+        submittedAt: new Date(),
+      },
+    });
+
+    const createRes = await request(app)
+      .post('/api/v1/shops')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        name: 'Submit Review Shop',
+        phone: '0900000001',
+        email: 'submit-review-shop@example.com',
+        address: {
+          province: 'Ho Chi Minh',
+          district: 'District 1',
+        },
+      });
+
+    shopId = createRes.body.data.shop._id;
+
+    const submitRes = await request(app)
+      .post(`/api/v1/shops/${shopId}/submit`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(submitRes.statusCode).toBe(200);
+    expect(submitRes.body.success).toBe(true);
+    expect(submitRes.body.data.shop.status).toBe('pending_review');
+  });
+
   it('should reject another shop_owner updating shop outside scope', async () => {
     const createRes = await request(app)
       .post('/api/v1/shops')

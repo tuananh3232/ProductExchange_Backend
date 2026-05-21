@@ -236,6 +236,15 @@ export const updateProfile = async (userId, updateData) => {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
+  const pendingShop = await Shop.exists({ owner: userId, status: SHOP_STATUS.PENDING_REVIEW, isActive: true })
+  if (pendingShop) {
+    throw new AppError(
+      'Không thể cập nhật hồ sơ khi shop đang chờ xét duyệt',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.LOCKED_FOR_REVIEW
+    )
+  }
+
   if (updateData.name) user.name = updateData.name
   if (updateData.phone !== undefined) user.phone = updateData.phone
   if (updateData.address) {
@@ -406,6 +415,31 @@ export const getMyKyc = async (userId) => {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
   return { kyc: user.kyc || { status: 'none' } }
+}
+
+export const adminGetAllKyc = async (query, pagination) => {
+  const { page, limit } = pagination
+  const skip = (page - 1) * limit
+
+  const [users, total] = query.status
+    ? await Promise.all([
+        userRepo.findAllByKycStatus(query.status, { skip, limit }),
+        userRepo.countByKycStatus(query.status),
+      ])
+    : await Promise.all([
+        userRepo.findAllKyc({ skip, limit }),
+        userRepo.countAllKyc(),
+      ])
+
+  return {
+    users,
+    meta: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  }
 }
 
 export const adminGetUserKyc = async (userId) => {

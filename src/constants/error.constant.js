@@ -40,6 +40,7 @@ const ERRORS = {
     ALREADY_ACTIVE: 'Shop is already active',
     SUSPENDED: 'Shop has been suspended',
     INCOMPLETE_ONBOARDING: 'Shop profile is incomplete. Please fill in name, phone, email, and address before submitting',
+    LOCKED_FOR_REVIEW: 'Shop cannot be edited while it is under review',
     INVITATION_NOT_FOUND: 'Shop invitation not found',
     INVITATION_ALREADY_ACCEPTED: 'Invitation has already been accepted',
     INVITATION_ALREADY_REJECTED: 'Invitation has already been rejected',

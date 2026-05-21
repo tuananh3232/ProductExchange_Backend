@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as shopInvitationController from '../../controllers/shop/shop-invitation.controller.js';
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js';
+import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
 import {
   sendInvitationSchema,
@@ -36,7 +36,7 @@ router.delete(
 router.post(
   '/:id/invitations',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_MANAGE_STAFF),
+  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
   validate(sendInvitationSchema),
   shopInvitationController.sendInvitation
 );
@@ -45,7 +45,7 @@ router.post(
 router.get(
   '/:id/invitations',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_MANAGE_STAFF),
+  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
   shopInvitationController.getShopInvitations
 );
 

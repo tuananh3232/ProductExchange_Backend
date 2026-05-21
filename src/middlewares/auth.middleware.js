@@ -4,6 +4,7 @@ import AppError from '../utils/app-error.util.js'
 import ERRORS from '../constants/error.constant.js'
 import HTTP_STATUS from '../constants/http-status.constant.js'
 import * as roleRepo from '../repositories/role/role.repository.js'
+import { canAccessShopPermission } from '../utils/data-scope.util.js'
 
 /**
  * Middleware xác thực JWT
@@ -91,6 +92,31 @@ export const requirePermissions = (...requiredPermissions) => {
       }
 
       req.user.permissions = [...grantedPermissions]
+      next()
+    } catch (error) {
+      next(error)
+    }
+  }
+}
+
+/**
+ * Middleware phân quyền theo permission trong phạm vi 1 shop cụ thể.
+ * Owner của shop luôn được phép đi tiếp, staff cần có permission tương ứng.
+ */
+export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
+  return async (req, res, next) => {
+    try {
+      const shopId = req.params?.[shopIdParam]
+
+      if (!shopId) {
+        throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+      }
+
+      const allowed = await canAccessShopPermission(req.user, shopId, permissionKey)
+      if (!allowed) {
+        throw new AppError('Bạn không có quyền thực hiện hành động này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+      }
+
       next()
     } catch (error) {
       next(error)
