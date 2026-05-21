@@ -15,6 +15,32 @@ if (isProduction) {
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
 const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value);
+const dbName = process.env.DB_NAME || 'productexchange';
+
+const normalizeMongoUri = (uri, databaseName) => {
+  if (!uri) return uri;
+
+  try {
+    const url = new URL(uri);
+    const currentPath = url.pathname.replace(/^\/+/, '');
+
+    if (!currentPath || currentPath === 'test') {
+      url.pathname = `/${databaseName}`;
+    }
+
+    return url.toString();
+  } catch {
+    if (uri.endsWith('/test')) {
+      return `${uri.slice(0, -5)}/${databaseName}`;
+    }
+
+    if (uri.endsWith('/')) {
+      return `${uri}${databaseName}`;
+    }
+
+    return uri;
+  }
+};
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -22,7 +48,8 @@ export const env = {
   apiPrefix,
 
   mongodb: {
-    uri: process.env.MONGODB_URI,
+    uri: normalizeMongoUri(process.env.MONGODB_URI, dbName),
+    dbName,
   },
 
   jwt: {

@@ -74,11 +74,17 @@ const ensureShopWritable = async (shopId, userContext) => {
   return shop
 }
 
-const buildFilter = (query) => {
-  const filter = { isActive: true }
+const buildFilter = (query, { publicOnly = true } = {}) => {
+  const filter = {}
+
+  if (publicOnly) {
+    filter.isActive = true
+  } else if (query.isActive !== undefined) {
+    filter.isActive = query.isActive === 'true' || query.isActive === true
+  }
 
   if (query.status) filter.status = query.status
-  else filter.status = 'available' // Mặc định chỉ lấy sản phẩm còn bán
+  else if (publicOnly) filter.status = 'available' // Mặc định chỉ lấy sản phẩm còn bán
 
   const categoryId = normalizeQueryId(query.category)
   if (categoryId) filter.category = categoryId
@@ -111,6 +117,30 @@ const buildFilter = (query) => {
 
 export const getProducts = async (query, pagination) => {
   const filter = buildFilter(query)
+  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  return { products, meta }
+}
+
+export const getAdminProducts = async (query, pagination) => {
+  const filter = buildFilter(query, { publicOnly: false })
+  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  return { products, meta }
+}
+
+export const getShopProducts = async (shopId, userContext, query, pagination) => {
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.PRODUCT_READ,
+    message: 'Bạn không có quyền xem sản phẩm của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
+
+  const filter = buildFilter({ ...query, shopId }, { publicOnly: false })
+  if (query.isActive === undefined) {
+    filter.isActive = true
+  }
+
   const { items: products, meta } = await paginate(productRepo, filter, pagination)
   return { products, meta }
 }

@@ -8,13 +8,13 @@ const router = Router()
 /**
  * @swagger
  * tags:
- *   name: Statistics
- *   description: API thống kê cho admin và shop owner
+ *   - name: Admin - Statistics
+ *     description: API thống kê toàn hệ thống dành cho admin
  *
  * /admin/stats/overview:
  *   get:
- *     summary: Thống kê tổng quan toàn hệ thống (admin)
- *     tags: [Statistics]
+ *     summary: Thống kê tổng quan toàn hệ thống
+ *     tags: [Admin - Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -34,8 +34,8 @@ const router = Router()
  *
  * /admin/stats/revenue:
  *   get:
- *     summary: Thống kê doanh thu toàn hệ thống (admin)
- *     tags: [Statistics]
+ *     summary: Thống kê doanh thu toàn hệ thống
+ *     tags: [Admin - Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -60,8 +60,8 @@ const router = Router()
  *
  * /admin/stats/top-shops:
  *   get:
- *     summary: Top shop theo doanh thu (admin)
- *     tags: [Statistics]
+ *     summary: Top shop theo doanh thu
+ *     tags: [Admin - Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -86,8 +86,8 @@ const router = Router()
  *
  * /admin/stats/top-products:
  *   get:
- *     summary: Top sản phẩm theo doanh thu (admin)
- *     tags: [Statistics]
+ *     summary: Top sản phẩm theo doanh thu
+ *     tags: [Admin - Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate

@@ -2,18 +2,21 @@ import mongoose from 'mongoose';
 import { env } from './env.config.js';
 
 let isConnected = false;
+let isDisconnecting = false;
 
 export const connectDB = async () => {
   if (isConnected) return;
 
   try {
     await mongoose.connect(env.mongodb.uri, {
+      dbName: env.mongodb.dbName,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
 
+    isDisconnecting = false;
     isConnected = true;
-    console.log('MongoDB connected successfully');
+    console.log(`MongoDB connected successfully: ${mongoose.connection.name}`);
 
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);
@@ -21,7 +24,9 @@ export const connectDB = async () => {
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB disconnected. Attempting to reconnect...');
+      if (!isDisconnecting) {
+        console.warn('MongoDB disconnected. Attempting to reconnect...');
+      }
       isConnected = false;
     });
   } catch (error) {
@@ -32,6 +37,7 @@ export const connectDB = async () => {
 
 export const disconnectDB = async () => {
   if (!isConnected) return;
+  isDisconnecting = true;
   await mongoose.disconnect();
   isConnected = false;
   console.log('MongoDB disconnected');

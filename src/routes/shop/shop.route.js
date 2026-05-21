@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as shopController from '../../controllers/shop/shop.controller.js'
-import { authenticate, requirePermissions, requireShopPermission } from '../../middlewares/auth.middleware.js'
+import * as productController from '../../controllers/product/product.controller.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import {
   addStaffSchema,
@@ -28,6 +29,20 @@ router.get(
 )
 
 router.get('/:id', shopController.getShopById)
+
+router.get(
+  '/:id/dashboard',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_READ),
+  shopController.getShopDashboard
+)
+
+router.get(
+  '/:id/products',
+  authenticate,
+  requirePermissions(PERMISSIONS.PRODUCT_READ),
+  productController.getShopProducts
+)
 
 router.post(
   '/',
@@ -59,6 +74,20 @@ router.post(
   requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
   validate(addStaffSchema),
   shopController.addStaff
+)
+
+router.get(
+  '/:id/staff',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_READ),
+  shopController.getShopStaff
+)
+
+router.get(
+  '/:id/staff/candidates',
+  authenticate,
+  requirePermissions(PERMISSIONS.SHOP_MANAGE_STAFF),
+  shopController.getInviteeCandidates
 )
 
 router.get(
@@ -105,16 +134,40 @@ export default router
 /**
  * @swagger
  * tags:
- *   name: Shops
- *   description: API quản lý shop
+ *   - name: Public - Shops
+ *     description: API shop public
+ *   - name: Shop Owner
+ *     description: API quản lý shop dành cho owner
+ *   - name: Shop Dashboard
+ *     description: API dashboard shop dành cho owner/staff
+ *   - name: Shop Products
+ *     description: API quản lý sản phẩm thuộc shop
+ *   - name: Shop Staff Management
+ *     description: API quản lý staff của shop
+ *   - name: Shop Invitations
+ *     description: API quản lý lời mời tham gia shop
  */
 
 /**
  * @swagger
  * /shops/{id}/staff:
+ *   get:
+ *     summary: Lấy danh sách staff của shop
+ *     tags: [Shop Staff Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách staff thành công
  *   post:
  *     summary: Thêm staff vào shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -137,9 +190,10 @@ export default router
  *     responses:
  *       200:
  *         description: Thêm staff vào shop thành công
- *   delete:
- *     summary: Xóa staff khỏi shop
- *     tags: [Shops]
+ * /shops/{id}/dashboard:
+ *   get:
+ *     summary: Lấy thông tin dashboard shop cho owner/staff
+ *     tags: [Shop Dashboard]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -148,19 +202,62 @@ export default router
  *         required: true
  *         schema:
  *           type: string
+ *     responses:
+ *       200:
+ *         description: Lấy thông tin shop thành công
+ *
+ * /shops/{id}/products:
+ *   get:
+ *     summary: Lấy danh sách sản phẩm thuộc shop cho owner/staff/admin
+ *     tags: [Shop Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
  *       - in: path
- *         name: staffUserId
+ *         name: id
  *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách sản phẩm của shop thành công
+ *
+ * /shops/{id}/staff/candidates:
+ *   get:
+ *     summary: Tìm người có thể mời làm staff
+ *     tags: [Shop Staff Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: search
  *         schema:
  *           type: string
  *     responses:
  *       200:
- *         description: Xóa staff khỏi shop thành công
+ *         description: Lấy danh sách người có thể mời thành công
  *
  * /shops/{id}/staff/{staffUserId}/permissions:
  *   get:
  *     summary: Lấy danh sách quyền của staff trong shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -179,7 +276,7 @@ export default router
  *         description: Lấy danh sách quyền staff thành công
  *   put:
  *     summary: Cập nhật quyền của staff trong shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -212,7 +309,7 @@ export default router
  * /shops/{id}/invitations:
  *   post:
  *     summary: Gửi lời mời tham gia shop
- *     tags: [Shops]
+ *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -241,7 +338,7 @@ export default router
  *         description: Gửi lời mời tham gia shop thành công
  *   get:
  *     summary: Lấy danh sách lời mời của shop
- *     tags: [Shops]
+ *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -262,7 +359,7 @@ export default router
  * /shops/my/invitations:
  *   get:
  *     summary: Lấy danh sách lời mời đang chờ của tôi
- *     tags: [Shops]
+ *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -281,7 +378,7 @@ export default router
  * /shops/invitations/{invitationId}/action:
  *   post:
  *     summary: Chấp nhận hoặc từ chối lời mời tham gia shop
- *     tags: [Shops]
+ *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -308,7 +405,7 @@ export default router
  * /shops/invitations/{invitationId}:
  *   delete:
  *     summary: Hủy lời mời tham gia shop
- *     tags: [Shops]
+ *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -327,7 +424,7 @@ export default router
  * /shops/{id}/staff/{staffUserId}/permissions:
  *   get:
  *     summary: Lấy danh sách quyền của staff trong shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     parameters:
  *       - in: path
  *         name: id
@@ -344,7 +441,7 @@ export default router
  *         description: Lấy danh sách quyền staff thành công
  *   put:
  *     summary: Cập nhật quyền của staff trong shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     parameters:
  *       - in: path
  *         name: id
@@ -376,13 +473,23 @@ export default router
 /**
  * @swagger
  * tags:
- *   name: Shops
- *   description: API quản lý shop
+ *   - name: Public - Shops
+ *     description: API shop public
+ *   - name: Shop Owner
+ *     description: API quản lý shop dành cho owner
+ *   - name: Shop Dashboard
+ *     description: API dashboard shop dành cho owner/staff
+ *   - name: Shop Products
+ *     description: API quản lý sản phẩm thuộc shop
+ *   - name: Shop Staff Management
+ *     description: API quản lý staff của shop
+ *   - name: Shop Invitations
+ *     description: API quản lý lời mời tham gia shop
  *
  * /shops/mine:
  *   get:
- *     summary: Lấy danh sách shop của tôi (owner)
- *     tags: [Shops]
+ *     summary: Lấy danh sách shop của tôi
+ *     tags: [Shop Owner]
  *     parameters:
  *       - in: query
  *         name: status
@@ -403,15 +510,15 @@ export default router
  *
  * /shops:
  *   get:
- *     summary: Lấy danh sách shop
- *     tags: [Shops]
+ *     summary: Lấy danh sách shop public
+ *     tags: [Public - Shops]
  *     security: []
  *     responses:
  *       200:
  *         description: Lấy danh sách shop thành công
  *   post:
  *     summary: Tạo shop mới
- *     tags: [Shops]
+ *     tags: [Shop Owner]
  *     requestBody:
  *       required: true
  *       content:
@@ -434,8 +541,8 @@ export default router
  *
  * /shops/{id}:
  *   get:
- *     summary: Xem chi tiết shop
- *     tags: [Shops]
+ *     summary: Xem chi tiết shop public
+ *     tags: [Public - Shops]
  *     security: []
  *     parameters:
  *       - in: path
@@ -448,7 +555,7 @@ export default router
  *         description: Lấy chi tiết shop thành công
  *   put:
  *     summary: Cập nhật shop
- *     tags: [Shops]
+ *     tags: [Shop Owner]
  *     parameters:
  *       - in: path
  *         name: id
@@ -487,7 +594,7 @@ export default router
  * /shops/{id}/owner:
  *   patch:
  *     summary: Chuyển owner shop
- *     tags: [Shops]
+ *     tags: [Shop Owner]
  *     parameters:
  *       - in: path
  *         name: id
@@ -501,7 +608,7 @@ export default router
  * /shops/{id}/staff:
  *   post:
  *     summary: Thêm staff vào shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     parameters:
  *       - in: path
  *         name: id
@@ -515,7 +622,7 @@ export default router
  * /shops/{id}/staff/{staffUserId}:
  *   delete:
  *     summary: Gỡ staff khỏi shop
- *     tags: [Shops]
+ *     tags: [Shop Staff Management]
  *     parameters:
  *       - in: path
  *         name: id
@@ -533,8 +640,8 @@ export default router
  *
  * /shops/{id}/submit:
  *   post:
- *     summary: Nộp shop để xét duyệt (draft → pending_review)
- *     tags: [Shops]
+ *     summary: Nộp shop để xét duyệt
+ *     tags: [Shop Owner]
  *     parameters:
  *       - in: path
  *         name: id
@@ -547,8 +654,8 @@ export default router
  *
  * /shops/{id}/resubmit:
  *   post:
- *     summary: Nộp lại shop sau khi bị từ chối (rejected → pending_review)
- *     tags: [Shops]
+ *     summary: Nộp lại shop sau khi bị từ chối
+ *     tags: [Shop Owner]
  *     parameters:
  *       - in: path
  *         name: id

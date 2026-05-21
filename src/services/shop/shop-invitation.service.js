@@ -115,14 +115,11 @@ export const acceptInvitation = async (invitationId, userContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND);
   }
 
-  // Update user role to include STAFF
+  // Update user roles to include STAFF
   const user = await User.findById(userContext._id);
-  const userRoles = new Set(user.roles || [user.role].filter(Boolean));
+  const userRoles = new Set(user.roles || []);
   userRoles.add(ROLES.STAFF);
   user.roles = [...userRoles];
-  if (!user.role) {
-    user.role = ROLES.STAFF;
-  }
   await user.save();
 
   // Add user to shop staff

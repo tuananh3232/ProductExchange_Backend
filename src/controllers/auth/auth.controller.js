@@ -1,6 +1,7 @@
 import * as authService from '../../services/auth/auth.service.js'
 import { sendSuccess } from '../../utils/response.util.js'
 import { toUserResponse } from '../../utils/user.util.js'
+import { getPaginationParams } from '../../utils/pagination.util.js'
 import { asyncHandler } from '../../utils/async-handler.util.js'
 import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -64,6 +65,12 @@ export const banUser = asyncHandler(async (req, res) => {
 export const unbanUser = asyncHandler(async (req, res) => {
   const user = await authService.unbanUser(req.params.userId)
   sendSuccess(res, { message: MESSAGES.USER.UNBANNED, data: { user } })
+})
+
+export const getAdminUsers = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { users, meta } = await authService.getAdminUsers(req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.ADMIN.USERS_FETCHED, data: { users }, meta })
 })
 
 export const forgotPassword = asyncHandler(async (req, res) => {

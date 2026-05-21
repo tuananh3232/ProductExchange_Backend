@@ -22,7 +22,7 @@ export const authenticate = async (req, res, next) => {
     const decoded = verifyAccessToken(token)
 
     // Kiểm tra user còn tồn tại và còn active
-    const user = await User.findById(decoded.userId).select('_id role roles isActive')
+    const user = await User.findById(decoded.userId).select('_id roles isActive')
     if (!user) {
       throw new AppError('Tài khoản không tồn tại', HTTP_STATUS.UNAUTHORIZED, ERRORS.AUTH.UNAUTHORIZED)
     }
@@ -31,13 +31,10 @@ export const authenticate = async (req, res, next) => {
       throw new AppError('Tài khoản đã bị khóa', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.ACCOUNT_INACTIVE)
     }
 
-    const userRoles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role].filter(Boolean)
-
-    const primaryRole = userRoles.includes(user.role) ? user.role : userRoles[0]
+    const userRoles = Array.isArray(user.roles) && user.roles.length ? user.roles : []
 
     req.user = {
       _id: user._id,
-      role: primaryRole,
       roles: userRoles,
       isActive: user.isActive,
     }

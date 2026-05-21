@@ -38,11 +38,6 @@ const userSchema = new mongoose.Schema(
       district: { type: String, default: '' },
       detail: { type: String, default: '' },
     },
-    role: {
-      type: String,
-      enum: ROLE_ENUM,
-      default: ROLES.USER,
-    },
     roles: {
       type: [
         {
@@ -119,23 +114,11 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Giữ tương thích với code cũ: role đơn vẫn được duy trì từ danh sách roles
 userSchema.pre('validate', function () {
-  const declaredRole = this.role || ROLES.USER;
   const normalizedRoles = Array.isArray(this.roles) ? [...new Set(this.roles.filter(Boolean))] : [];
 
   if (!normalizedRoles.length) {
-    normalizedRoles.push(declaredRole);
-  } else if (normalizedRoles.length === 1 && normalizedRoles[0] === ROLES.USER && declaredRole !== ROLES.USER) {
-    normalizedRoles[0] = declaredRole;
-  } else if (declaredRole !== ROLES.USER && !normalizedRoles.includes(declaredRole)) {
-    normalizedRoles.unshift(declaredRole);
-  }
-
-  if (normalizedRoles.includes(ROLES.ADMIN)) {
-    this.role = ROLES.ADMIN;
-  } else {
-    this.role = declaredRole;
+    normalizedRoles.push(ROLES.USER);
   }
 
   this.roles = normalizedRoles;

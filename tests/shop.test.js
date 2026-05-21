@@ -2,6 +2,7 @@ import request from 'supertest';
 import app from '../src/server.js';
 import User from '../src/models/user.model.js';
 import Shop from '../src/models/shop.model.js';
+import { createToken } from './fixtures/testData.js'
 
 let ownerId;
 let staffId;
@@ -10,8 +11,6 @@ let ownerToken;
 let staffToken;
 let outsiderToken;
 let shopId;
-
-import { createToken } from './fixtures/testData.js'
 
 describe('Shop API', () => {
   beforeEach(async () => {
@@ -160,6 +159,22 @@ describe('Shop API', () => {
 
     expect(updateRes.statusCode).toBe(200);
     expect(updateRes.body.success).toBe(true);
+
+    const dashboardRes = await request(app)
+      .get(`/api/v1/shops/${shopId}/dashboard`)
+      .set('Authorization', `Bearer ${staffToken}`);
+
+    expect(dashboardRes.statusCode).toBe(200);
+    expect(dashboardRes.body.success).toBe(true);
+    expect(dashboardRes.body.data.shop._id).toBe(shopId.toString());
+
+    const mineRes = await request(app)
+      .get('/api/v1/shops/mine')
+      .set('Authorization', `Bearer ${staffToken}`);
+
+    expect(mineRes.statusCode).toBe(200);
+    expect(mineRes.body.success).toBe(true);
+    expect(mineRes.body.data.shops).toHaveLength(1);
   });
 
   it('should transfer owner successfully', async () => {
@@ -178,5 +193,31 @@ describe('Shop API', () => {
     expect(transferRes.statusCode).toBe(200);
     expect(transferRes.body.success).toBe(true);
     expect(transferRes.body.data.shop.owner._id).toBe(outsiderId.toString());
+  });
+
+  it('should list invitee candidates for staff management', async () => {
+    const createRes = await request(app)
+      .post('/api/v1/shops')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'Anh Decor Shop' });
+
+    shopId = createRes.body.data.shop._id;
+
+    await request(app)
+      .post(`/api/v1/shops/${shopId}/staff`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ staffUserId: staffId.toString() });
+
+    const res = await request(app)
+      .get(`/api/v1/shops/${shopId}/staff/candidates`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .query({ search: 'Shop' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.users)).toBe(true);
+    expect(res.body.data.users.some((user) => user._id === outsiderId.toString())).toBe(true);
+    expect(res.body.data.users.some((user) => user._id === ownerId.toString())).toBe(false);
+    expect(res.body.data.users.some((user) => user._id === staffId.toString())).toBe(false);
   });
 });

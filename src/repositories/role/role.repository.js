@@ -29,5 +29,5 @@ export const upsertRoleByCode = async ({ code, name, description, permissionIds 
         code,
       },
     },
-    { new: true, upsert: true, runValidators: true }
+    { returnDocument: 'after', upsert: true, runValidators: true }
   )

@@ -64,7 +64,7 @@ const router = Router()
  *                   id: "..."
  *                   name: "..."
  *                   email: "..."
- *                   role: user
+ *                   roles: [user]
  */
 router.post('/register', authRateLimit, validate(registerSchema), authController.register)
 

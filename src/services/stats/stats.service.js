@@ -310,9 +310,9 @@ const buildShopOverview = async (shopId, userContext, query = {}) => {
   })
 
   const shop = await Shop.findById(shopId)
-    .populate('owner', 'name email role roles')
-    .populate('staff', 'name email role roles')
-    .populate('staffPermissions.staffUser', 'name email role roles')
+    .populate('owner', 'name email roles')
+    .populate('staff', 'name email roles')
+    .populate('staffPermissions.staffUser', 'name email roles')
 
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.STATS.SHOP_NOT_FOUND)
@@ -345,7 +345,6 @@ const buildShopOverview = async (shopId, userContext, query = {}) => {
       _id: member._id,
       name: member.name,
       email: member.email,
-      role: member.role,
       roles: member.roles,
       permissions: entry ? entry.permissions || [] : [],
       updatedAt: entry ? entry.updatedAt || null : null,
@@ -425,8 +424,8 @@ const buildShopStaff = async (shopId, userContext) => {
   })
 
   const shop = await Shop.findById(shopId)
-    .populate('staff', 'name email role roles')
-    .populate('staffPermissions.staffUser', 'name email role roles')
+    .populate('staff', 'name email roles')
+    .populate('staffPermissions.staffUser', 'name email roles')
 
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.STATS.SHOP_NOT_FOUND)
@@ -442,7 +441,6 @@ const buildShopStaff = async (shopId, userContext) => {
         _id: member._id,
         name: member.name,
         email: member.email,
-        role: member.role,
         roles: member.roles,
         permissions: entry ? entry.permissions || [] : [],
         updatedAt: entry ? entry.updatedAt || null : null,

@@ -8,8 +8,7 @@ import { sendPasswordOtpEmail, sendVerificationOtpEmail } from '../../utils/mail
 import { env } from '../../configs/env.config.js'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
-import Shop from '../../models/shop.model.js'
-import { SHOP_STATUS } from '../../constants/status.constant.js'
+import { paginate } from '../../utils/pagination.util.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
@@ -53,7 +52,7 @@ const dispatchPasswordOtp = async (user, otp, purpose) => {
 }
 
 const issueAuthTokens = async (user) => {
-  const payload = { userId: user._id.toString(), role: user.role }
+  const payload = { userId: user._id.toString(), roles: user.roles || [] }
   const accessToken = generateAccessToken(payload)
   const refreshToken = generateRefreshToken(payload)
 
@@ -196,7 +195,7 @@ export const refreshToken = async (token) => {
     throw new AppError('Phiên làm việc không hợp lệ', HTTP_STATUS.UNAUTHORIZED, ERRORS.AUTH.REFRESH_TOKEN_INVALID)
   }
 
-  const payload = { userId: user._id.toString(), role: user.role }
+  const payload = { userId: user._id.toString(), roles: user.roles || [] }
   const newAccessToken = generateAccessToken(payload)
   const newRefreshToken = generateRefreshToken(payload)
   await userRepo.saveRefreshToken(user._id, newRefreshToken)
@@ -276,6 +275,33 @@ export const unbanUser = async (userId) => {
   user.isActive = true
   await user.save()
   return user.toPublicJSON()
+}
+
+export const getAdminUsers = async (query, pagination) => {
+  const filter = {}
+
+  if (query.search) {
+    filter.$or = [
+      { name: { $regex: query.search, $options: 'i' } },
+      { email: { $regex: query.search, $options: 'i' } },
+    ]
+  }
+
+  const roleFilter = query.role || query.roles
+  if (roleFilter) {
+    filter.roles = { $in: String(roleFilter).split(',').map((role) => role.trim()).filter(Boolean) }
+  }
+
+  if (query.isActive !== undefined) {
+    filter.isActive = query.isActive === 'true' || query.isActive === true
+  }
+
+  const { items: users, meta } = await paginate(userRepo, filter, pagination)
+
+  return {
+    users: users.map((user) => user.toPublicJSON()),
+    meta,
+  }
 }
 
 export const forgotPassword = async ({ email }) => {

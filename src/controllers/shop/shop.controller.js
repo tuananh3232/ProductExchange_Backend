@@ -25,6 +25,11 @@ export const getShopById = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.SHOP.DETAIL_FETCHED, data: { shop } })
 })
 
+export const getShopDashboard = asyncHandler(async (req, res) => {
+  const shop = await shopService.getShopDashboard(req.params.id, req.user)
+  sendSuccess(res, { message: MESSAGES.SHOP.DASHBOARD_FETCHED, data: { shop } })
+})
+
 export const updateShop = asyncHandler(async (req, res) => {
   const shop = await shopService.updateShop(req.params.id, req.user, req.body)
   sendSuccess(res, { message: MESSAGES.SHOP.UPDATED, data: { shop } })
@@ -45,6 +50,11 @@ export const removeStaff = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.SHOP.STAFF_REMOVED, data: { shop } })
 })
 
+export const getShopStaff = asyncHandler(async (req, res) => {
+  const result = await shopService.getShopStaff(req.params.id, req.user)
+  sendSuccess(res, { message: MESSAGES.SHOP.STAFF_FETCHED, data: result })
+})
+
 export const getStaffPermissions = asyncHandler(async (req, res) => {
   const result = await shopService.getStaffPermissions(req.params.id, req.user, req.params.staffUserId)
   sendSuccess(res, { message: MESSAGES.SHOP.STAFF_PERMISSIONS_FETCHED, data: result })
@@ -58,6 +68,12 @@ export const updateStaffPermissions = asyncHandler(async (req, res) => {
     req.body.permissions
   )
   sendSuccess(res, { message: MESSAGES.SHOP.STAFF_PERMISSIONS_UPDATED, data: result })
+})
+
+export const getInviteeCandidates = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { users, meta } = await shopService.getInviteeCandidates(req.params.id, req.user, req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.SHOP.INVITEE_CANDIDATES_FETCHED, data: { users }, meta })
 })
 
 export const getMyShops = asyncHandler(async (req, res) => {

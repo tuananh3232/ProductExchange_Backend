@@ -1,6 +1,8 @@
 import request from 'supertest';
 import app from '../src/server.js';
 import User from '../src/models/user.model.js';
+import Product from '../src/models/product.model.js';
+import Category from '../src/models/category.model.js';
 
 let adminId;
 let userId;
@@ -19,7 +21,7 @@ const createToken = async (userId) => {
 describe('Admin API', () => {
   beforeEach(async () => {
     // Clear users
-    await User.deleteMany({});
+    await Promise.all([User.deleteMany({}), Product.deleteMany({}), Category.deleteMany({})]);
 
     // Create admin user
     const admin = await User.create({
@@ -158,6 +160,59 @@ describe('Admin API', () => {
 
       expect(res.statusCode).toBe(401);
       expect(res.body.success).toBe(false);
+    });
+  });
+
+  describe('GET /api/v1/admin/users', () => {
+    it('should return paginated users for admin', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ search: 'Regular' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data.users)).toBe(true);
+      expect(res.body.data.users).toHaveLength(1);
+      expect(res.body.data.users[0].email).toBe('user@example.com');
+    });
+  });
+
+  describe('GET /api/v1/admin/products', () => {
+    it('should return all products for admin without public status filtering', async () => {
+      const category = await Category.create({ name: 'Admin Products', slug: 'admin-products' });
+      await Product.create([
+        {
+          title: 'Available admin product',
+          description: 'Product visible in public listing',
+          price: 100000,
+          listingType: 'sell',
+          condition: 'good',
+          category: category._id,
+          owner: userId,
+          status: 'available',
+        },
+        {
+          title: 'Hidden admin product',
+          description: 'Product hidden from public listing',
+          price: 200000,
+          listingType: 'sell',
+          condition: 'good',
+          category: category._id,
+          owner: userId,
+          status: 'hidden',
+        },
+      ]);
+
+      const res = await request(app)
+        .get('/api/v1/admin/products')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.products.map((product) => product.status)).toEqual(
+        expect.arrayContaining(['available', 'hidden'])
+      );
     });
   });
 });

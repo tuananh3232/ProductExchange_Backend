@@ -3,12 +3,16 @@ import app from '../src/server.js';
 import User from '../src/models/user.model.js';
 import Role from '../src/models/role.model.js';
 import Permission from '../src/models/permission.model.js';
-import { ensureRbacSeedData } from '../src/services/rbac-seed.service.js';
+import { ensureRbacSeedData } from '../src/services/rbac/rbac-seed.service.js';
 
 let adminId;
 let userId;
+let ownerId;
+let staffId;
 let adminToken;
 let userToken;
+let ownerToken;
+let staffToken;
 
 const createToken = async (userId, role = 'user') => {
   const jwt = await import('jsonwebtoken');
@@ -37,10 +41,45 @@ describe('RBAC API', () => {
       roles: ['user'],
     });
 
+    const owner = await User.create({
+      name: 'Shop Owner',
+      email: 'owner-rbac@example.com',
+      password: '12345',
+      role: 'shop_owner',
+      roles: ['shop_owner'],
+    });
+
+    const staff = await User.create({
+      name: 'Staff',
+      email: 'staff-rbac@example.com',
+      password: '12345',
+      role: 'staff',
+      roles: ['staff'],
+    });
+
     adminId = admin._id;
     userId = user._id;
+    ownerId = owner._id;
+    staffId = staff._id;
     adminToken = await createToken(adminId, 'admin');
     userToken = await createToken(userId, 'user');
+    ownerToken = await createToken(ownerId, 'shop_owner');
+    staffToken = await createToken(staffId, 'staff');
+  });
+
+  describe('GET /api/v1/users/me', () => {
+    it.each([
+      ['shop owner', () => ownerToken, 'Shop Owner'],
+      ['staff', () => staffToken, 'Staff'],
+    ])('should allow %s to get their own profile', async (_label, getToken, expectedName) => {
+      const res = await request(app)
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${getToken()}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.name).toBe(expectedName);
+    });
   });
 
   describe('GET /api/v1/admin/rbac/permissions', () => {

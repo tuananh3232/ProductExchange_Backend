@@ -11,6 +11,18 @@ export const getProducts = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.PRODUCT.FETCHED, data: { products }, meta })
 })
 
+export const getAdminProducts = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { products, meta } = await productService.getAdminProducts(req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.ADMIN_FETCHED, data: { products }, meta })
+})
+
+export const getShopProducts = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { products, meta } = await productService.getShopProducts(req.params.id, req.user, req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.SHOP_FETCHED, data: { products }, meta })
+})
+
 export const getProductById = asyncHandler(async (req, res) => {
   const product = await productService.getProductById(req.params.id)
   sendSuccess(res, { message: MESSAGES.PRODUCT.DETAIL_FETCHED, data: { product } })

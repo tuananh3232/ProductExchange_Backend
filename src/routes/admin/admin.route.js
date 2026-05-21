@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import * as shopController from '../../controllers/shop/shop.controller.js'
+import * as productController from '../../controllers/product/product.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { banUserSchema, rejectKycSchema } from '../../validations/auth/auth.validation.js'
@@ -15,16 +16,102 @@ router.use('/stats', adminStatsRoutes)
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Các API quản trị hệ thống (chỉ admin mới dùng được)
+ *   - name: Admin - Users
+ *     description: API quản trị người dùng
+ *   - name: Admin - Products
+ *     description: API quản trị sản phẩm
+ *   - name: Admin - Shops
+ *     description: API quản trị shop
+ *   - name: Admin - KYC
+ *     description: API quản trị hồ sơ KYC
  */
+
+/**
+ * @swagger
+ * /admin/users:
+ *   get:
+ *     summary: Lấy danh sách người dùng
+ *     tags: [Admin - Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách người dùng thành công
+ */
+router.get(
+  '/users',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  authController.getAdminUsers
+)
+
+/**
+ * @swagger
+ * /admin/products:
+ *   get:
+ *     summary: Lấy danh sách tất cả sản phẩm
+ *     tags: [Admin - Products]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: shopId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: ownerId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách sản phẩm thành công
+ */
+router.get(
+  '/products',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_PRODUCTS),
+  productController.getAdminProducts
+)
 
 /**
  * @swagger
  * /admin/users/{userId}/ban:
  *   patch:
  *     summary: Khóa tài khoản người dùng
- *     tags: [Admin]
+ *     tags: [Admin - Users]
  *     parameters:
  *       - in: path
  *         name: userId
@@ -58,7 +145,7 @@ router.patch(
  * /admin/users/{userId}/unban:
  *   patch:
  *     summary: Mở khóa tài khoản người dùng
- *     tags: [Admin]
+ *     tags: [Admin - Users]
  *     parameters:
  *       - in: path
  *         name: userId
@@ -82,8 +169,8 @@ router.patch(
  * @swagger
  * /admin/shops:
  *   get:
- *     summary: Lấy danh sách tất cả shop (admin)
- *     tags: [Admin]
+ *     summary: Lấy danh sách tất cả shop
+ *     tags: [Admin - Shops]
  *     parameters:
  *       - in: query
  *         name: status
@@ -105,7 +192,7 @@ router.patch(
  * /admin/shops/{id}/approve:
  *   patch:
  *     summary: Duyệt shop
- *     tags: [Admin]
+ *     tags: [Admin - Shops]
  *     parameters:
  *       - in: path
  *         name: id
@@ -119,7 +206,7 @@ router.patch(
  * /admin/shops/{id}/reject:
  *   patch:
  *     summary: Từ chối shop
- *     tags: [Admin]
+ *     tags: [Admin - Shops]
  *     parameters:
  *       - in: path
  *         name: id
@@ -143,7 +230,7 @@ router.patch(
  * /admin/shops/{id}/suspend:
  *   patch:
  *     summary: Đình chỉ shop
- *     tags: [Admin]
+ *     tags: [Admin - Shops]
  *     parameters:
  *       - in: path
  *         name: id
@@ -240,7 +327,7 @@ router.get(
  * /admin/users/{userId}/kyc:
  *   get:
  *     summary: Lấy hồ sơ KYC của người dùng
- *     tags: [Admin]
+ *     tags: [Admin - KYC]
  *     parameters:
  *       - in: path
  *         name: userId
@@ -254,7 +341,7 @@ router.get(
  * /admin/users/{userId}/kyc/approve:
  *   patch:
  *     summary: Duyệt hồ sơ KYC
- *     tags: [Admin]
+ *     tags: [Admin - KYC]
  *     parameters:
  *       - in: path
  *         name: userId
@@ -268,7 +355,7 @@ router.get(
  * /admin/users/{userId}/kyc/reject:
  *   patch:
  *     summary: Từ chối hồ sơ KYC
- *     tags: [Admin]
+ *     tags: [Admin - KYC]
  *     parameters:
  *       - in: path
  *         name: userId

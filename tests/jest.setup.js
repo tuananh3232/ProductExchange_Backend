@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const originalMongoUri = process.env.MONGODB_URI || '';
-const testDbName = process.env.MONGODB_TEST_DB_NAME || 'productexchange_test';
+const dbName = process.env.DB_NAME || 'productexchange';
 
 const injectDatabaseName = (uri, databaseName) => {
   if (!uri) return uri;
@@ -29,5 +29,11 @@ const injectDatabaseName = (uri, databaseName) => {
 process.env.NODE_ENV = 'test';
 
 if (originalMongoUri) {
-  process.env.MONGODB_URI = process.env.MONGODB_URI_TEST || injectDatabaseName(originalMongoUri, testDbName);
+  process.env.MONGODB_URI = injectDatabaseName(originalMongoUri, dbName);
+}
+
+if (dbName === 'productexchange' && process.env.ALLOW_DESTRUCTIVE_PRODUCTEXCHANGE_TESTS !== 'true') {
+  throw new Error(
+    'Tests are blocked because they delete collections in productexchange. Set ALLOW_DESTRUCTIVE_PRODUCTEXCHANGE_TESTS=true only when you intentionally want to clear test data in this database.'
+  );
 }
