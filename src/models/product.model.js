@@ -19,6 +19,11 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Price is required'],
       min: [0, 'Price must be a positive number'],
     },
+    stock: {
+      type: Number,
+      default: 1,
+      min: [0, 'Stock must not be negative'],
+    },
     listingType: {
       type: String,
       enum: ['sell'],

@@ -38,9 +38,9 @@ const buildDecorProducts = (prefix, categoryLabel, basePrice, location, conditio
       title: `${prefix} ${itemNumber}`,
       description: `${categoryLabel} số ${itemNumber} dành cho không gian decor phòng và nhà.`,
       price: basePrice + index * 100000,
+      stock: itemNumber,
       listingType: 'sell',
       condition: index % 3 === 0 ? 'new' : condition,
-      exchangeFor: '',
       location,
     }
   })
@@ -49,9 +49,9 @@ export const TEST_PRODUCT = {
   title: 'Bàn trang trí phòng khách',
   description: 'Bàn trang trí bằng gỗ tự nhiên, phong cách Scandinavian, thích hợp cho phòng khách và phòng trà.',
   price: 1500000,
+  stock: 5,
   listingType: 'sell',
   condition: 'good',
-  exchangeFor: '',
   location: {
     province: 'Hà Nội',
     district: 'Hoàn Kiếm',
@@ -63,9 +63,9 @@ export const TEST_PRODUCTS = [
     title: 'Bàn trang trí phòng khách',
     description: 'Bàn decor gỗ tự nhiên, phù hợp phòng khách phong cách Scandinavian.',
     price: 1500000,
+    stock: 5,
     listingType: 'sell',
     condition: 'good',
-    exchangeFor: '',
     location: {
       province: 'Hà Nội',
       district: 'Hoàn Kiếm',
@@ -75,9 +75,9 @@ export const TEST_PRODUCTS = [
     title: 'Đèn bàn decor ánh vàng',
     description: 'Đèn bàn ánh vàng tạo không gian ấm áp cho phòng ngủ và góc đọc sách.',
     price: 850000,
+    stock: 3,
     listingType: 'sell',
     condition: 'like_new',
-    exchangeFor: '',
     location: {
       province: 'Đà Nẵng',
       district: 'Sơn Trà',
@@ -87,9 +87,9 @@ export const TEST_PRODUCTS = [
     title: 'Tranh treo tường canvas tối giản',
     description: 'Bộ tranh canvas tông be nâu, hợp với phòng khách hiện đại.',
     price: 1200000,
+    stock: 7,
     listingType: 'sell',
     condition: 'new',
-    exchangeFor: '',
     location: {
       province: 'TP. Hồ Chí Minh',
       district: 'Quận 3',

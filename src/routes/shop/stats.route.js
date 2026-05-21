@@ -6,10 +6,14 @@ const router = Router({ mergeParams: true })
 
 /**
  * @swagger
+ * tags:
+ *   - name: Shop Statistics
+ *     description: API thống kê dành cho shop owner/staff
+ *
  * /shops/{id}/stats/overview:
  *   get:
  *     summary: Thống kê tổng quan của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id
@@ -35,7 +39,7 @@ const router = Router({ mergeParams: true })
  * /shops/{id}/stats/revenue:
  *   get:
  *     summary: Thống kê doanh thu của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id
@@ -66,7 +70,7 @@ const router = Router({ mergeParams: true })
  * /shops/{id}/stats/products:
  *   get:
  *     summary: Thống kê sản phẩm của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id
@@ -80,7 +84,7 @@ const router = Router({ mergeParams: true })
  * /shops/{id}/stats/orders:
  *   get:
  *     summary: Thống kê đơn hàng của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id
@@ -94,7 +98,7 @@ const router = Router({ mergeParams: true })
  * /shops/{id}/stats/staff:
  *   get:
  *     summary: Thống kê nhân sự của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id
@@ -108,7 +112,7 @@ const router = Router({ mergeParams: true })
  * /shops/{id}/stats/deliveries:
  *   get:
  *     summary: Thống kê giao hàng của shop
- *     tags: [Statistics]
+ *     tags: [Shop Statistics]
  *     parameters:
  *       - in: path
  *         name: id

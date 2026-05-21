@@ -4,6 +4,14 @@ export const findByEmail = (email) => User.findOne({ email })
 
 export const findByEmailWithPassword = (email) => User.findOne({ email }).select('+password')
 
+export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
+  User.find(filter)
+    .sort({ [sortBy]: sortOrder })
+    .skip(skip)
+    .limit(limit)
+
+export const countMany = (filter = {}) => User.countDocuments(filter)
+
 export const findById = (id) => User.findById(id)
 
 export const findByIdWithPassword = (id) => User.findById(id).select('+password')

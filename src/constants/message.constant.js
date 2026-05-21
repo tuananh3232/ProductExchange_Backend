@@ -16,10 +16,21 @@ const MESSAGES = {
     EMAIL_ALREADY_VERIFIED: 'Email đã được xác minh trước đó',
   },
 
+  USER: {
+    BANNED: 'Khóa tài khoản người dùng thành công',
+    UNBANNED: 'Mở khóa tài khoản người dùng thành công',
+  },
+
+  ADMIN: {
+    USERS_FETCHED: 'Lấy danh sách người dùng thành công',
+  },
+
   // Product
   PRODUCT: {
     CREATED: 'Đăng sản phẩm thành công',
     FETCHED: 'Lấy danh sách sản phẩm thành công',
+    ADMIN_FETCHED: 'Lấy danh sách sản phẩm (admin) thành công',
+    SHOP_FETCHED: 'Lấy danh sách sản phẩm của shop thành công',
     DETAIL_FETCHED: 'Lấy chi tiết sản phẩm thành công',
     UPDATED: 'Cập nhật sản phẩm thành công',
     DELETED: 'Xóa sản phẩm thành công',
@@ -35,6 +46,7 @@ const MESSAGES = {
     UPDATED: 'Cập nhật shop thành công',
     OWNER_UPDATED: 'Cập nhật owner của shop thành công',
     STAFF_ADDED: 'Thêm staff vào shop thành công',
+    STAFF_FETCHED: 'Lấy danh sách staff thành công',
     STAFF_REMOVED: 'Gỡ staff khỏi shop thành công',
     STAFF_PERMISSIONS_FETCHED: 'Lấy danh sách quyền staff thành công',
     STAFF_PERMISSIONS_UPDATED: 'Cập nhật quyền staff thành công',
@@ -52,6 +64,8 @@ const MESSAGES = {
     INVITATION_CANCELLED: 'Hủy lời mời tham gia shop thành công',
     INVITATIONS_FETCHED: 'Lấy danh sách lời mời thành công',
     MY_INVITATIONS_FETCHED: 'Lấy danh sách lời mời của tôi thành công',
+    INVITEE_CANDIDATES_FETCHED: 'Lấy danh sách người có thể mời thành công',
+    DASHBOARD_FETCHED: 'Lấy thông tin shop thành công',
   },
 
   ORDER: {

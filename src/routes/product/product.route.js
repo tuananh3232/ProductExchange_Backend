@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
-import { authenticate } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
@@ -10,13 +10,16 @@ import {
 	updateStatusSchema,
 } from '../../validations/product/product.validation.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 const router = Router()
 
 /**
  * @swagger
  * tags:
- *   name: Products
- *   description: API Quản lý sản phẩm
+ *   - name: Products
+ *     description: API sản phẩm public
+ *   - name: Shop Products
+ *     description: API quản lý sản phẩm thuộc shop
  */
 
 /**
@@ -41,7 +44,6 @@ const router = Router()
  *         schema:
  *           type: string
  *           description: MongoDB ObjectId của category
- *           example: 507f1f77bcf86cd799439011
  *       - in: query
  *         name: listingType
  *         schema: { type: string, enum: [sell] }
@@ -55,8 +57,8 @@ const router = Router()
  *       200:
  *         description: Lấy danh sách thành công
  *   post:
- *     summary: Đăng sản phẩm mới
- *     tags: [Products]
+ *     summary: Tạo sản phẩm mới cho shop
+ *     tags: [Shop Products]
  *     requestBody:
  *       required: true
  *       content:
@@ -71,6 +73,12 @@ const router = Router()
  *                 type: string
  *               price:
  *                 type: number
+ *                 example: 650000
+ *               stock:
+ *                 type: integer
+ *                 minimum: 0
+ *                 default: 1
+ *                 example: 12
  *               listingType:
  *                 type: string
  *                 enum: [sell]
@@ -93,6 +101,7 @@ router.get('/', validate(productQuerySchema, 'query'), productController.getProd
 router.post(
 	'/',
 	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_CREATE),
 	validate(createProductSchema),
 	productController.createProduct
 )
@@ -115,19 +124,66 @@ router.post(
  *         description: Thành công
  *   patch:
  *     summary: Cập nhật sản phẩm
- *     tags: [Products]
+ *     tags: [Shop Products]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *                 example: 650000
+ *               stock:
+ *                 type: integer
+ *                 minimum: 0
+ *                 example: 8
+ *               condition:
+ *                 type: string
+ *                 enum: [new, like_new, good, fair, poor]
+ *               category:
+ *                 type: string
+ *                 description: MongoDB ObjectId của category
+ *                 example:
+ *               shop:
+ *                 type: string
+ *                 nullable: true
+ *                 description: MongoDB ObjectId của shop hoặc null
+ *                 example:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     url:
+ *                       type: string
+ *                     publicId:
+ *                       type: string
+ *               location:
+ *                 type: object
+ *                 properties:
+ *                   province:
+ *                     type: string
+ *                   district:
+ *                     type: string
  *     responses:
  *       200:
  *         description: Thành công
  *   delete:
  *     summary: Xóa sản phẩm
- *     tags: [Products]
+ *     tags: [Shop Products]
  *     parameters:
  *       - in: path
  *         name: id
@@ -143,6 +199,7 @@ router.patch(
 	'/:id',
 	validateObjectId('id'),
 	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
 	validate(updateProductSchema),
 	productController.updateProduct
 )
@@ -150,6 +207,7 @@ router.patch(
 	'/:id/status',
 	validateObjectId('id'),
 	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
 	validate(updateStatusSchema),
 	productController.updateProductStatus
 )
@@ -157,6 +215,7 @@ router.post(
 	'/:id/images',
 	validateObjectId('id'),
 	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
 	validate(addProductImagesSchema),
 	productController.addProductImages
 )
@@ -164,9 +223,16 @@ router.delete(
 	'/:id/images/:publicId',
 	validateObjectId('id'),
 	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
 	productController.removeProductImage
 )
-router.delete('/:id', validateObjectId('id'), authenticate, productController.deleteProduct)
+router.delete(
+	'/:id',
+	validateObjectId('id'),
+	authenticate,
+	requirePermissions(PERMISSIONS.PRODUCT_DELETE),
+	productController.deleteProduct
+)
 
 export default router
 
@@ -175,7 +241,7 @@ export default router
  * /products/{id}/status:
  *   patch:
  *     summary: Cập nhật trạng thái sản phẩm
- *     tags: [Products]
+ *     tags: [Shop Products]
  *     parameters:
  *       - in: path
  *         name: id
@@ -199,8 +265,8 @@ export default router
  *
  * /products/{id}/images:
  *   post:
- *     summary: Thêm ảnh sản phẩm
- *     tags: [Products]
+ *     summary: Cập nhật ảnh sản phẩm
+ *     tags: [Shop Products]
  *     parameters:
  *       - in: path
  *         name: id
@@ -231,7 +297,7 @@ export default router
  * /products/{id}/images/{publicId}:
  *   delete:
  *     summary: Xóa ảnh sản phẩm
- *     tags: [Products]
+ *     tags: [Shop Products]
  *     parameters:
  *       - in: path
  *         name: id

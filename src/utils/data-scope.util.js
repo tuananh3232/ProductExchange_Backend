@@ -51,7 +51,7 @@ export const canAccessShopPermission = async (user, shopId, permissionKey) => {
   // Fallback: if user is listed in shop.staff and their role grants the permissionKey, allow it
   const staffIds = (shop.staff || []).map((s) => (s && s._id ? s._id.toString() : s ? s.toString() : null));
   if (staffIds.includes(userId)) {
-    const roles = Array.isArray(user.roles) ? user.roles : [user.role].filter(Boolean);
+    const roles = Array.isArray(user.roles) ? user.roles : [];
     for (const r of roles) {
       const perms = ROLE_PERMISSION_MAP[r] || [];
       if (perms.includes(permissionKey)) return true;

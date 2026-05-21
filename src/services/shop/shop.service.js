@@ -9,6 +9,8 @@ import { normalizeSlug } from '../../utils/slug.util.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 
+const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
+
 const ensureShopAccess = (shop, userContext) => {
   const roleSet = new Set(userContext?.roles || [])
   if (roleSet.has(ROLES.ADMIN)) return
@@ -67,10 +69,9 @@ export const createShop = async (ownerId, payload) => {
     status: SHOP_STATUS.DRAFT,
   })
 
-  const ownerRoles = new Set(ownerUser.roles || [ownerUser.role].filter(Boolean))
+  const ownerRoles = new Set(ownerUser.roles || [])
   ownerRoles.add(ROLES.SHOP_OWNER)
   ownerUser.roles = [...ownerRoles]
-  ownerUser.role = ownerRoles.has(ROLES.ADMIN) ? ROLES.ADMIN : ownerUser.role
   await ownerUser.save()
 
   return shopRepo.findById(shop._id)
@@ -81,6 +82,24 @@ export const getShopById = async (shopId) => {
   if (!shop || !shop.isActive || shop.status !== SHOP_STATUS.ACTIVE) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
+  return shop
+}
+
+export const getShopDashboard = async (shopId, userContext) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+
+  const userId = toIdString(userContext?._id)
+  const roleSet = new Set(userContext?.roles || [])
+  const ownerId = toIdString(shop.owner)
+  const isStaff = (shop.staff || []).some((staffId) => toIdString(staffId) === userId)
+
+  if (!roleSet.has(ROLES.ADMIN) && userId !== ownerId && !isStaff) {
+    throw new AppError('Bạn không có quyền truy cập shop này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
   return shop
 }
 
@@ -185,12 +204,9 @@ export const transferOwner = async (shopId, userContext, newOwnerId) => {
     ),
   }
 
-  const ownerRoles = new Set(newOwner.roles || [newOwner.role].filter(Boolean))
+  const ownerRoles = new Set(newOwner.roles || [])
   ownerRoles.add(ROLES.SHOP_OWNER)
   newOwner.roles = [...ownerRoles]
-  if (!newOwner.role) {
-    newOwner.role = ROLES.SHOP_OWNER
-  }
   await newOwner.save()
 
   return shopRepo.updateById(shopId, updateData)
@@ -210,12 +226,9 @@ export const addStaff = async (shopId, userContext, staffUserId) => {
     throw new AppError('Không thể thêm owner vào staff', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.INVALID_STAFF)
   }
 
-  const staffRoles = new Set(staffUser.roles || [staffUser.role].filter(Boolean))
+  const staffRoles = new Set(staffUser.roles || [])
   staffRoles.add(ROLES.STAFF)
   staffUser.roles = [...staffRoles]
-  if (!staffUser.role) {
-    staffUser.role = ROLES.STAFF
-  }
   await staffUser.save()
 
   return shopRepo.addStaff(shopId, staffUserId)
@@ -234,6 +247,40 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
       staffPermissions: { staffUser: staffUserId },
     },
   })
+}
+
+export const getShopStaff = async (shopId, userContext) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+
+  ensureShopAccess(shop, userContext)
+
+  const permissionByStaffId = new Map(
+    (shop.staffPermissions || []).map((entry) => [
+      toIdString(entry.staffUser),
+      {
+        permissions: entry.permissions || [],
+        updatedAt: entry.updatedAt || null,
+        updatedBy: entry.updatedBy || null,
+      },
+    ])
+  )
+
+  const staff = (shop.staff || []).map((member) => {
+    const memberId = toIdString(member)
+    const permissionEntry = permissionByStaffId.get(memberId)
+
+    return {
+      user: member,
+      permissions: permissionEntry?.permissions || [],
+      permissionUpdatedAt: permissionEntry?.updatedAt || null,
+      permissionUpdatedBy: permissionEntry?.updatedBy || null,
+    }
+  })
+
+  return { staff }
 }
 
 export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
@@ -265,7 +312,10 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
 }
 
 export const getMyShops = async (userId, query, pagination) => {
-  const filter = { owner: userId, isActive: true }
+  const filter = {
+    isActive: true,
+    $or: [{ owner: userId }, { staff: userId }],
+  }
   if (query.status) filter.status = query.status
 
   const { items: shops, meta } = await paginate(shopRepo, filter, pagination)
@@ -410,4 +460,47 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
     staffUserId,
     permissions: permissions.map((permission) => permission.key),
   }
+}
+
+export const getInviteeCandidates = async (shopId, userContext, query = {}, pagination) => {
+  const shop = await shopRepo.findById(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+
+  ensureShopOwnerAccess(shop, userContext)
+
+  const excludedIds = new Set([
+    toIdString(shop.owner),
+    ...(shop.staff || []).map((member) => toIdString(member)).filter(Boolean),
+    ...(shop.staffPermissions || []).map((entry) => toIdString(entry.staffUser)).filter(Boolean),
+  ])
+
+  const filter = {
+    isActive: true,
+    _id: { $nin: [...excludedIds] },
+  }
+
+  if (query.search) {
+    filter.$or = [
+      { name: { $regex: query.search, $options: 'i' } },
+      { email: { $regex: query.search, $options: 'i' } },
+    ]
+  }
+
+  const { items: users, meta } = await paginate(
+    {
+      findMany: ({ filter: userFilter, skip, limit, sortBy, sortOrder }) =>
+        User.find(userFilter)
+          .select('_id name email avatar roles phone isActive')
+          .sort({ [sortBy]: sortOrder })
+          .skip(skip)
+          .limit(limit),
+      countMany: (userFilter) => User.countDocuments(userFilter),
+    },
+    filter,
+    pagination
+  )
+
+  return { users, meta }
 }

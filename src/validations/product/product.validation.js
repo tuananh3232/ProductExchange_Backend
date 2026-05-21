@@ -4,6 +4,7 @@ export const createProductSchema = Joi.object({
   title: Joi.string().trim().min(5).max(200).required(),
   description: Joi.string().trim().min(20).max(3000).required(),
   price: Joi.number().min(0).required(),
+  stock: Joi.number().integer().min(0),
   listingType: Joi.string().valid('sell').required(),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
   category: Joi.string().hex().length(24).required(), // MongoDB ObjectId
@@ -26,6 +27,7 @@ export const updateProductSchema = Joi.object({
   title: Joi.string().trim().min(5).max(200),
   description: Joi.string().trim().min(20).max(3000),
   price: Joi.number().min(0),
+  stock: Joi.number().integer().min(0),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
   category: Joi.string().hex().length(24),
   shop: Joi.string().hex().length(24).allow(null),

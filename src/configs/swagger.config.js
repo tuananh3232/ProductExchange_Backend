@@ -34,10 +34,9 @@ const swaggerDefinition = {
             properties: { url: { type: 'string' }, publicId: { type: 'string' } },
           },
           phone: { type: 'string' },
-          role: { type: 'string', enum: ['user', 'admin', 'seller', 'shop_owner', 'staff'] },
           roles: {
             type: 'array',
-            items: { type: 'string' },
+            items: { type: 'string', enum: ['user', 'admin', 'seller', 'shop_owner', 'staff'] },
           },
           rating: {
             type: 'object',
@@ -54,6 +53,12 @@ const swaggerDefinition = {
           title: { type: 'string' },
           description: { type: 'string' },
           price: { type: 'number' },
+          stock: {
+            type: 'integer',
+            minimum: 0,
+            default: 1,
+            example: 12,
+          },
           listingType: { type: 'string', enum: ['sell'] },
           condition: { type: 'string', enum: ['new', 'like_new', 'good', 'fair', 'poor'] },
           status: { type: 'string', enum: ['available', 'pending', 'sold', 'hidden'] },

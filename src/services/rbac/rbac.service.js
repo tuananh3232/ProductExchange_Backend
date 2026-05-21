@@ -56,7 +56,6 @@ export const assignRolesToUser = async (userId, roles) => {
   }
 
   user.roles = normalizedRoles
-  user.role = normalizedRoles.includes(ROLES.ADMIN) ? ROLES.ADMIN : normalizedRoles[0]
   await user.save()
 
   return user.toPublicJSON()

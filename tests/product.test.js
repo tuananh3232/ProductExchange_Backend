@@ -4,13 +4,13 @@ import User from '../src/models/user.model.js';
 import Product from '../src/models/product.model.js';
 import Category from '../src/models/category.model.js';
 import Shop from '../src/models/shop.model.js';
+import { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } from './fixtures/testData.js'
 
 let userId;
 let productId;
 let categoryId;
 let token;
 let shopId;
-import { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } from './fixtures/testData.js'
 
 const seedDecorCategories = async () => {
   const createdCategories = await Category.insertMany(TEST_CATEGORIES)
@@ -65,6 +65,7 @@ describe('Product API', () => {
       expect(res.statusCode).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.product.title).toBe(productData.title);
+      expect(res.body.data.product.stock).toBe(productData.stock);
       expect(res.body.data.product.owner).toBe(userId.toString());
       expect(res.body.data.product.shop).toBe(shopId.toString());
     });
@@ -121,6 +122,7 @@ describe('Product API', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(Array.isArray(res.body.data.products)).toBe(true);
+      expect(res.body.data.products[0].stock).toBeDefined();
       expect(res.body.meta).toBeDefined();
     });
 
@@ -162,6 +164,7 @@ describe('Product API', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.product._id).toBe(productId.toString());
+      expect(res.body.data.product.stock).toBe(1);
     });
 
     it('should fail with invalid product id', async () => {
@@ -190,12 +193,14 @@ describe('Product API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           price: 23000000,
+          stock: 9,
           title: 'iPhone 14 Pro Max - Updated',
         });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.product.price).toBe(23000000);
+      expect(res.body.data.product.stock).toBe(9);
     });
 
     it('should fail if not product owner', async () => {

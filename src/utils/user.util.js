@@ -6,5 +6,5 @@ export const toUserResponse = (user) => ({
   id: user._id?.toString?.() || user.id,
   name: user.name,
   email: user.email,
-  role: user.role,
+  roles: user.roles || [],
 })
