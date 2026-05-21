@@ -32,29 +32,32 @@ export const canAccessShopPermission = async (user, shopId, permissionKey) => {
   if (!shopId || !permissionKey) return false;
   if (isAdmin(user)) return true;
 
-  const userId = user && user._id ? user._id.toString() : null;
+  const userId = user?._id?.toString();
   if (!userId) return false;
 
-  const shop = await Shop.findById(shopId).select('_id owner staff staffPermissions isActive');
+  // lean() returns plain JS objects — ObjectIds come back as BSON ObjectId, .toString() is reliable
+  const shop = await Shop.findById(shopId)
+    .select('_id owner staff staffPermissions isActive')
+    .lean();
   if (!shop || !shop.isActive) return false;
 
-  const ownerId = shop.owner && shop.owner._id ? shop.owner._id.toString() : shop.owner ? shop.owner.toString() : null;
-  if (ownerId === userId) return true;
+  if (shop.owner?.toString() === userId) return true;
 
-  // If staffPermissions explicitly define permissions for staff, honor them
-  const explicit = (shop.staffPermissions || []).some((entry) => {
-    const staffId = entry.staffUser && entry.staffUser._id ? entry.staffUser._id.toString() : entry.staffUser ? entry.staffUser.toString() : null;
-    return staffId === userId && Array.isArray(entry.permissions) && entry.permissions.includes(permissionKey);
-  });
+  // Staff with explicit permission grant
+  const explicit = (shop.staffPermissions || []).some(
+    (entry) =>
+      entry.staffUser?.toString() === userId &&
+      Array.isArray(entry.permissions) &&
+      entry.permissions.includes(permissionKey)
+  );
   if (explicit) return true;
 
-  // Fallback: if user is listed in shop.staff and their role grants the permissionKey, allow it
-  const staffIds = (shop.staff || []).map((s) => (s && s._id ? s._id.toString() : s ? s.toString() : null));
-  if (staffIds.includes(userId)) {
+  // Staff whose role map grants the permission
+  const isStaff = (shop.staff || []).some((s) => s?.toString() === userId);
+  if (isStaff) {
     const roles = Array.isArray(user.roles) ? user.roles : [user.role].filter(Boolean);
     for (const r of roles) {
-      const perms = ROLE_PERMISSION_MAP[r] || [];
-      if (perms.includes(permissionKey)) return true;
+      if ((ROLE_PERMISSION_MAP[r] || []).includes(permissionKey)) return true;
     }
   }
 

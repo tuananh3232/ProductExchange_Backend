@@ -8,6 +8,8 @@ import { sendPasswordOtpEmail, sendVerificationOtpEmail } from '../../utils/mail
 import { env } from '../../configs/env.config.js'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
+import Shop from '../../models/shop.model.js'
+import { SHOP_STATUS } from '../../constants/status.constant.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
@@ -235,6 +237,15 @@ export const updateProfile = async (userId, updateData) => {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
+  const pendingShop = await Shop.exists({ owner: userId, status: SHOP_STATUS.PENDING_REVIEW, isActive: true })
+  if (pendingShop) {
+    throw new AppError(
+      'Không thể cập nhật hồ sơ khi shop đang chờ xét duyệt',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.LOCKED_FOR_REVIEW
+    )
+  }
+
   if (updateData.name) user.name = updateData.name
   if (updateData.phone !== undefined) user.phone = updateData.phone
   if (updateData.address) {
@@ -381,14 +392,18 @@ export const getMyKyc = async (userId) => {
 }
 
 export const adminGetAllKyc = async (query, pagination) => {
-  const status = query.status || 'pending'
   const { page, limit } = pagination
   const skip = (page - 1) * limit
 
-  const [users, total] = await Promise.all([
-    userRepo.findAllByKycStatus(status, { skip, limit }),
-    userRepo.countByKycStatus(status),
-  ])
+  const [users, total] = query.status
+    ? await Promise.all([
+        userRepo.findAllByKycStatus(query.status, { skip, limit }),
+        userRepo.countByKycStatus(query.status),
+      ])
+    : await Promise.all([
+        userRepo.findAllKyc({ skip, limit }),
+        userRepo.countAllKyc(),
+      ])
 
   return {
     users,
