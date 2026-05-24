@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { ROLE_ENUM, ROLES } from '../constants/role.constant.js';
+import mongoose from 'mongoose'
+import { ROLE_ENUM, ROLES } from '../constants/role.constant.js'
 
 const roleSchema = new mongoose.Schema(
   {
@@ -8,7 +8,7 @@ const roleSchema = new mongoose.Schema(
       required: true,
       unique: true,
       enum: ROLE_ENUM,
-      default: ROLES.USER,
+      default: ROLES.MEMBER,
     },
     name: {
       type: String,
@@ -35,8 +35,8 @@ const roleSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
-const Role = mongoose.model('Role', roleSchema);
+const Role = mongoose.model('Role', roleSchema)
 
-export default Role;
+export default Role

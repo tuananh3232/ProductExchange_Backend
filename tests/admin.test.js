@@ -8,11 +8,11 @@ let adminId;
 let userId;
 let adminToken;
 
-const createToken = async (userId) => {
+const createToken = async (userId, role = 'admin') => {
   const jwt = await import('jsonwebtoken');
   const { env } = await import('../src/configs/env.config.js');
   return jwt.default.sign(
-    { userId: userId.toString(), role: 'admin' },
+    { userId: userId.toString(), role },
     env.jwt.secret,
     { expiresIn: env.jwt.expiresIn }
   );
@@ -39,6 +39,8 @@ describe('Admin API', () => {
       name: 'Regular User',
       email: 'user@example.com',
       password: '123456',
+      isVerified: true,
+      emailVerifiedAt: new Date(),
     });
     userId = user._id;
   });
@@ -61,7 +63,7 @@ describe('Admin API', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'user@example.com',
-          password: '12345',
+          password: '123456',
         });
 
       expect(loginRes.statusCode).toBe(403);
@@ -73,7 +75,7 @@ describe('Admin API', () => {
       const jwt = await import('jsonwebtoken');
       const { env } = await import('../src/configs/env.config.js');
       const userToken = jwt.default.sign(
-        { userId: userId.toString(), role: 'user' },
+        { userId: userId.toString(), role: 'member' },
         env.jwt.secret,
         { expiresIn: env.jwt.expiresIn }
       );
@@ -130,7 +132,7 @@ describe('Admin API', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'user@example.com',
-          password: '12345',
+          password: '123456',
         });
 
       expect(loginRes.statusCode).toBe(200);
@@ -141,7 +143,7 @@ describe('Admin API', () => {
       const jwt = await import('jsonwebtoken');
       const { env } = await import('../src/configs/env.config.js');
       const userToken = jwt.default.sign(
-        { userId: userId.toString(), role: 'user' },
+        { userId: userId.toString(), role: 'member' },
         env.jwt.secret,
         { expiresIn: env.jwt.expiresIn }
       );
@@ -178,6 +180,87 @@ describe('Admin API', () => {
     });
   });
 
+  describe('GET /api/v1/admin/kyc', () => {
+    it('should return paginated KYC applications for admin', async () => {
+      await User.findByIdAndUpdate(userId, {
+        kyc: {
+          fullName: 'Regular User',
+          idNumber: '123456789012',
+          status: 'pending',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .get('/api/v1/admin/kyc')
+        .query({ status: 'pending', page: 1, limit: 10 })
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data.kycs)).toBe(true);
+      expect(res.body.data.kycs[0].kyc.status).toBe('pending');
+      expect(res.body.meta).toBeDefined();
+    });
+
+    it('should reject non-admin from listing KYC applications', async () => {
+      const userToken = await createToken(userId, 'member');
+
+      const res = await request(app)
+        .get('/api/v1/admin/kyc')
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  describe('PATCH /api/v1/admin/users/:userId/kyc', () => {
+    it('should add seller role when admin approves KYC', async () => {
+      await User.findByIdAndUpdate(userId, {
+        roles: ['member'],
+        kyc: {
+          fullName: 'Regular User',
+          idNumber: '123456789012',
+          status: 'pending',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/admin/users/${userId}/kyc/approve`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'seller']));
+
+      const user = await User.findById(userId);
+      expect(user.roles.filter((role) => role === 'seller')).toHaveLength(1);
+    });
+
+    it('should not add seller role when admin rejects KYC', async () => {
+      await User.findByIdAndUpdate(userId, {
+        roles: ['member'],
+        kyc: {
+          fullName: 'Regular User',
+          idNumber: '123456789012',
+          status: 'pending',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/admin/users/${userId}/kyc/reject`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ rejectionReason: 'Invalid document' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.roles).not.toContain('seller');
+    });
+  });
+
   describe('GET /api/v1/admin/products', () => {
     it('should return all products for admin without public status filtering', async () => {
       const category = await Category.create({ name: 'Admin Products', slug: 'admin-products' });
@@ -190,6 +273,8 @@ describe('Admin API', () => {
           condition: 'good',
           category: category._id,
           owner: userId,
+          ownerType: 'SELLER',
+          seller: userId,
           status: 'available',
         },
         {
@@ -200,6 +285,8 @@ describe('Admin API', () => {
           condition: 'good',
           category: category._id,
           owner: userId,
+          ownerType: 'SELLER',
+          seller: userId,
           status: 'hidden',
         },
       ]);

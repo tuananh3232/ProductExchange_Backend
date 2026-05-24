@@ -8,6 +8,8 @@ import { paginate } from '../../utils/pagination.util.js'
 import { normalizeSlug } from '../../utils/slug.util.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
+import { assertShopPermission } from '../../utils/data-scope.util.js'
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 
@@ -157,7 +159,13 @@ export const updateShop = async (shopId, userContext, payload) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_UPDATE,
+    message: 'Bạn không có quyền cập nhật shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
 
   if (shop.status === SHOP_STATUS.PENDING_REVIEW) {
     throw new AppError('Không thể sửa thông tin shop khi đang chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.LOCKED_FOR_REVIEW)

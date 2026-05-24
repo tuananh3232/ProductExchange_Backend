@@ -11,7 +11,7 @@ const createToken = async (userId) => {
   const jwt = await import('jsonwebtoken');
   const { env } = await import('../src/configs/env.config.js');
   return jwt.default.sign(
-    { userId: userId.toString(), role: 'user' },
+    { userId: userId.toString(), role: 'member' },
     env.jwt.secret,
     { expiresIn: env.jwt.expiresIn }
   );
@@ -83,6 +83,45 @@ describe('Shop staff permissions', () => {
     expect(addStaffRes.statusCode).toBe(200);
     expect(addStaffRes.body.success).toBe(true);
 
+    const createBeforePermissionRes = await request(app)
+      .post('/api/v1/products')
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({
+        title: 'Staff Product',
+        description: 'Product created by staff in shop',
+        price: 1200000,
+        listingType: 'sell',
+        condition: 'good',
+        category: categoryId,
+        shop: shopId,
+      });
+
+    expect(createBeforePermissionRes.statusCode).toBe(403);
+    expect(createBeforePermissionRes.body.success).toBe(false);
+
+    const updatePermRes = await request(app)
+      .put(`/api/v1/shops/${shopId}/staff/${staffId}/permissions`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        permissions: [
+          PERMISSIONS.PRODUCT_CREATE,
+          PERMISSIONS.PRODUCT_READ,
+          PERMISSIONS.PRODUCT_UPDATE,
+          PERMISSIONS.PRODUCT_DELETE,
+        ],
+      });
+
+    expect(updatePermRes.statusCode).toBe(200);
+    expect(updatePermRes.body.success).toBe(true);
+    expect(updatePermRes.body.data.permissions).toEqual(
+      expect.arrayContaining([
+        PERMISSIONS.PRODUCT_CREATE,
+        PERMISSIONS.PRODUCT_READ,
+        PERMISSIONS.PRODUCT_UPDATE,
+        PERMISSIONS.PRODUCT_DELETE,
+      ])
+    );
+
     const createProductRes = await request(app)
       .post('/api/v1/products')
       .set('Authorization', `Bearer ${staffToken}`)
@@ -100,17 +139,6 @@ describe('Shop staff permissions', () => {
     expect(createProductRes.body.success).toBe(true);
     expect(createProductRes.body.data.product.shop).toBe(shopId.toString());
 
-    const updatePermRes = await request(app)
-      .put(`/api/v1/shops/${shopId}/staff/${staffId}/permissions`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ permissions: [PERMISSIONS.PRODUCT_CREATE, PERMISSIONS.PRODUCT_UPDATE, PERMISSIONS.PRODUCT_DELETE] });
-
-    expect(updatePermRes.statusCode).toBe(200);
-    expect(updatePermRes.body.success).toBe(true);
-    expect(updatePermRes.body.data.permissions).toEqual(
-      expect.arrayContaining([PERMISSIONS.PRODUCT_CREATE, PERMISSIONS.PRODUCT_UPDATE, PERMISSIONS.PRODUCT_DELETE])
-    );
-
     const staffListRes = await request(app)
       .get(`/api/v1/shops/${shopId}/staff`)
       .set('Authorization', `Bearer ${staffToken}`);
@@ -120,7 +148,12 @@ describe('Shop staff permissions', () => {
     expect(staffListRes.body.data.staff).toHaveLength(1);
     expect(staffListRes.body.data.staff[0].user._id).toBe(staffId.toString());
     expect(staffListRes.body.data.staff[0].permissions).toEqual(
-      expect.arrayContaining([PERMISSIONS.PRODUCT_CREATE, PERMISSIONS.PRODUCT_UPDATE, PERMISSIONS.PRODUCT_DELETE])
+      expect.arrayContaining([
+        PERMISSIONS.PRODUCT_CREATE,
+        PERMISSIONS.PRODUCT_READ,
+        PERMISSIONS.PRODUCT_UPDATE,
+        PERMISSIONS.PRODUCT_DELETE,
+      ])
     );
 
     const listProductsRes = await request(app)

@@ -9,6 +9,7 @@ import { env } from '../../configs/env.config.js'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
 import { paginate } from '../../utils/pagination.util.js'
+import { ROLES } from '../../constants/role.constant.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
@@ -450,6 +451,38 @@ export const adminGetUserKyc = async (userId) => {
   return { user: user.toPublicJSON() }
 }
 
+export const getAdminKycs = async (query, pagination) => {
+  const filter = {}
+  const allowedStatuses = ['pending', 'approved', 'rejected', 'none']
+
+  if (query.status) {
+    if (!allowedStatuses.includes(query.status)) {
+      throw new AppError('Trạng thái KYC không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    }
+    filter['kyc.status'] = query.status
+  } else {
+    filter['kyc.status'] = { $ne: 'none' }
+  }
+
+  if (query.search) {
+    filter.$or = [
+      { name: { $regex: query.search, $options: 'i' } },
+      { email: { $regex: query.search, $options: 'i' } },
+      { 'kyc.fullName': { $regex: query.search, $options: 'i' } },
+    ]
+  }
+
+  const { items: users, meta } = await paginate(userRepo, filter, pagination)
+
+  return {
+    kycs: users.map((user) => ({
+      user: user.toPublicJSON(),
+      kyc: user.kyc || { status: 'none' },
+    })),
+    meta,
+  }
+}
+
 export const adminApproveKyc = async (userId) => {
   const user = await userRepo.findById(userId)
   if (!user) {
@@ -462,6 +495,7 @@ export const adminApproveKyc = async (userId) => {
   user.kyc.status = 'approved'
   user.kyc.reviewedAt = new Date()
   user.kyc.rejectionReason = ''
+  user.roles = [...new Set([...(user.roles || []), ROLES.SELLER])]
   await user.save()
   return user.toPublicJSON()
 }

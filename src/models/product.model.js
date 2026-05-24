@@ -1,5 +1,10 @@
-import mongoose from 'mongoose';
-import { PRODUCT_STATUS_ENUM } from '../constants/status.constant.js';
+import mongoose from 'mongoose'
+import { PRODUCT_STATUS_ENUM } from '../constants/status.constant.js'
+
+export const PRODUCT_OWNER_TYPES = {
+  SHOP: 'SHOP',
+  SELLER: 'SELLER',
+}
 
 const productSchema = new mongoose.Schema(
   {
@@ -50,9 +55,21 @@ const productSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Owner is required'],
     },
+    ownerType: {
+      type: String,
+      enum: Object.values(PRODUCT_OWNER_TYPES),
+      required: true,
+      index: true,
+    },
     shop: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Shop',
+      default: null,
+      index: true,
+    },
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       default: null,
       index: true,
     },
@@ -72,13 +89,31 @@ const productSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
-productSchema.index({ title: 'text', description: 'text' });
-productSchema.index({ category: 1, status: 1 });
-productSchema.index({ owner: 1 });
-productSchema.index({ shop: 1, status: 1 });
-productSchema.index({ listingType: 1, status: 1 });
-productSchema.index({ createdAt: -1 });
+productSchema.pre('validate', function () {
+  if (!this.ownerType) {
+    this.ownerType = this.shop ? PRODUCT_OWNER_TYPES.SHOP : PRODUCT_OWNER_TYPES.SELLER
+  }
 
-export default mongoose.model('Product', productSchema);
+  if (this.ownerType === PRODUCT_OWNER_TYPES.SHOP) {
+    if (!this.shop) this.invalidate('shop', 'Shop product requires shop')
+    if (this.seller) this.invalidate('seller', 'Shop product cannot have seller')
+  }
+
+  if (this.ownerType === PRODUCT_OWNER_TYPES.SELLER) {
+    if (!this.seller) this.invalidate('seller', 'Seller product requires seller')
+    if (this.shop) this.invalidate('shop', 'Seller product cannot have shop')
+  }
+})
+
+productSchema.index({ title: 'text', description: 'text' })
+productSchema.index({ category: 1, status: 1 })
+productSchema.index({ owner: 1 })
+productSchema.index({ shop: 1, status: 1 })
+productSchema.index({ seller: 1, status: 1 })
+productSchema.index({ ownerType: 1, status: 1 })
+productSchema.index({ listingType: 1, status: 1 })
+productSchema.index({ createdAt: -1 })
+
+export default mongoose.model('Product', productSchema)

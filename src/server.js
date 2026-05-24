@@ -40,23 +40,23 @@ app.use(env.apiPrefix, router)
 app.use(errorHandler)
 
 // Start server
-const PORT = env.port || 3000;
+const PORT = env.port || 3000
 
-connectDB().then(async () => {
-  try {
-    await ensureRbacSeedData();
-  } catch (error) {
-    console.error('RBAC seed failed:', error.message);
-  }
+if (env.nodeEnv !== 'test' && !process.env.JEST_WORKER_ID) {
+  connectDB().then(async () => {
+    try {
+      await ensureRbacSeedData()
+    } catch (error) {
+      console.error('RBAC seed failed:', error.message)
+    }
 
-  if (env.nodeEnv !== 'test' && !process.env.JEST_WORKER_ID) {
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`🔗 API Base URL: http://localhost:${PORT}${env.apiPrefix}`);
-      console.log(`📚 Swagger UI:   http://localhost:${PORT}/api-docs`);
-    });
-  }
-});
+      console.log(`🚀 Server running on http://localhost:${PORT}`)
+      console.log(`🔗 API Base URL: http://localhost:${PORT}${env.apiPrefix}`)
+      console.log(`📚 Swagger UI:   http://localhost:${PORT}/api-docs`)
+    })
+  })
+}
 
 export default app
 

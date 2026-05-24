@@ -12,7 +12,7 @@ import { jest } from '@jest/globals';
 
 jest.setTimeout(30000);
 
-const createToken = async (userId, role = 'user') => {
+const createToken = async (userId, role = 'member') => {
   const jwt = await import('jsonwebtoken');
   return jwt.default.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
 };
@@ -43,7 +43,7 @@ describe('Payment API', () => {
       name: 'Payment Buyer',
       email: 'payment-buyer@example.com',
           password: '123456',
-      roles: ['user'],
+      roles: ['member'],
     });
 
     shopOwner = await User.create({
@@ -53,7 +53,7 @@ describe('Payment API', () => {
       roles: ['shop_owner'],
     });
 
-    buyerToken = await createToken(buyer._id, 'user');
+    buyerToken = await createToken(buyer._id, 'member');
     category = await Category.create({ name: 'Noi that', slug: 'noi-that-payment' });
     shop = await Shop.create({
       name: 'Payment Shop',

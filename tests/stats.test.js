@@ -57,7 +57,7 @@ describe('Statistics API', () => {
       name: 'Stats Buyer',
       email: 'stats-buyer@example.com',
       password: '123456',
-      roles: ['user'],
+      roles: ['member'],
     });
 
     adminToken = await createToken(adminUser._id);

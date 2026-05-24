@@ -3,18 +3,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const originalMongoUri = process.env.MONGODB_URI || '';
-const dbName = process.env.DB_NAME || 'productexchange';
+const dbName = process.env.TEST_DB_NAME || 'productexchange_test';
 
 const injectDatabaseName = (uri, databaseName) => {
   if (!uri) return uri;
 
   try {
     const url = new URL(uri);
-    const hasDatabasePath = url.pathname && url.pathname !== '/';
-
-    if (!hasDatabasePath) {
-      url.pathname = `/${databaseName}`;
-    }
+    url.pathname = `/${databaseName}`;
 
     return url.toString();
   } catch {
@@ -27,6 +23,7 @@ const injectDatabaseName = (uri, databaseName) => {
 };
 
 process.env.NODE_ENV = 'test';
+process.env.DB_NAME = dbName;
 
 if (originalMongoUri) {
   process.env.MONGODB_URI = injectDatabaseName(originalMongoUri, dbName);

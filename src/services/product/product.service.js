@@ -7,6 +7,8 @@ import { assertDataScope, assertShopPermission } from '../../utils/data-scope.ut
 import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
+import { ROLES } from '../../constants/role.constant.js'
+import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -33,8 +35,25 @@ const normalizeQueryId = (value) => {
   return null
 }
 
+const isAdmin = (userContext) => (userContext?.roles || []).includes(ROLES.ADMIN)
+const hasSellerRole = (userContext) => (userContext?.roles || []).includes(ROLES.SELLER)
+const getIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
+
+const assertPersonalSellerAccess = (product, userContext, message) => {
+  if (isAdmin(userContext)) return
+
+  const userId = getIdString(userContext?._id)
+  const sellerId = getIdString(product.seller) || getIdString(product.owner)
+
+  if (userId && sellerId === userId && hasSellerRole(userContext)) {
+    return
+  }
+
+  throw new AppError(message, HTTP_STATUS.FORBIDDEN, ERRORS.PRODUCT.NOT_OWNER)
+}
+
 const assertProductAccess = async (product, userContext, permissionKey, message) => {
-  if (product.shop) {
+  if (product.ownerType === PRODUCT_OWNER_TYPES.SHOP || product.shop) {
     await assertShopPermission({
       user: userContext,
       shopId: product.shop?._id || product.shop,
@@ -42,18 +61,26 @@ const assertProductAccess = async (product, userContext, permissionKey, message)
       message,
       errorCode: ERRORS.PRODUCT.NOT_OWNER,
     })
-  } else {
-    assertDataScope({
-      user: userContext,
-      ownerId: product.owner?._id,
-      message,
-      errorCode: ERRORS.PRODUCT.NOT_OWNER,
-    })
+    return
   }
+
+  if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER || product.seller) {
+    assertPersonalSellerAccess(product, userContext, message)
+    return
+  }
+
+  assertDataScope({
+    user: userContext,
+    ownerId: product.owner?._id || product.owner,
+    message,
+    errorCode: ERRORS.PRODUCT.NOT_OWNER,
+  })
 }
 
 const ensureShopWritable = async (shopId, userContext) => {
-  if (!shopId) return null
+  if (!shopId) {
+    throw new AppError('Sản phẩm thuộc shop bắt buộc có shop', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_FOUND)
+  }
 
   const shop = await Shop.findById(shopId).select('_id owner staff isActive status')
   if (!shop || !shop.isActive) {
@@ -74,6 +101,64 @@ const ensureShopWritable = async (shopId, userContext) => {
   return shop
 }
 
+const ensurePersonalSellerWritable = (userContext) => {
+  const roles = new Set(userContext?.roles || [])
+  if (!roles.has(ROLES.SELLER) && !roles.has(ROLES.ADMIN)) {
+    throw new AppError('Bạn cần được duyệt KYC và có role seller để đăng sản phẩm cá nhân', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+}
+
+const resolveCreateOwnership = async (productData, userContext) => {
+  const requestedOwnerType = productData.ownerType || (productData.shop ? PRODUCT_OWNER_TYPES.SHOP : PRODUCT_OWNER_TYPES.SELLER)
+
+  if (requestedOwnerType === PRODUCT_OWNER_TYPES.SHOP) {
+    await ensureShopWritable(productData.shop, userContext)
+    return {
+      ownerType: PRODUCT_OWNER_TYPES.SHOP,
+      shop: productData.shop,
+      seller: null,
+      owner: userContext._id,
+    }
+  }
+
+  if (requestedOwnerType === PRODUCT_OWNER_TYPES.SELLER) {
+    ensurePersonalSellerWritable(userContext)
+    return {
+      ownerType: PRODUCT_OWNER_TYPES.SELLER,
+      shop: null,
+      seller: userContext._id,
+      owner: userContext._id,
+    }
+  }
+
+  throw new AppError('Loại chủ sở hữu sản phẩm không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+}
+
+const normalizeUpdateOwnership = async (product, updateData, userContext) => {
+  const nextUpdateData = { ...updateData }
+
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'ownerType')) {
+    if (nextUpdateData.ownerType !== product.ownerType) {
+      throw new AppError('Không thể chuyển sản phẩm giữa shop và seller cá nhân', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    }
+    delete nextUpdateData.ownerType
+  }
+
+  if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER || product.seller) {
+    if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'shop') && nextUpdateData.shop) {
+      throw new AppError('Sản phẩm seller cá nhân không được gắn shop', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    }
+    delete nextUpdateData.shop
+    return nextUpdateData
+  }
+
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'shop')) {
+    await ensureShopWritable(nextUpdateData.shop, userContext)
+  }
+
+  return nextUpdateData
+}
+
 const buildFilter = (query, { publicOnly = true } = {}) => {
   const filter = {}
 
@@ -89,8 +174,13 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
   const categoryId = normalizeQueryId(query.category)
   if (categoryId) filter.category = categoryId
 
-  const shopId = normalizeQueryId(query.shopId)
+  const shopId = normalizeQueryId(query.shopId || query.shop)
   if (shopId) filter.shop = shopId
+
+  const sellerId = normalizeQueryId(query.sellerId)
+  if (sellerId) filter.seller = sellerId
+
+  if (query.ownerType) filter.ownerType = query.ownerType
 
   if (query.listingType) filter.listingType = query.listingType
   if (query.condition) filter.condition = query.condition
@@ -156,12 +246,13 @@ export const getProductById = async (id) => {
 }
 
 export const createProduct = async (userContext, productData) => {
-  await ensureShopWritable(productData.shop, userContext)
+  const ownership = await resolveCreateOwnership(productData, userContext)
+  const safeProductData = { ...productData }
+  delete safeProductData.ownerType
 
   return productRepo.create({
-    ...productData,
-    owner: userContext._id,
-    shop: productData.shop || null,
+    ...safeProductData,
+    ...ownership,
   })
 }
 
@@ -173,11 +264,7 @@ export const updateProduct = async (productId, userContext, updateData) => {
 
   await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
 
-  if (Object.prototype.hasOwnProperty.call(updateData, 'shop')) {
-    await ensureShopWritable(updateData.shop, userContext)
-  }
-
-  const nextUpdateData = { ...updateData }
+  const nextUpdateData = await normalizeUpdateOwnership(product, updateData, userContext)
   if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
     nextUpdateData.location = {
       ...(product.location || {}),

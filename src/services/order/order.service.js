@@ -1,4 +1,4 @@
-import Product from '../../models/product.model.js'
+import Product, { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -9,6 +9,7 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as orderRepo from '../../repositories/order/order.repository.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
+import { ROLES } from '../../constants/role.constant.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -29,6 +30,7 @@ const getManagedShopIds = async (userId) => {
 }
 
 const isAdmin = (userContext) => (userContext?.roles || []).includes('admin')
+const isSeller = (userContext) => (userContext?.roles || []).includes(ROLES.SELLER)
 
 const ensureOrderReadable = async (order, userContext) => {
   if (isAdmin(userContext)) return
@@ -48,6 +50,11 @@ const ensureOrderReadable = async (order, userContext) => {
     return
   }
 
+  const orderSellerId = order.seller?._id?.toString() || order.seller?.toString()
+  if (orderSellerId && orderSellerId === userId) {
+    return
+  }
+
   throw new AppError('Bạn không có quyền xem đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
 }
 
@@ -55,6 +62,12 @@ const ensureShopManageOrder = async (order, userContext, permissionKey) => {
   if (isAdmin(userContext)) return
 
   const orderShopId = order.shop?._id?.toString() || order.shop?.toString()
+  const userId = userContext?._id?.toString()
+  const orderSellerId = order.seller?._id?.toString() || order.seller?.toString()
+  if (!orderShopId && orderSellerId && orderSellerId === userId && isSeller(userContext)) {
+    return
+  }
+
   if (!orderShopId) {
     throw new AppError('Bạn không có quyền xử lý đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.ORDER.NOT_SHOP_ORDER)
   }
@@ -89,7 +102,7 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
 
 export const createOrder = async (buyerId, payload) => {
   const productId = payload.productId || payload.product
-  const product = await Product.findById(productId).select('_id owner shop status listingType price isActive title')
+  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType price isActive title')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
@@ -106,8 +119,12 @@ export const createOrder = async (buyerId, payload) => {
     throw new AppError('Không thể tạo đơn cho sản phẩm của chính bạn', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.SELF_ORDER_NOT_ALLOWED)
   }
 
-  if (!product.shop) {
+  if (product.ownerType === PRODUCT_OWNER_TYPES.SHOP && !product.shop) {
     throw new AppError('Sản phẩm chưa gắn với shop', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
+  }
+
+  if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER && !product.seller) {
+    throw new AppError('San pham chua gan voi seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
   }
 
   const quantity = payload.quantity || 1
@@ -123,7 +140,8 @@ export const createOrder = async (buyerId, payload) => {
 
   const order = await orderRepo.create({
     buyer: buyerId,
-    shop: product.shop,
+    shop: product.ownerType === PRODUCT_OWNER_TYPES.SHOP ? product.shop : null,
+    seller: product.ownerType === PRODUCT_OWNER_TYPES.SELLER ? product.seller : null,
     product: product._id,
     quantity,
     unitPrice,
@@ -163,6 +181,8 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
   if (!isAdmin(userContext) && scope === 'shop') {
     const managedShopIds = await getManagedShopIds(userContext._id)
     filter.shop = { $in: managedShopIds }
+  } else if (!isAdmin(userContext) && scope === 'seller') {
+    filter.seller = userContext._id
   } else if (!isAdmin(userContext) && scope === 'buyer') {
     filter.buyer = userContext._id
   }
@@ -173,6 +193,10 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
 
   if (query.shopId) {
     filter.shop = query.shopId
+  }
+
+  if (query.sellerId) {
+    filter.seller = query.sellerId
   }
 
   const [orders, total] = await Promise.all([
