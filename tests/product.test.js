@@ -5,6 +5,7 @@ import Product from '../src/models/product.model.js';
 import Category from '../src/models/category.model.js';
 import Shop from '../src/models/shop.model.js';
 import { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } from './fixtures/testData.js'
+import { SHOP_STATUS } from '../src/constants/status.constant.js'
 
 let userId;
 let productId;
@@ -13,8 +14,17 @@ let token;
 let shopId;
 
 const seedDecorCategories = async () => {
-  const createdCategories = await Category.insertMany(TEST_CATEGORIES)
-  return Object.fromEntries(createdCategories.map((category) => [category.slug, category]))
+  await Category.bulkWrite(
+    TEST_CATEGORIES.map((category) => ({
+      updateOne: {
+        filter: { slug: category.slug },
+        update: { $setOnInsert: category },
+        upsert: true,
+      },
+    }))
+  )
+  const categories = await Category.find({ slug: { $in: TEST_CATEGORIES.map((category) => category.slug) } })
+  return Object.fromEntries(categories.map((category) => [category.slug, category]))
 }
 
 const getPrimaryProductForCategory = (categorySlug) => TEST_PRODUCTS_BY_CATEGORY[categorySlug][0]
@@ -35,17 +45,19 @@ describe('Product API', () => {
       name: 'Test User',
       email: 'test@example.com',
       password: '123456',
+      roles: ['shop_owner'],
     });
     userId = userRes._id;
 
     // Manually generate token since we're not going through auth endpoint
-    token = await createToken(userId, 'user')
+    token = await createToken(userId, 'shop_owner')
 
     const shop = await Shop.create({
       name: 'Test Shop',
       slug: 'test-shop',
       owner: userId,
       staff: [],
+      status: SHOP_STATUS.ACTIVE,
     });
     shopId = shop._id;
   });
@@ -96,6 +108,85 @@ describe('Product API', () => {
       expect(res.statusCode).toBe(422);
       expect(res.body.success).toBe(false);
     });
+
+    it('should reject member from creating a personal product', async () => {
+      const member = await User.create({
+        name: 'Plain Member',
+        email: 'member-product@example.com',
+        password: '123456',
+        roles: ['member'],
+      })
+      const memberToken = await createToken(member._id, 'member')
+      const productData = getPrimaryProductForCategory('do-trang-tri')
+
+      const res = await request(app)
+        .post('/api/v1/products')
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({
+          ...productData,
+          category: categoryId,
+          ownerType: 'SELLER',
+        })
+
+      expect(res.statusCode).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
+
+    it('should allow seller to create a personal product', async () => {
+      const seller = await User.create({
+        name: 'Personal Seller',
+        email: 'seller-product@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const sellerToken = await createToken(seller._id, 'seller')
+      const productData = getPrimaryProductForCategory('do-trang-tri')
+
+      const res = await request(app)
+        .post('/api/v1/products')
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .send({
+          ...productData,
+          category: categoryId,
+          ownerType: 'SELLER',
+        })
+
+      expect(res.statusCode).toBe(201)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.product.ownerType).toBe('SELLER')
+      expect(res.body.data.product.seller).toBe(seller._id.toString())
+      expect(res.body.data.product.shop).toBeNull()
+    })
+
+    it('should ignore a forged seller id when seller creates a personal product', async () => {
+      const seller = await User.create({
+        name: 'Forged Seller',
+        email: 'forged-seller@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const otherSeller = await User.create({
+        name: 'Other Seller',
+        email: 'other-forged-seller@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const sellerToken = await createToken(seller._id, 'seller')
+      const productData = getPrimaryProductForCategory('do-trang-tri')
+
+      const res = await request(app)
+        .post('/api/v1/products')
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .send({
+          ...productData,
+          category: categoryId,
+          ownerType: 'SELLER',
+          seller: otherSeller._id.toString(),
+        })
+
+      expect(res.statusCode).toBe(201)
+      expect(res.body.data.product.seller).toBe(seller._id.toString())
+    })
   });
 
   describe('GET /api/v1/products', () => {
@@ -109,6 +200,7 @@ describe('Product API', () => {
             ...products[0],
             owner: userId,
             category: categoriesBySlug[slug]._id,
+            shop: shopId,
           })
         )
       )
@@ -129,7 +221,7 @@ describe('Product API', () => {
     it('should filter products by category', async () => {
       const res = await request(app)
         .get('/api/v1/products')
-        .query({ category: categoryId });
+        .query({ category: categoryId.toString() });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
@@ -153,6 +245,7 @@ describe('Product API', () => {
         ...productData,
         owner: userId,
         category: categoryId,
+        shop: shopId,
       });
       productId = product._id;
     });
@@ -183,6 +276,7 @@ describe('Product API', () => {
         ...productData,
         owner: userId,
         category: categoryId,
+        shop: shopId,
       });
       productId = product._id;
     });
@@ -214,7 +308,7 @@ describe('Product API', () => {
       const jwt = await import('jsonwebtoken');
       const { env } = await import('../src/configs/env.config.js');
       const token2 = jwt.default.sign(
-        { userId: user2._id.toString(), role: 'user' },
+        { userId: user2._id.toString(), role: 'member' },
         env.jwt.secret,
         { expiresIn: env.jwt.expiresIn }
       );
@@ -227,7 +321,126 @@ describe('Product API', () => {
       expect(res.statusCode).toBe(403);
       expect(res.body.success).toBe(false);
     });
+
+    it('should reject seller from updating another seller product', async () => {
+      const seller = await User.create({
+        name: 'Owner Seller',
+        email: 'owner-seller@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const otherSeller = await User.create({
+        name: 'Other Seller',
+        email: 'other-seller@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const sellerProduct = await Product.create({
+        ...getPrimaryProductForCategory('do-trang-tri'),
+        category: categoryId,
+        owner: seller._id,
+        ownerType: 'SELLER',
+        seller: seller._id,
+      })
+      const otherSellerToken = await createToken(otherSeller._id, 'seller')
+
+      const res = await request(app)
+        .patch(`/api/v1/products/${sellerProduct._id}`)
+        .set('Authorization', `Bearer ${otherSellerToken}`)
+        .send({ price: 990000 })
+
+      expect(res.statusCode).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
+
+    it('should reject shop owner from updating a seller product', async () => {
+      const seller = await User.create({
+        name: 'Seller Product Owner',
+        email: 'seller-owned-product@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const sellerProduct = await Product.create({
+        ...getPrimaryProductForCategory('do-trang-tri'),
+        category: categoryId,
+        owner: seller._id,
+        ownerType: 'SELLER',
+        seller: seller._id,
+      })
+
+      const res = await request(app)
+        .patch(`/api/v1/products/${sellerProduct._id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ price: 990000 })
+
+      expect(res.statusCode).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
+
+    it('should reject seller from updating a shop product', async () => {
+      const seller = await User.create({
+        name: 'Shop Product Seller',
+        email: 'shop-product-seller@example.com',
+        password: '123456',
+        roles: ['member', 'seller'],
+      })
+      const sellerToken = await createToken(seller._id, 'seller')
+
+      const res = await request(app)
+        .patch(`/api/v1/products/${productId}`)
+        .set('Authorization', `Bearer ${sellerToken}`)
+        .send({ price: 990000 })
+
+      expect(res.statusCode).toBe(403)
+      expect(res.body.success).toBe(false)
+    })
   });
+
+  describe('Product ownerType validation', () => {
+    it('should validate SHOP and SELLER ownership exclusivity', async () => {
+      const productData = getPrimaryProductForCategory('do-trang-tri')
+
+      await expect(
+        new Product({
+          ...productData,
+          owner: userId,
+          ownerType: 'SHOP',
+          category: categoryId,
+        }).validate()
+      ).rejects.toThrow()
+
+      await expect(
+        new Product({
+          ...productData,
+          owner: userId,
+          ownerType: 'SHOP',
+          category: categoryId,
+          shop: shopId,
+          seller: userId,
+        }).validate()
+      ).rejects.toThrow()
+
+      await expect(
+        new Product({
+          ...productData,
+          owner: userId,
+          ownerType: 'SELLER',
+          category: categoryId,
+        }).validate()
+      ).rejects.toThrow()
+
+      await expect(
+        new Product({
+          ...productData,
+          owner: userId,
+          ownerType: 'SELLER',
+          category: categoryId,
+          seller: userId,
+          shop: shopId,
+        }).validate()
+      ).rejects.toThrow()
+    })
+  })
 
   describe('DELETE /api/v1/products/:id', () => {
     beforeEach(async () => {
@@ -236,6 +449,7 @@ describe('Product API', () => {
         ...productData,
         owner: userId,
         category: categoryId,
+        shop: shopId,
       });
       productId = product._id;
     });

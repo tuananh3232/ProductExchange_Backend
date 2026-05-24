@@ -5,6 +5,7 @@ import Shop from '../src/models/shop.model.js';
 import Category from '../src/models/category.model.js';
 import Product from '../src/models/product.model.js';
 import Order from '../src/models/order.model.js';
+import PERMISSIONS from '../src/constants/permission.constant.js';
 
 let buyer;
 let shopOwner;
@@ -34,8 +35,8 @@ describe('Order API', () => {
       name: 'Buyer',
       email: 'buyer-order@example.com',
       password: '123456',
-      role: 'user',
-      roles: ['user'],
+      role: 'member',
+      roles: ['member'],
     });
 
     shopOwner = await User.create({
@@ -58,14 +59,14 @@ describe('Order API', () => {
       name: 'Outsider',
       email: 'outsider-order@example.com',
       password: '123456',
-      role: 'user',
-      roles: ['user'],
+      role: 'member',
+      roles: ['member'],
     });
 
-    buyerToken = await createToken(buyer._id, 'user');
+    buyerToken = await createToken(buyer._id, 'member');
     ownerToken = await createToken(shopOwner._id, 'shop_owner');
     staffToken = await createToken(staff._id, 'staff');
-    outsiderToken = await createToken(outsider._id, 'user');
+    outsiderToken = await createToken(outsider._id, 'member');
 
     category = await Category.create({ name: 'Noi that', slug: 'noi-that' });
 
@@ -74,6 +75,12 @@ describe('Order API', () => {
       slug: 'decor-shop',
       owner: shopOwner._id,
       staff: [staff._id],
+      staffPermissions: [
+        {
+          staffUser: staff._id,
+          permissions: [PERMISSIONS.ORDER_UPDATE_STATUS],
+        },
+      ],
     });
 
     product = await Product.create({

@@ -30,6 +30,13 @@ export const productQuerySchema = paginationQuerySchema.keys({
   shop: Joi.string().pattern(objectIdPattern).messages({
     'string.pattern.base': 'shop must be a valid MongoDB ObjectId',
   }),
+  shopId: Joi.string().pattern(objectIdPattern).messages({
+    'string.pattern.base': 'shopId must be a valid MongoDB ObjectId',
+  }),
+  sellerId: Joi.string().pattern(objectIdPattern).messages({
+    'string.pattern.base': 'sellerId must be a valid MongoDB ObjectId',
+  }),
+  ownerType: Joi.string().valid('SHOP', 'SELLER'),
   minPrice: Joi.number().min(0),
   maxPrice: Joi.number().min(0),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
@@ -45,4 +52,7 @@ export const shopQuerySchema = paginationQuerySchema.keys({
 export const orderQuerySchema = paginationQuerySchema.keys({
   status: Joi.string().valid('pending', 'confirmed', 'cancelled', 'completed'),
   shop: Joi.string().pattern(objectIdPattern),
+  shopId: Joi.string().pattern(objectIdPattern),
+  sellerId: Joi.string().pattern(objectIdPattern),
+  scope: Joi.string().valid('buyer', 'shop', 'seller'),
 })

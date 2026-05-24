@@ -14,7 +14,7 @@ let userToken;
 let ownerToken;
 let staffToken;
 
-const createToken = async (userId, role = 'user') => {
+const createToken = async (userId, role = 'member') => {
   const jwt = await import('jsonwebtoken');
   const { env } = await import('../src/configs/env.config.js');
   return jwt.default.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
@@ -28,7 +28,7 @@ describe('RBAC API', () => {
     const admin = await User.create({
       name: 'Admin',
       email: 'admin-rbac@example.com',
-      password: '12345',
+      password: '123456',
       role: 'admin',
       roles: ['admin'],
     });
@@ -36,15 +36,15 @@ describe('RBAC API', () => {
     const user = await User.create({
       name: 'Normal User',
       email: 'user-rbac@example.com',
-      password: '12345',
-      role: 'user',
-      roles: ['user'],
+      password: '123456',
+      role: 'member',
+      roles: ['member'],
     });
 
     const owner = await User.create({
       name: 'Shop Owner',
       email: 'owner-rbac@example.com',
-      password: '12345',
+      password: '123456',
       role: 'shop_owner',
       roles: ['shop_owner'],
     });
@@ -52,7 +52,7 @@ describe('RBAC API', () => {
     const staff = await User.create({
       name: 'Staff',
       email: 'staff-rbac@example.com',
-      password: '12345',
+      password: '123456',
       role: 'staff',
       roles: ['staff'],
     });
@@ -62,7 +62,7 @@ describe('RBAC API', () => {
     ownerId = owner._id;
     staffId = staff._id;
     adminToken = await createToken(adminId, 'admin');
-    userToken = await createToken(userId, 'user');
+    userToken = await createToken(userId, 'member');
     ownerToken = await createToken(ownerId, 'shop_owner');
     staffToken = await createToken(staffId, 'staff');
   });
@@ -109,11 +109,11 @@ describe('RBAC API', () => {
       const res = await request(app)
         .patch(`/api/v1/admin/rbac/users/${userId}/roles`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ roles: ['user', 'seller'] });
+        .send({ roles: ['member', 'seller'] });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['user', 'seller']));
+      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'seller']));
     });
   });
 

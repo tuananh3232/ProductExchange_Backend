@@ -75,7 +75,7 @@ const upsertUsers = async () => {
   const buyer = await upsertSeedUser({
     email: SEED_BUYER_EMAIL,
     name: 'Decor Seed Buyer',
-    roles: ['user'],
+    roles: ['member'],
     address: {
       province: 'Ho Chi Minh',
       district: 'District 3',

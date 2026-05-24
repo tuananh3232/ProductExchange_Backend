@@ -1,5 +1,5 @@
-import swaggerJsdoc from 'swagger-jsdoc';
-import { env } from './env.config.js';
+import swaggerJsdoc from 'swagger-jsdoc'
+import { env } from './env.config.js'
 
 const swaggerDefinition = {
   openapi: '3.0.0',
@@ -36,7 +36,7 @@ const swaggerDefinition = {
           phone: { type: 'string' },
           roles: {
             type: 'array',
-            items: { type: 'string', enum: ['user', 'admin', 'seller', 'shop_owner', 'staff'] },
+            items: { type: 'string', enum: ['member', 'admin', 'seller', 'shop_owner', 'staff'] },
           },
           rating: {
             type: 'object',
@@ -293,29 +293,29 @@ const swaggerDefinition = {
     },
   },
   security: [{ bearerAuth: [] }],
-};
+}
 
 const options = {
   swaggerDefinition,
   apis: ['./src/routes/**/*.js', './src/controllers/**/*.js'], // JSDoc annotations
-};
+}
 
-const rawSwaggerSpec = swaggerJsdoc(options);
+const rawSwaggerSpec = swaggerJsdoc(options)
 const normalizedApiPrefix = env.apiPrefix && env.apiPrefix !== '/'
   ? env.apiPrefix.replace(/\/+$/, '')
-  : '';
+  : ''
 
 const prefixedPaths = Object.fromEntries(
   Object.entries(rawSwaggerSpec.paths || {}).map(([path, pathItem]) => {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`
     const finalPath = normalizedApiPrefix
       ? `${normalizedApiPrefix}${normalizedPath}`
-      : normalizedPath;
-    return [finalPath, pathItem];
+      : normalizedPath
+    return [finalPath, pathItem]
   })
-);
+)
 
 export const swaggerSpec = {
   ...rawSwaggerSpec,
   paths: prefixedPaths,
-};
+}

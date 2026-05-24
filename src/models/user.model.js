@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
-import { ROLE_ENUM, ROLES } from '../constants/role.constant.js';
+import mongoose from 'mongoose'
+import bcrypt from 'bcryptjs'
+import { ROLE_ENUM, ROLES } from '../constants/role.constant.js'
 
 const userSchema = new mongoose.Schema(
   {
@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema(
           enum: ROLE_ENUM,
         },
       ],
-      default: [ROLES.USER],
+      default: [ROLES.MEMBER],
     },
     isVerified: {
       type: Boolean,
@@ -112,36 +112,36 @@ const userSchema = new mongoose.Schema(
     timestamps: true, // Tự thêm createdAt, updatedAt
     versionKey: false,
   }
-);
+)
 
 userSchema.pre('validate', function () {
-  const normalizedRoles = Array.isArray(this.roles) ? [...new Set(this.roles.filter(Boolean))] : [];
+  const normalizedRoles = Array.isArray(this.roles) ? [...new Set(this.roles.filter(Boolean))] : []
 
   if (!normalizedRoles.length) {
-    normalizedRoles.push(ROLES.USER);
+    normalizedRoles.push(ROLES.MEMBER)
   }
 
-  this.roles = normalizedRoles;
-});
+  this.roles = normalizedRoles
+})
 
 // Hash password trước khi lưu
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) return;
-  this.password = await bcrypt.hash(this.password, 12);
-});
+  if (!this.isModified('password')) return
+  this.password = await bcrypt.hash(this.password, 12)
+})
 
 // Instance method: so sánh password
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
+  return bcrypt.compare(candidatePassword, this.password)
+}
 
 // Instance method: loại bỏ trường nhạy cảm khi trả về JSON
 userSchema.methods.toPublicJSON = function () {
-  const obj = this.toObject();
-  delete obj.password;
-  delete obj.refreshToken;
-  return obj;
-};
+  const obj = this.toObject()
+  delete obj.password
+  delete obj.refreshToken
+  return obj
+}
 
-const User = mongoose.model('User', userSchema);
-export default User;
+const User = mongoose.model('User', userSchema)
+export default User

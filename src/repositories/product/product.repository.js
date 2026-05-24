@@ -5,12 +5,14 @@ export const create = (data) => Product.create(data)
 export const findById = (id) =>
   Product.findById(id)
     .populate('owner', 'name avatar rating phone')
+    .populate('seller', 'name avatar rating phone')
     .populate('category', 'name slug')
     .populate('shop', 'name slug owner staff')
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
   Product.find(filter)
     .populate('owner', 'name avatar rating')
+    .populate('seller', 'name avatar rating')
     .populate('category', 'name slug')
     .populate('shop', 'name slug')
     .sort({ [sortBy]: sortOrder })

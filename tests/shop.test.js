@@ -20,16 +20,16 @@ describe('Shop API', () => {
       name: 'Shop Owner Candidate',
       email: 'shop-owner@example.com',
       password: '123456',
-      role: 'user',
-      roles: ['user'],
+      role: 'member',
+      roles: ['member'],
     });
 
     const staff = await User.create({
       name: 'Shop Staff Candidate',
       email: 'shop-staff@example.com',
       password: '123456',
-      role: 'user',
-      roles: ['user'],
+      role: 'member',
+      roles: ['member'],
     });
 
     const outsider = await User.create({
@@ -44,8 +44,8 @@ describe('Shop API', () => {
     staffId = staff._id;
     outsiderId = outsider._id;
 
-    ownerToken = await createToken(ownerId, 'user');
-    staffToken = await createToken(staffId, 'user');
+    ownerToken = await createToken(ownerId, 'member');
+    staffToken = await createToken(staffId, 'member');
     outsiderToken = await createToken(outsiderId, 'shop_owner');
   });
 
@@ -151,6 +151,14 @@ describe('Shop API', () => {
 
     expect(addStaffRes.statusCode).toBe(200);
     expect(addStaffRes.body.success).toBe(true);
+
+    const permissionRes = await request(app)
+      .put(`/api/v1/shops/${shopId}/staff/${staffId}/permissions`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ permissions: ['shop:update', 'shop:read'] });
+
+    expect(permissionRes.statusCode).toBe(200);
+    expect(permissionRes.body.success).toBe(true);
 
     const updateRes = await request(app)
       .put(`/api/v1/shops/${shopId}`)

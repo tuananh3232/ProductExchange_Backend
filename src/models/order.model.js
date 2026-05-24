@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { ORDER_STATUS, ORDER_STATUS_ENUM, PAYMENT_STATUS, PAYMENT_STATUS_ENUM } from '../constants/status.constant.js';
+import mongoose from 'mongoose'
+import { ORDER_STATUS, ORDER_STATUS_ENUM, PAYMENT_STATUS, PAYMENT_STATUS_ENUM } from '../constants/status.constant.js'
 
 const orderHistorySchema = new mongoose.Schema(
   {
@@ -24,7 +24,7 @@ const orderHistorySchema = new mongoose.Schema(
     },
   },
   { _id: false }
-);
+)
 
 const orderSchema = new mongoose.Schema(
   {
@@ -37,7 +37,13 @@ const orderSchema = new mongoose.Schema(
     shop: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Shop',
-      required: true,
+      default: null,
+      index: true,
+    },
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
       index: true,
     },
     product: {
@@ -115,12 +121,13 @@ const orderSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
-orderSchema.index({ buyer: 1, createdAt: -1 });
-orderSchema.index({ shop: 1, createdAt: -1 });
-orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ buyer: 1, createdAt: -1 })
+orderSchema.index({ shop: 1, createdAt: -1 })
+orderSchema.index({ seller: 1, createdAt: -1 })
+orderSchema.index({ status: 1, createdAt: -1 })
 
-const Order = mongoose.model('Order', orderSchema);
+const Order = mongoose.model('Order', orderSchema)
 
-export default Order;
+export default Order

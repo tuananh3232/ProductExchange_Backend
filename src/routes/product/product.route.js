@@ -65,7 +65,7 @@ const router = Router()
  *         application/json:
  *           schema:
  *             type: object
- *             required: [title, description, price, listingType, condition, category, shop]
+ *             required: [title, description, price, listingType, condition, category]
  *             properties:
  *               title:
  *                 type: string

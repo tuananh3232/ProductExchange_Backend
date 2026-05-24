@@ -106,6 +106,12 @@ export const adminGetUserKyc = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
 })
 
+export const getAdminKycs = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { kycs, meta } = await authService.getAdminKycs(req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: { kycs }, meta })
+})
+
 export const adminApproveKyc = asyncHandler(async (req, res) => {
   const user = await authService.adminApproveKyc(req.params.userId)
   sendSuccess(res, { message: MESSAGES.KYC.APPROVED, data: { user } })

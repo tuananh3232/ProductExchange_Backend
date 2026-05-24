@@ -116,7 +116,7 @@ export const TEST_PRODUCTS_BY_CATEGORY = {
   }, 'good'),
 }
 
-export const createToken = async (userId, role = 'user') => {
+export const createToken = async (userId, role = 'member') => {
   const jwt = await import('jsonwebtoken')
   const { env } = await import('../../src/configs/env.config.js')
   return jwt.default.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn })

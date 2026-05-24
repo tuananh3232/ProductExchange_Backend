@@ -292,38 +292,30 @@ router.patch(
  * @swagger
  * /admin/kyc:
  *   get:
- *     summary: Lấy danh sách KYC theo trạng thái
- *     tags: [Admin]
+ *     summary: Lay danh sach ho so KYC
+ *     tags: [Admin - KYC]
  *     parameters:
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending, approved, rejected]
- *           default: pending
+ *           enum: [pending, approved, rejected, none]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 20
  *     responses:
  *       200:
- *         description: Lấy danh sách KYC thành công
- */
-router.get(
-  '/kyc',
-  authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
-  authController.adminGetAllKyc
-)
-
-/**
- * @swagger
+ *         description: Lay danh sach KYC thanh cong
+ *
  * /admin/users/{userId}/kyc:
  *   get:
  *     summary: Lấy hồ sơ KYC của người dùng
@@ -376,6 +368,13 @@ router.get(
  *       200:
  *         description: Từ chối KYC thành công
  */
+router.get(
+  '/kyc',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  authController.getAdminKycs
+)
+
 router.get(
   '/users/:userId/kyc',
   authenticate,
