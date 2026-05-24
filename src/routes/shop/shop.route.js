@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import * as shopController from '../../controllers/shop/shop.controller.js'
 import * as productController from '../../controllers/product/product.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions, requireShopPermission } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import {
   addStaffSchema,
