@@ -1,11 +1,7 @@
 import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import * as shopController from '../../controllers/shop/shop.controller.js'
-<<<<<<< HEAD
-import * as productController from '../../controllers/product/product.controller.js'
-=======
 import * as walletController from '../../controllers/wallet/wallet.controller.js'
->>>>>>> baonq
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { banUserSchema, rejectKycSchema } from '../../validations/auth/auth.validation.js'

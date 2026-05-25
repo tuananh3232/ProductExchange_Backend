@@ -9,11 +9,7 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as orderRepo from '../../repositories/order/order.repository.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
-<<<<<<< HEAD
-import { ROLES } from '../../constants/role.constant.js'
-=======
 import * as walletService from '../wallet/wallet.service.js'
->>>>>>> baonq
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],

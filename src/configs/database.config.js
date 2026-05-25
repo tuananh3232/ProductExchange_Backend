@@ -16,12 +16,8 @@ export const connectDB = async () => {
 
     isDisconnecting = false;
     isConnected = true;
-<<<<<<< HEAD
-    console.log(`MongoDB connected successfully: ${mongoose.connection.name}`);
-=======
     const dbName = mongoose.connection.db?.databaseName || env.mongodb.uri?.split('/').pop()?.split('?')[0]
     console.log(`MongoDB connected successfully → DB: ${dbName}`);
->>>>>>> baonq
 
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error:', err);

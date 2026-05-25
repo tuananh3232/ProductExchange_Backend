@@ -48,12 +48,8 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_ROLES: 'admin:manage_roles',
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',
-<<<<<<< HEAD
-}
-=======
   ADMIN_MANAGE_WITHDRAWALS: 'admin:manage_withdrawals',
 };
->>>>>>> baonq
 
 /**
  * Gán quyền cho từng role
@@ -88,10 +84,6 @@ export const ROLE_PERMISSION_MAP = {
     PERMISSIONS.ORDER_UPDATE_STATUS,
   ],
   shop_owner: [
-<<<<<<< HEAD
-    PERMISSIONS.AUTH_LOGOUT,
-=======
->>>>>>> baonq
     PERMISSIONS.USER_READ,
     PERMISSIONS.USER_UPDATE,
     PERMISSIONS.SHOP_CREATE,
