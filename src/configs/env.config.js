@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
 
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
 const isProduction = process.env.NODE_ENV === 'production';

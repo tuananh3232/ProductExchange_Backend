@@ -124,7 +124,7 @@ export default router
  *
  * /orders/{id}/status:
  *   patch:
- *     summary: Cập nhật trạng thái đơn hàng
+ *     summary: Cập nhật trạng thái đơn hàng (shop thực hiện)
  *     tags: [Orders]
  *     parameters:
  *       - in: path
@@ -132,7 +132,22 @@ export default router
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [processing, shipped, delivered, cancelled]
+ *                 example: delivered
+ *               note:
+ *                 type: string
+ *                 example: ""
  *     responses:
  *       200:
- *         description: Cập nhật trạng thái đơn hàng thành công
+ *         description: Cập nhật trạng thái thành công. Khi status=delivered thì ví shop được cộng tiền tự động.
  */

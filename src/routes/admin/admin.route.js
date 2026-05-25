@@ -1,13 +1,33 @@
 import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import * as shopController from '../../controllers/shop/shop.controller.js'
+<<<<<<< HEAD
 import * as productController from '../../controllers/product/product.controller.js'
+=======
+import * as walletController from '../../controllers/wallet/wallet.controller.js'
+>>>>>>> baonq
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { banUserSchema, rejectKycSchema } from '../../validations/auth/auth.validation.js'
 import { rejectShopSchema, suspendShopSchema } from '../../validations/shop/shop.validation.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import adminStatsRoutes from './stats.route.js'
+import Joi from 'joi'
+
+const rejectWithdrawalSchema = Joi.object({
+  rejectionReason: Joi.string().min(1).required(),
+  adminNote: Joi.string().allow('').optional(),
+})
+
+const completeWithdrawalSchema = Joi.object({
+  adminNote: Joi.string().allow('').optional(),
+  transferProof: Joi.object({
+    transactionId: Joi.string().max(100).optional(),
+    transferDate: Joi.date().optional(),
+    bankTransferRef: Joi.string().max(100).optional(),
+    note: Joi.string().max(500).allow('').optional(),
+  }).optional(),
+})
 
 const router = Router()
 
@@ -395,6 +415,142 @@ router.patch(
   requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
   validate(rejectKycSchema),
   authController.adminRejectKyc
+)
+
+/**
+ * @swagger
+ * /admin/withdrawals:
+ *   get:
+ *     summary: Lấy danh sách lệnh rút tiền (admin)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected, processing, completed]
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *
+ * /admin/withdrawals/{id}/approve:
+ *   patch:
+ *     summary: Duyệt lệnh rút tiền (pending → approved)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của lệnh rút tiền
+ *     responses:
+ *       200:
+ *         description: Duyệt thành công
+ *
+ * /admin/withdrawals/{id}/reject:
+ *   patch:
+ *     summary: Từ chối lệnh rút tiền (pending/approved → rejected, hoàn tiền về ví)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của lệnh rút tiền
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rejectionReason]
+ *             properties:
+ *               rejectionReason:
+ *                 type: string
+ *                 example: Thông tin tài khoản ngân hàng không hợp lệ
+ *               adminNote:
+ *                 type: string
+ *                 example: ""
+ *     responses:
+ *       200:
+ *         description: Từ chối thành công, tiền hoàn về ví shop
+ *
+ * /admin/withdrawals/{id}/complete:
+ *   patch:
+ *     summary: Xác nhận đã chuyển tiền (approved → completed)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của lệnh rút tiền
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               adminNote:
+ *                 type: string
+ *                 example: Đã chuyển khoản thành công
+ *               transferProof:
+ *                 type: object
+ *                 properties:
+ *                   transactionId:
+ *                     type: string
+ *                     example: TXN20250525001
+ *                   transferDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2025-05-25T10:00:00Z"
+ *                   bankTransferRef:
+ *                     type: string
+ *                     example: REF123456
+ *                   note:
+ *                     type: string
+ *                     example: ""
+ *     responses:
+ *       200:
+ *         description: Xác nhận thành công, pendingBalance về 0, totalWithdrawn tăng
+ */
+router.get(
+  '/withdrawals',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  walletController.adminGetWithdrawals
+)
+
+router.patch(
+  '/withdrawals/:id/approve',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  walletController.approveWithdrawal
+)
+
+router.patch(
+  '/withdrawals/:id/reject',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  validate(rejectWithdrawalSchema),
+  walletController.rejectWithdrawal
+)
+
+router.patch(
+  '/withdrawals/:id/complete',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  validate(completeWithdrawalSchema),
+  walletController.completeWithdrawal
 )
 
 export default router

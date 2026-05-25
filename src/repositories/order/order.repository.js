@@ -23,7 +23,7 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
 export const countMany = (filter = {}) => Order.countDocuments(filter)
 
 export const updateById = (id, data) =>
-  Order.findByIdAndUpdate(id, data, { new: true, runValidators: true })
+  Order.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
     .populate('buyer', 'name email avatar')
     .populate('shop', 'name slug owner staff')
     .populate('seller', 'name email avatar')

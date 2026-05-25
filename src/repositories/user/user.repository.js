@@ -21,7 +21,7 @@ export const findByIdWithRefreshToken = (id) => User.findById(id).select('+refre
 export const create = (userData) => User.create(userData)
 
 export const updateById = (id, updateData) =>
-  User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true })
+  User.findByIdAndUpdate(id, updateData, { returnDocument: 'after', runValidators: true })
 
 export const saveRefreshToken = (id, refreshToken) =>
   User.findByIdAndUpdate(id, { refreshToken })

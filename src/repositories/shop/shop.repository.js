@@ -21,19 +21,19 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
 export const countMany = (filter = {}) => Shop.countDocuments(filter)
 
 export const updateById = (id, data) =>
-  Shop.findByIdAndUpdate(id, data, { new: true, runValidators: true })
+  Shop.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
     .populate('owner', 'name email avatar')
     .populate('staff', 'name email avatar')
     .populate('staffPermissions.staffUser', 'name email avatar')
 
 export const addStaff = (id, userId) =>
-  Shop.findByIdAndUpdate(id, { $addToSet: { staff: userId } }, { new: true, runValidators: true })
+  Shop.findByIdAndUpdate(id, { $addToSet: { staff: userId } }, { returnDocument: 'after', runValidators: true })
     .populate('owner', 'name email avatar')
     .populate('staff', 'name email avatar')
     .populate('staffPermissions.staffUser', 'name email avatar')
 
 export const removeStaff = (id, userId) =>
-  Shop.findByIdAndUpdate(id, { $pull: { staff: userId } }, { new: true, runValidators: true })
+  Shop.findByIdAndUpdate(id, { $pull: { staff: userId } }, { returnDocument: 'after', runValidators: true })
     .populate('owner', 'name email avatar')
     .populate('staff', 'name email avatar')
     .populate('staffPermissions.staffUser', 'name email avatar')
