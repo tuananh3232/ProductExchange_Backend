@@ -29,14 +29,14 @@ export const countMany = async (filter = {}) => {
 };
 
 export const findByIdAndUpdate = async (id, update) => {
-  return ShopInvitation.findByIdAndUpdate(id, update, { new: true })
+  return ShopInvitation.findByIdAndUpdate(id, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
     .populate('invitee', 'email fullName')
     .populate('inviter', 'email fullName');
 };
 
 export const findOneAndUpdate = async (filter, update) => {
-  return ShopInvitation.findOneAndUpdate(filter, update, { new: true })
+  return ShopInvitation.findOneAndUpdate(filter, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
     .populate('invitee', 'email fullName')
     .populate('inviter', 'email fullName');

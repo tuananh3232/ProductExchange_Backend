@@ -89,8 +89,8 @@ export const createVnpayPayment = async (orderId, userContext, req) => {
     throw new AppError('Bạn không có quyền thanh toán đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
-  if (order.status !== ORDER_STATUS.DELIVERED) {
-    throw new AppError('Đơn hàng chưa đủ điều kiện để thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
+  if (order.status !== ORDER_STATUS.PENDING) {
+    throw new AppError('Chỉ có thể thanh toán đơn hàng ở trạng thái chờ xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
   }
 
   if (order.paymentStatus === PAYMENT_STATUS.PAID) {
@@ -203,8 +203,8 @@ const validateOrderForPayment = async (orderId, userContext) => {
   if (!isBuyerOrAdmin(order, userContext)) {
     throw new AppError('Bạn không có quyền thanh toán đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
-  if (order.status !== ORDER_STATUS.DELIVERED) {
-    throw new AppError('Đơn hàng chưa đủ điều kiện để thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
+  if (order.status !== ORDER_STATUS.PENDING) {
+    throw new AppError('Chỉ có thể thanh toán đơn hàng ở trạng thái chờ xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
   }
   if (order.paymentStatus === PAYMENT_STATUS.PAID) {
     throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)

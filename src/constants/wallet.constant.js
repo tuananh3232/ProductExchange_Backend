@@ -1,0 +1,11 @@
+/**
+ * Wallet constants
+ */
+
+export const WALLET_CONSTANTS = {
+  MIN_WITHDRAWAL_AMOUNT: 50000, // 50k VND
+  MAX_WITHDRAWAL_AMOUNT: 50000000, // 50M VND
+  PLATFORM_FEE_RATE: 0.05, // 5%
+}
+
+export default WALLET_CONSTANTS

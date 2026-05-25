@@ -4,11 +4,12 @@ import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { ORDER_STATUS } from '../../constants/status.constant.js'
+import { ORDER_STATUS, PAYMENT_STATUS } from '../../constants/status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as orderRepo from '../../repositories/order/order.repository.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
+import * as walletService from '../wallet/wallet.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -192,6 +193,10 @@ export const confirmOrder = async (orderId, userContext) => {
   await ensureShopManageOrder(order, userContext, PERMISSIONS.ORDER_CONFIRM)
   ensureTransitionAllowed(order.status, ORDER_STATUS.CONFIRMED)
 
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    throw new AppError('Đơn hàng chưa được thanh toán, không thể xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
+  }
+
   const updated = await orderRepo.updateById(orderId, {
     status: ORDER_STATUS.CONFIRMED,
     $push: {
@@ -222,7 +227,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
 
   ensureTransitionAllowed(order.status, ORDER_STATUS.CANCELLED)
 
-  const updated = await orderRepo.updateById(orderId, {
+  const cancelUpdate = {
     status: ORDER_STATUS.CANCELLED,
     $push: {
       history: {
@@ -232,7 +237,13 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
         updatedAt: new Date(),
       },
     },
-  })
+  }
+
+  if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+    cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
+  }
+
+  const updated = await orderRepo.updateById(orderId, cancelUpdate)
 
   await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
   return updated
@@ -261,6 +272,9 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
     await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'sold' })
+    if (order.paymentStatus === PAYMENT_STATUS.PAID) {
+      await walletService.creditFromOrder(updated)
+    }
   }
 
   if (nextStatus === ORDER_STATUS.CANCELLED) {

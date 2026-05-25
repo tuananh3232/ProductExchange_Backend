@@ -7,7 +7,9 @@
       "Bash(Get-ChildItem -Path \"d:\\\\Study\\\\FPTU\\\\Term8\\\\EXE202\\\\BE\\\\ProductExchange_Backend\" -Recurse -Directory)",
       "Bash(Select-Object FullName)",
       "Bash(xargs ls -la)",
-      "Bash(xargs grep -l \"kyc\\\\|KYC\")"
+      "Bash(xargs grep -l \"kyc\\\\|KYC\")",
+      "Bash(grep -E \"\\\\.\\(js|json|env\\)$\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\Study\\\\FPTU\\\\Term8\\\\EXE202\\\\BE\\\\ProductExchange_Backend\" -Directory)"
     ]
   }
 }

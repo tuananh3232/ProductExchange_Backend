@@ -49,6 +49,7 @@ export const PAYMENT_STATUS = {
   PAID: 'paid',
   FAILED: 'failed',
   CANCELLED: 'cancelled',
+  REFUND_PENDING: 'refund_pending',
 };
 
 export const PAYMENT_STATUS_ENUM = Object.values(PAYMENT_STATUS);
@@ -71,6 +72,33 @@ export const SHOP_MEMBER_STATUS = {
 
 export const SHOP_MEMBER_STATUS_ENUM = Object.values(SHOP_MEMBER_STATUS);
 
+// Trạng thái giao dịch ví
+export const WALLET_TRANSACTION_TYPE = {
+  CREDIT: 'credit',
+  DEBIT: 'debit',
+};
+
+export const WALLET_TRANSACTION_TYPE_ENUM = Object.values(WALLET_TRANSACTION_TYPE);
+
+export const WALLET_TRANSACTION_STATUS = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+};
+
+export const WALLET_TRANSACTION_STATUS_ENUM = Object.values(WALLET_TRANSACTION_STATUS);
+
+// Trạng thái lệnh rút tiền
+export const WITHDRAWAL_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+};
+
+export const WITHDRAWAL_STATUS_ENUM = Object.values(WITHDRAWAL_STATUS);
+
 export default {
   SHOP_STATUS,
   SHOP_STATUS_ENUM,
@@ -85,4 +113,10 @@ export default {
   INVITATION_STATUS_ENUM,
   SHOP_MEMBER_STATUS,
   SHOP_MEMBER_STATUS_ENUM,
+  WALLET_TRANSACTION_TYPE,
+  WALLET_TRANSACTION_TYPE_ENUM,
+  WALLET_TRANSACTION_STATUS,
+  WALLET_TRANSACTION_STATUS_ENUM,
+  WITHDRAWAL_STATUS,
+  WITHDRAWAL_STATUS_ENUM,
 };

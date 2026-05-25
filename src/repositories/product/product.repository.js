@@ -21,7 +21,7 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
 export const countMany = (filter = {}) => Product.countDocuments(filter)
 
 export const updateById = (id, data) =>
-  Product.findByIdAndUpdate(id, data, { new: true, runValidators: true })
+  Product.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
 
 export const deleteById = (id) => Product.findByIdAndDelete(id)
 

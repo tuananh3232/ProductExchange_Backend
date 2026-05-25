@@ -59,6 +59,7 @@ const ERRORS = {
     INVALID_STATUS_TRANSITION: 'Invalid order status transition',
     NOT_READY_FOR_PAYMENT: 'Order is not ready for payment',
     ALREADY_PAID: 'Order has already been paid',
+    PAYMENT_REQUIRED: 'Order must be paid before it can be confirmed',
   },
 
   PAYMENT: {
@@ -102,6 +103,20 @@ const ERRORS = {
     ROLE_NOT_FOUND: 'Role not found',
     ROLE_REQUIRED: 'At least one role is required',
     PERMISSION_NOT_FOUND: 'Permission not found',
+  },
+
+  WALLET: {
+    NOT_FOUND: 'Wallet not found',
+    INSUFFICIENT_BALANCE: 'Insufficient wallet balance',
+    PENDING_WITHDRAWAL_EXISTS: 'A pending withdrawal request already exists',
+    AMOUNT_TOO_LOW: 'Withdrawal amount is below minimum',
+    AMOUNT_TOO_HIGH: 'Withdrawal amount exceeds maximum',
+  },
+
+  WITHDRAWAL: {
+    NOT_FOUND: 'Withdrawal request not found',
+    INVALID_STATUS: 'Invalid withdrawal request status for this action',
+    TRANSFER_PROOF_REQUIRED: 'Transfer proof is required to complete withdrawal',
   },
 };
 

@@ -37,6 +37,10 @@ export const PERMISSIONS = {
   ORDER_CANCEL: 'order:cancel',
   ORDER_UPDATE_STATUS: 'order:update_status',
 
+  // Wallet
+  WALLET_VIEW: 'wallet:view',
+  WALLET_REQUEST_WITHDRAWAL: 'wallet:request_withdrawal',
+
   // Admin
   ADMIN_MANAGE_USERS: 'admin:manage_users',
   ADMIN_MANAGE_PRODUCTS: 'admin:manage_products',
@@ -44,6 +48,7 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_ROLES: 'admin:manage_roles',
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',
+  ADMIN_MANAGE_WITHDRAWALS: 'admin:manage_withdrawals',
 };
 
 /**
@@ -81,6 +86,8 @@ export const ROLE_PERMISSION_MAP = {
     PERMISSIONS.ORDER_UPDATE_STATUS,
   ],
   shop_owner: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.USER_UPDATE,
     PERMISSIONS.SHOP_CREATE,
     PERMISSIONS.SHOP_READ,
     PERMISSIONS.SHOP_UPDATE,
@@ -96,6 +103,8 @@ export const ROLE_PERMISSION_MAP = {
     PERMISSIONS.ORDER_CONFIRM,
     PERMISSIONS.ORDER_CANCEL,
     PERMISSIONS.ORDER_UPDATE_STATUS,
+    PERMISSIONS.WALLET_VIEW,
+    PERMISSIONS.WALLET_REQUEST_WITHDRAWAL,
   ],
   staff: [
     PERMISSIONS.SHOP_READ,
