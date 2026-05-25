@@ -124,7 +124,7 @@ export const createOrder = async (buyerId, payload) => {
   }
 
   if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER && !product.seller) {
-    throw new AppError('San pham chua gan voi seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
+    throw new AppError('Sản phẩm chưa gắn với seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
   }
 
   const quantity = payload.quantity || 1

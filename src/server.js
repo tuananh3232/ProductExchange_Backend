@@ -1,4 +1,5 @@
 import express from 'express'
+import { createServer } from 'http'
 import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
@@ -11,8 +12,11 @@ import { errorHandler } from './middlewares/error.middleware.js'
 import { apiRateLimit } from './middlewares/rate-limit.middleware.js'
 import router from './routes/index.js'
 import { ensureRbacSeedData } from './services/rbac/rbac-seed.service.js'
+import { initChatSocket } from './sockets/chat.socket.js'
 
 const app = express()
+const httpServer = createServer(app)
+initChatSocket(httpServer)
 
 // Middlewares
 // Tắt CSP để Swagger UI load được CSS/JS
@@ -50,7 +54,7 @@ if (env.nodeEnv !== 'test' && !process.env.JEST_WORKER_ID) {
       console.error('RBAC seed failed:', error.message)
     }
 
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`)
       console.log(`🔗 API Base URL: http://localhost:${PORT}${env.apiPrefix}`)
       console.log(`📚 Swagger UI:   http://localhost:${PORT}/api-docs`)
