@@ -77,6 +77,15 @@ const MESSAGES = {
     STATUS_UPDATED: 'Cập nhật trạng thái đơn hàng thành công',
   },
 
+  CONVERSATION: {
+    CREATED: 'Tạo cuộc trò chuyện thành công',
+    SHOP_CREATED: 'Tạo cuộc trò chuyện với shop thành công',
+    FETCHED: 'Lấy danh sách cuộc trò chuyện thành công',
+    MESSAGES_FETCHED: 'Lấy danh sách tin nhắn thành công',
+    MESSAGE_SENT: 'Gửi tin nhắn thành công',
+    MARKED_AS_READ: 'Đánh dấu đã đọc thành công',
+  },
+
 
   STATS: {
     ADMIN_OVERVIEW_FETCHED: 'Lấy thống kê tổng quan hệ thống thành công',

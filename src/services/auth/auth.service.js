@@ -10,6 +10,8 @@ import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
 import { paginate } from '../../utils/pagination.util.js'
 import { ROLES } from '../../constants/role.constant.js'
+import { SHOP_STATUS } from '../../constants/status.constant.js'
+import Shop from '../../models/shop.model.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000

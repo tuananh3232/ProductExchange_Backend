@@ -62,6 +62,12 @@ const ERRORS = {
     PAYMENT_REQUIRED: 'Order must be paid before it can be confirmed',
   },
 
+  CONVERSATION: {
+    AUTHENTICATION_REQUIRED: 'Authentication required',
+    AUTHENTICATION_FAILED: 'Authentication failed',
+    SOCKET_ERROR: 'Socket error',
+  },
+
   PAYMENT: {
     NOT_FOUND: 'Payment not found',
     INVALID_SIGNATURE: 'Invalid payment signature',
@@ -78,6 +84,7 @@ const ERRORS = {
   // Validation
   VALIDATION: {
     REQUIRED: 'This field is required',
+    DUPLICATE: 'Resource already exists',
     INVALID_FORMAT: 'Invalid format',
     INVALID_OBJECT_ID: 'Invalid ID format',
     PAGE_MUST_BE_NUMBER: 'Page must be a positive integer',
