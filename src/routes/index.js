@@ -9,11 +9,8 @@ import paymentRoutes from './payment/payment.route.js'
 import adminRoutes from './admin/admin.route.js'
 import adminRbacRoutes from './admin/rbac.route.js'
 import walletRoutes from './wallet/wallet.route.js'
-<<<<<<< HEAD
 import conversationRoutes from './conversation/conversation.route.js'
-=======
 import userWalletRoutes from './user-wallet/user-wallet.route.js'
->>>>>>> baonq
 
 const router = Router()
 
