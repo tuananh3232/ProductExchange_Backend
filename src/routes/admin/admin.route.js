@@ -195,6 +195,14 @@ router.patch(
  *           type: string
  *           enum: [pending_review, active, rejected, suspended]
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: ownerId
+ *         schema:
+ *           type: string
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer
@@ -205,6 +213,25 @@ router.patch(
  *     responses:
  *       200:
  *         description: Lấy danh sách shop thành công
+ *
+ * /admin/shops/{id}:
+ *   get:
+ *     summary: Lấy chi tiết shop
+ *     tags: [Admin - Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của shop
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết shop thành công
+ *       404:
+ *         description: Không tìm thấy shop
  *
  * /admin/shops/{id}/approve:
  *   patch:
@@ -273,6 +300,13 @@ router.get(
   authenticate,
   requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
   shopController.getAdminShops
+)
+
+router.get(
+  '/shops/:id',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  shopController.getAdminShopById
 )
 
 router.patch(

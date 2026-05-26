@@ -1,19 +1,22 @@
 import crypto from 'crypto'
-import PayOS from '@payos/node'
+import { PayOS } from '@payos/node'
 import Order from '../../models/order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { ORDER_STATUS, PAYMENT_STATUS } from '../../constants/status.constant.js'
+import { ORDER_STATUS, PAYMENT_STATUS, TOPUP_STATUS } from '../../constants/status.constant.js'
+import { USER_WALLET_CONSTANTS } from '../../constants/wallet.constant.js'
 import { env } from '../../configs/env.config.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
+import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
+import * as userWalletService from '../user-wallet/user-wallet.service.js'
 
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
   if (!clientId || !apiKey || !checksumKey) {
     throw new AppError('PayOS chưa được cấu hình', HTTP_STATUS.INTERNAL_SERVER_ERROR, ERRORS.PAYMENT.PAYOS_NOT_CONFIGURED)
   }
-  return new PayOS(clientId, apiKey, checksumKey)
+  return new PayOS({ clientId, apiKey, checksumKey })
 }
 
 const getClientIp = (req) =>
@@ -247,7 +250,7 @@ export const createPayosPayment = async (orderId, userContext) => {
 
   // PayOS giới hạn description tối đa 25 ký tự
   const shortId = order._id.toString().slice(-8)
-  const paymentLink = await payos.createPaymentLink({
+  const paymentLink = await payos.paymentRequests.create({
     orderCode,
     amount,
     description: `Thanh toan #${shortId}`,
@@ -263,7 +266,7 @@ export const handlePayosWebhook = async (webhookData) => {
 
   let verifiedData
   try {
-    verifiedData = payos.verifyPaymentWebhookData(webhookData)
+    verifiedData = await payos.webhooks.verify(webhookData)
   } catch {
     throw new AppError('Chữ ký PayOS không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.INVALID_SIGNATURE)
   }
@@ -301,6 +304,152 @@ export const handlePayosWebhook = async (webhookData) => {
   await Order.findByIdAndUpdate(payment.order, orderUpdate)
 
   return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
+}
+
+// ─── Wallet Topup via PayOS ───────────────────────────────────────────────────
+
+export const createWalletTopup = async (amount, userContext) => {
+  const userId = userContext._id
+
+  if (amount < USER_WALLET_CONSTANTS.MIN_TOPUP_AMOUNT) {
+    throw new AppError(
+      `Số tiền nạp tối thiểu là ${USER_WALLET_CONSTANTS.MIN_TOPUP_AMOUNT.toLocaleString('vi-VN')} VNĐ`,
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.USER_WALLET.TOPUP_AMOUNT_TOO_LOW
+    )
+  }
+
+  if (amount > USER_WALLET_CONSTANTS.MAX_TOPUP_AMOUNT) {
+    throw new AppError(
+      `Số tiền nạp tối đa là ${USER_WALLET_CONSTANTS.MAX_TOPUP_AMOUNT.toLocaleString('vi-VN')} VNĐ`,
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.USER_WALLET.TOPUP_AMOUNT_TOO_HIGH
+    )
+  }
+
+  const payos = getPayosClient()
+  const wallet = await userWalletRepo.findOrCreateByUser(userId)
+
+  // Trả lại phiên nạp tiền đang pending nếu có (tránh tạo trùng)
+  const existingPending = await userWalletRepo.findPendingTopupByUser(userId)
+  if (existingPending?.checkoutUrl) {
+    return { topup: existingPending, paymentUrl: existingPending.checkoutUrl }
+  }
+
+  // PayOS orderCode phải là số nguyên dương, tối đa 9 chữ số
+  const orderCode = Date.now() % 1000000000
+  const transactionRef = `TOPUP_${orderCode}`
+  const roundedAmount = Math.round(Number(amount))
+
+  const topup = await userWalletRepo.createTopup({
+    user: userId,
+    wallet: wallet._id,
+    amount: roundedAmount,
+    orderCode,
+    transactionRef,
+    status: TOPUP_STATUS.PENDING,
+  })
+
+  // PayOS giới hạn description tối đa 25 ký tự
+  const shortId = topup._id.toString().slice(-6)
+  const paymentLink = await payos.paymentRequests.create({
+    orderCode,
+    amount: roundedAmount,
+    description: `Nap vi #${shortId}`,
+    returnUrl: env.payment.payos.topupReturnUrl,
+    cancelUrl: env.payment.payos.topupCancelUrl,
+  })
+
+  const savedTopup = await userWalletRepo.updateTopup(topup._id, { checkoutUrl: paymentLink.checkoutUrl })
+
+  return { topup: savedTopup, paymentUrl: paymentLink.checkoutUrl }
+}
+
+export const handleTopupWebhook = async (webhookData) => {
+  const payos = getPayosClient()
+
+  let verifiedData
+  try {
+    verifiedData = await payos.webhooks.verify(webhookData)
+  } catch {
+    throw new AppError('Chữ ký PayOS không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.INVALID_SIGNATURE)
+  }
+
+  const topup = await userWalletRepo.findTopupByOrderCode(verifiedData.orderCode)
+  if (!topup) {
+    throw new AppError('Không tìm thấy phiên nạp tiền', HTTP_STATUS.NOT_FOUND, ERRORS.USER_WALLET.TOPUP_NOT_FOUND)
+  }
+
+  if (topup.status !== TOPUP_STATUS.PENDING) {
+    return { topup, status: topup.status }
+  }
+
+  const nextStatus = webhookData.code === '00' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.FAILED
+
+  const updatedTopup = await userWalletRepo.updateTopup(topup._id, {
+    status: nextStatus,
+    rawCallbackData: webhookData,
+    completedAt: nextStatus === TOPUP_STATUS.COMPLETED ? new Date() : null,
+  })
+
+  if (nextStatus === TOPUP_STATUS.COMPLETED) {
+    await userWalletService.creditWalletFromTopup(updatedTopup)
+  }
+
+  return { topup: updatedTopup, status: nextStatus }
+}
+
+export const handleTopupReturn = async (query, callerId = null) => {
+  const { orderCode, cancel, code } = query
+  if (!orderCode) {
+    throw new AppError('Thiếu thông tin callback PayOS', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.TOPUP_NOT_FOUND)
+  }
+
+  const topup = await userWalletRepo.findTopupByOrderCode(Number(orderCode))
+  if (!topup) {
+    throw new AppError('Không tìm thấy phiên nạp tiền', HTTP_STATUS.NOT_FOUND, ERRORS.USER_WALLET.TOPUP_NOT_FOUND)
+  }
+
+  if (callerId && topup.user.toString() !== callerId.toString()) {
+    throw new AppError('Bạn không có quyền xác minh phiên nạp tiền này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  // Không cập nhật nếu đã xử lý xong (tránh ghi đè kết quả từ webhook)
+  if (topup.status !== TOPUP_STATUS.PENDING) {
+    return { topupId: topup._id, status: topup.status }
+  }
+
+  // Xác minh trực tiếp từ PayOS API thay vì tin vào query params
+  let paymentStatus
+  try {
+    const payos = getPayosClient()
+    const paymentInfo = await payos.paymentRequests.get(Number(orderCode))
+    paymentStatus = paymentInfo.status // 'PAID' | 'CANCELLED' | 'EXPIRED' | 'PENDING' | 'PROCESSING'
+  } catch {
+    // Fallback về query params khi không gọi được PayOS
+    const isCancelled = cancel === 'true' || cancel === true
+    if (isCancelled) paymentStatus = 'CANCELLED'
+    else if (code === '00') paymentStatus = 'PAID'
+    else paymentStatus = 'PENDING'
+  }
+
+  // Chưa có kết quả cuối → không cập nhật
+  if (paymentStatus === 'PENDING' || paymentStatus === 'PROCESSING') {
+    return { topupId: topup._id, status: TOPUP_STATUS.PENDING }
+  }
+
+  const nextStatus = paymentStatus === 'PAID' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.CANCELLED
+
+  const updatedTopup = await userWalletRepo.updateTopup(topup._id, {
+    status: nextStatus,
+    completedAt: nextStatus === TOPUP_STATUS.COMPLETED ? new Date() : null,
+  })
+
+  if (nextStatus === TOPUP_STATUS.COMPLETED) {
+    await userWalletService.creditWalletFromTopup(updatedTopup)
+  }
+
+  return { topupId: topup._id, status: nextStatus }
 }
 
 export const handlePayosReturn = async (query) => {

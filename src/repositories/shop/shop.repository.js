@@ -10,6 +10,12 @@ export const findById = (id) =>
     .populate('staff', 'name email avatar')
     .populate('staffPermissions.staffUser', 'name email avatar')
 
+export const findByIdForAdmin = (id) =>
+  Shop.findById(id)
+    .populate('owner', 'name email avatar roles phone kyc isActive')
+    .populate('staff', 'name email avatar roles')
+    .populate('staffPermissions.staffUser', 'name email avatar')
+
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
   Shop.find(filter)
     .populate('owner', 'name avatar')

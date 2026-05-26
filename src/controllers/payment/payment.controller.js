@@ -43,3 +43,13 @@ export const payosReturn = asyncHandler(async (req, res) => {
   const result = await paymentService.handlePayosReturn(req.query)
   sendSuccess(res, { message: MESSAGES.PAYMENT.CALLBACK_PROCESSED, data: result })
 })
+
+export const topupWebhook = asyncHandler(async (req, res) => {
+  const result = await paymentService.handleTopupWebhook(req.body)
+  res.status(200).json({ code: '00', desc: 'success', data: result })
+})
+
+export const topupReturn = asyncHandler(async (req, res) => {
+  const result = await paymentService.handleTopupReturn(req.query)
+  sendSuccess(res, { message: MESSAGES.PAYMENT.CALLBACK_PROCESSED, data: result })
+})

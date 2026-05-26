@@ -9,6 +9,7 @@ import paymentRoutes from './payment/payment.route.js'
 import adminRoutes from './admin/admin.route.js'
 import adminRbacRoutes from './admin/rbac.route.js'
 import walletRoutes from './wallet/wallet.route.js'
+import userWalletRoutes from './user-wallet/user-wallet.route.js'
 
 const router = Router()
 
@@ -22,5 +23,6 @@ router.use('/payments', paymentRoutes)
 router.use('/admin', adminRoutes)
 router.use('/admin/rbac', adminRbacRoutes)
 router.use('/wallet', walletRoutes)
+router.use('/user-wallet', userWalletRoutes)
 
 export default router

@@ -102,6 +102,8 @@ export const env = {
       checksumKey: process.env.PAYOS_CHECKSUM_KEY || '',
       returnUrl: process.env.PAYOS_RETURN_URL || `${appUrl}${apiPrefix}/payments/payos/return`,
       cancelUrl: process.env.PAYOS_CANCEL_URL || `${appUrl}${apiPrefix}/payments/payos/cancel`,
+      topupReturnUrl: process.env.PAYOS_TOPUP_RETURN_URL || `${appUrl}${apiPrefix}/payments/payos/topup/return`,
+      topupCancelUrl: process.env.PAYOS_TOPUP_CANCEL_URL || `${appUrl}${apiPrefix}/payments/payos/topup/cancel`,
     },
   },
 };
