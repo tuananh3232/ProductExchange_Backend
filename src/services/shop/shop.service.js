@@ -334,6 +334,14 @@ export const getMyShops = async (userId, query, pagination) => {
   return { shops, meta }
 }
 
+export const getAdminShopById = async (shopId) => {
+  const shop = await shopRepo.findByIdForAdmin(shopId)
+  if (!shop || !shop.isActive) {
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+  }
+  return shop
+}
+
 export const getAdminShops = async (query, pagination) => {
   const filter = { isActive: true, status: { $ne: SHOP_STATUS.DRAFT } }
   if (query.status) filter.status = query.status
@@ -388,7 +396,7 @@ export const unsuspendShop = async (shopId) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
   if (shop.status !== SHOP_STATUS.SUSPENDED) {
-    throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
+    throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_SUSPENDED)
   }
   return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
 }

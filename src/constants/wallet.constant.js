@@ -8,4 +8,9 @@ export const WALLET_CONSTANTS = {
   PLATFORM_FEE_RATE: 0.05, // 5%
 }
 
+export const USER_WALLET_CONSTANTS = {
+  MIN_TOPUP_AMOUNT: 10000, // 10k VND
+  MAX_TOPUP_AMOUNT: 50000000, // 50M VND
+}
+
 export default WALLET_CONSTANTS

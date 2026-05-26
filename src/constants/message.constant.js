@@ -53,6 +53,7 @@ const MESSAGES = {
     SUBMITTED_FOR_REVIEW: 'Nộp shop để xét duyệt thành công',
     MY_SHOPS_FETCHED: 'Lấy danh sách shop của tôi thành công',
     ADMIN_SHOPS_FETCHED: 'Lấy danh sách shop (admin) thành công',
+    ADMIN_SHOP_DETAIL_FETCHED: 'Lấy chi tiết shop (admin) thành công',
     APPROVED: 'Duyệt shop thành công',
     REJECTED: 'Từ chối shop thành công',
     SUSPENDED: 'Đình chỉ shop thành công',
@@ -65,7 +66,7 @@ const MESSAGES = {
     INVITATIONS_FETCHED: 'Lấy danh sách lời mời thành công',
     MY_INVITATIONS_FETCHED: 'Lấy danh sách lời mời của tôi thành công',
     INVITEE_CANDIDATES_FETCHED: 'Lấy danh sách người có thể mời thành công',
-    DASHBOARD_FETCHED: 'Lấy thông tin shop thành công',
+    DASHBOARD_FETCHED: 'Lấy thông tin dashboard shop thành công',
   },
 
   ORDER: {
@@ -103,6 +104,15 @@ const MESSAGES = {
     CREATED: 'Tạo yêu cầu thanh toán thành công',
     CALLBACK_PROCESSED: 'Xử lý kết quả thanh toán thành công',
     WEBHOOK_PROCESSED: 'Xử lý webhook thanh toán thành công',
+  },
+
+  USER_WALLET: {
+    FETCHED: 'Lấy thông tin ví cá nhân thành công',
+    TRANSACTIONS_FETCHED: 'Lấy lịch sử giao dịch ví thành công',
+    TOPUP_CREATED: 'Tạo yêu cầu nạp tiền thành công',
+    TOPUP_CALLBACK_PROCESSED: 'Xử lý kết quả nạp tiền thành công',
+    ORDER_PAID: 'Thanh toán đơn hàng bằng ví thành công',
+    TOPUPS_FETCHED: 'Lấy lịch sử nạp tiền thành công',
   },
 
   RBAC: {

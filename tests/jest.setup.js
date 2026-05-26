@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const originalMongoUri = process.env.MONGODB_URI || '';
+const originalMongoUri = process.env.MONGODB_URI_TEST || process.env.MONGODB_URI || '';
 const dbName = process.env.TEST_DB_NAME || 'productexchange_test';
 
 const injectDatabaseName = (uri, databaseName) => {
@@ -24,6 +24,12 @@ const injectDatabaseName = (uri, databaseName) => {
 
 process.env.NODE_ENV = 'test';
 process.env.DB_NAME = dbName;
+
+// Fake PayOS credentials so getPayosClient() doesn't throw in tests
+// (actual API calls are mocked via jest.unstable_mockModule)
+process.env.PAYOS_CLIENT_ID = process.env.PAYOS_CLIENT_ID || 'test-payos-client-id';
+process.env.PAYOS_API_KEY = process.env.PAYOS_API_KEY || 'test-payos-api-key';
+process.env.PAYOS_CHECKSUM_KEY = process.env.PAYOS_CHECKSUM_KEY || 'test-payos-checksum-key';
 
 if (originalMongoUri) {
   process.env.MONGODB_URI = injectDatabaseName(originalMongoUri, dbName);

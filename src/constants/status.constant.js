@@ -88,6 +88,25 @@ export const WALLET_TRANSACTION_STATUS = {
 
 export const WALLET_TRANSACTION_STATUS_ENUM = Object.values(WALLET_TRANSACTION_STATUS);
 
+// Loại giao dịch ví cá nhân user
+export const USER_WALLET_TRANSACTION_TYPE = {
+  TOPUP: 'topup',
+  PAYMENT: 'payment',
+  REFUND: 'refund',
+}
+
+export const USER_WALLET_TRANSACTION_TYPE_ENUM = Object.values(USER_WALLET_TRANSACTION_TYPE)
+
+// Trạng thái phiên nạp tiền
+export const TOPUP_STATUS = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+}
+
+export const TOPUP_STATUS_ENUM = Object.values(TOPUP_STATUS)
+
 // Trạng thái lệnh rút tiền
 export const WITHDRAWAL_STATUS = {
   PENDING: 'pending',
@@ -117,6 +136,10 @@ export default {
   WALLET_TRANSACTION_TYPE_ENUM,
   WALLET_TRANSACTION_STATUS,
   WALLET_TRANSACTION_STATUS_ENUM,
+  USER_WALLET_TRANSACTION_TYPE,
+  USER_WALLET_TRANSACTION_TYPE_ENUM,
+  TOPUP_STATUS,
+  TOPUP_STATUS_ENUM,
   WITHDRAWAL_STATUS,
   WITHDRAWAL_STATUS_ENUM,
 };

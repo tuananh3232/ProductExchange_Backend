@@ -36,6 +36,7 @@ const ERRORS = {
     NOT_DRAFT: 'Shop is not in draft status',
     NOT_PENDING: 'Shop is not pending review',
     NOT_ACTIVE: 'Shop is not active',
+    NOT_SUSPENDED: 'Shop is not in suspended status',
     NOT_REJECTED: 'Shop is not in rejected status',
     ALREADY_ACTIVE: 'Shop is already active',
     SUSPENDED: 'Shop has been suspended',
@@ -118,6 +119,16 @@ const ERRORS = {
     PENDING_WITHDRAWAL_EXISTS: 'A pending withdrawal request already exists',
     AMOUNT_TOO_LOW: 'Withdrawal amount is below minimum',
     AMOUNT_TOO_HIGH: 'Withdrawal amount exceeds maximum',
+  },
+
+  USER_WALLET: {
+    NOT_FOUND: 'User wallet not found',
+    INSUFFICIENT_BALANCE: 'Insufficient user wallet balance',
+    TOPUP_NOT_FOUND: 'Topup record not found',
+    TOPUP_AMOUNT_TOO_LOW: 'Topup amount is below minimum',
+    TOPUP_AMOUNT_TOO_HIGH: 'Topup amount exceeds maximum',
+    ALREADY_PAID_BY_OTHER: 'Order was already paid by another payment method',
+    ORDER_NOT_PAYABLE: 'Order is not eligible for wallet payment',
   },
 
   WITHDRAWAL: {

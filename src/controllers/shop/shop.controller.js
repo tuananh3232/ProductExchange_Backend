@@ -88,6 +88,11 @@ export const getAdminShops = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.SHOP.ADMIN_SHOPS_FETCHED, data: { shops }, meta })
 })
 
+export const getAdminShopById = asyncHandler(async (req, res) => {
+  const shop = await shopService.getAdminShopById(req.params.id)
+  sendSuccess(res, { message: MESSAGES.SHOP.ADMIN_SHOP_DETAIL_FETCHED, data: { shop } })
+})
+
 export const approveShop = asyncHandler(async (req, res) => {
   const shop = await shopService.approveShop(req.params.id)
   sendSuccess(res, { message: MESSAGES.SHOP.APPROVED, data: { shop } })

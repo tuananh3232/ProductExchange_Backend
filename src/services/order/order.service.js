@@ -10,6 +10,7 @@ import * as orderRepo from '../../repositories/order/order.repository.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import * as walletService from '../wallet/wallet.service.js'
+import * as userWalletService from '../user-wallet/user-wallet.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -263,12 +264,24 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   }
 
   if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-    cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
+    // Đơn thanh toán bằng ví → hoàn tiền ngay lập tức
+    if (order.paymentMethod === 'wallet') {
+      cancelUpdate.paymentStatus = PAYMENT_STATUS.UNPAID
+    } else {
+      // Thanh toán qua cổng (VNPay/PayOS) → admin xử lý hoàn tiền thủ công
+      cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
+    }
   }
 
   const updated = await orderRepo.updateById(orderId, cancelUpdate)
 
   await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+
+  // Tự động hoàn ví nếu đơn thanh toán bằng ví
+  if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
+    await userWalletService.refundWalletForOrder(order)
+  }
+
   return updated
 }
 

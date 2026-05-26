@@ -123,4 +123,40 @@ router.get('/payos/return', paymentController.payosReturn)
  */
 router.get('/payos/cancel', paymentController.payosReturn)
 
+/**
+ * @swagger
+ * /payments/payos/topup/webhook:
+ *   post:
+ *     summary: Nhận webhook nạp tiền ví từ PayOS
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Xử lý webhook nạp tiền thành công
+ */
+router.post('/payos/topup/webhook', paymentController.topupWebhook)
+
+/**
+ * @swagger
+ * /payments/payos/topup/return:
+ *   get:
+ *     summary: Xử lý kết quả trả về từ PayOS sau khi nạp tiền ví
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Xử lý callback nạp tiền thành công
+ */
+router.get('/payos/topup/return', paymentController.topupReturn)
+
+/**
+ * @swagger
+ * /payments/payos/topup/cancel:
+ *   get:
+ *     summary: Xử lý khi người dùng huỷ nạp tiền ví PayOS
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Xử lý huỷ nạp tiền thành công
+ */
+router.get('/payos/topup/cancel', paymentController.topupReturn)
+
 export default router
