@@ -193,7 +193,7 @@ router.patch(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending_review, active, rejected, suspended]
+ *           enum: [draft, pending_review, active, rejected, suspended]
  *       - in: query
  *         name: page
  *         schema:

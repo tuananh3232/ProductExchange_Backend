@@ -10,6 +10,7 @@ import adminRoutes from './admin/admin.route.js'
 import adminRbacRoutes from './admin/rbac.route.js'
 import walletRoutes from './wallet/wallet.route.js'
 import conversationRoutes from './conversation/conversation.route.js'
+import sellerRoutes from './seller/seller.route.js'
 
 const router = Router()
 
@@ -21,6 +22,7 @@ router.use('/shops', shopRoutes)
 router.use('/orders', orderRoutes)
 router.use('/payments', paymentRoutes)
 router.use('/conversations', conversationRoutes)
+router.use('/seller', sellerRoutes)
 router.use('/admin', adminRoutes)
 router.use('/admin/rbac', adminRbacRoutes)
 router.use('/wallet', walletRoutes)

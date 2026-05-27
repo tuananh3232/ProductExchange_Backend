@@ -218,7 +218,7 @@ describe('Admin API', () => {
   describe('PATCH /api/v1/admin/users/:userId/kyc', () => {
     it('should add seller role when admin approves KYC', async () => {
       await User.findByIdAndUpdate(userId, {
-        roles: ['member'],
+        roles: ['member', 'shop_owner', 'staff'],
         kyc: {
           fullName: 'Regular User',
           idNumber: '123456789012',
@@ -233,7 +233,31 @@ describe('Admin API', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'seller']));
+      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'shop_owner', 'staff', 'seller']));
+
+      const user = await User.findById(userId);
+      expect(user.roles.filter((role) => role === 'seller')).toHaveLength(1);
+    });
+
+    it('should not duplicate seller role when admin approves KYC for an existing seller', async () => {
+      await User.findByIdAndUpdate(userId, {
+        roles: ['member', 'seller', 'shop_owner', 'staff'],
+        kyc: {
+          fullName: 'Regular User',
+          idNumber: '123456789012',
+          status: 'pending',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/admin/users/${userId}/kyc/approve`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'seller', 'shop_owner', 'staff']));
+      expect(res.body.data.user.roles.filter((role) => role === 'seller')).toHaveLength(1);
 
       const user = await User.findById(userId);
       expect(user.roles.filter((role) => role === 'seller')).toHaveLength(1);
@@ -258,6 +282,27 @@ describe('Admin API', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.user.roles).not.toContain('seller');
+    });
+
+    it('should not revoke an existing seller role when admin rejects a new pending KYC', async () => {
+      await User.findByIdAndUpdate(userId, {
+        roles: ['member', 'seller'],
+        kyc: {
+          fullName: 'Regular User',
+          idNumber: '123456789012',
+          status: 'pending',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/v1/admin/users/${userId}/kyc/reject`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ rejectionReason: 'Invalid document' });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.roles).toEqual(expect.arrayContaining(['member', 'seller']));
     });
   });
 

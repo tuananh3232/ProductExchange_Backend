@@ -2,6 +2,7 @@ import request from 'supertest';
 import app from '../src/server.js';
 import User from '../src/models/user.model.js';
 import Shop from '../src/models/shop.model.js';
+import ShopInvitation from '../src/models/shop-invitation.model.js';
 import Product from '../src/models/product.model.js';
 import Category from '../src/models/category.model.js';
 import PERMISSIONS from '../src/constants/permission.constant.js';
@@ -26,7 +27,7 @@ describe('Shop staff permissions', () => {
   let categoryId;
 
   beforeEach(async () => {
-    await Promise.all([User.deleteMany({}), Shop.deleteMany({}), Product.deleteMany({}), Category.deleteMany({})]);
+    await Promise.all([User.deleteMany({}), Shop.deleteMany({}), ShopInvitation.deleteMany({}), Product.deleteMany({}), Category.deleteMany({})]);
 
     const owner = await User.create({
       name: 'Shop Owner',
@@ -76,12 +77,20 @@ describe('Shop staff permissions', () => {
     expect(beforeAssignRes.body.success).toBe(false);
 
     const addStaffRes = await request(app)
-      .post(`/api/v1/shops/${shopId}/staff`)
+      .post(`/api/v1/shops/${shopId}/invitations`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ staffUserId: staffId.toString() });
+      .send({ email: 'shop-staff-perm@example.com' });
 
-    expect(addStaffRes.statusCode).toBe(200);
+    expect(addStaffRes.statusCode).toBe(201);
     expect(addStaffRes.body.success).toBe(true);
+
+    const acceptRes = await request(app)
+      .post(`/api/v1/shops/invitations/${addStaffRes.body.data.invitation._id}/action`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ action: 'accept' });
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.body.success).toBe(true);
 
     const createBeforePermissionRes = await request(app)
       .post('/api/v1/products')

@@ -71,7 +71,21 @@ const swaggerDefinition = {
           },
           category: { $ref: '#/components/schemas/Category' },
           owner: { $ref: '#/components/schemas/User' },
-          shop: { type: 'string', nullable: true },
+          ownerType: {
+            type: 'string',
+            enum: ['SHOP', 'SELLER'],
+            description: 'Sản phẩm shop dùng SHOP, sản phẩm cá nhân seller dùng SELLER.',
+          },
+          shop: {
+            type: 'string',
+            nullable: true,
+            description: 'Shop sở hữu sản phẩm khi ownerType=SHOP.',
+          },
+          seller: {
+            type: 'string',
+            nullable: true,
+            description: 'Seller sở hữu sản phẩm khi ownerType=SELLER.',
+          },
           location: {
             type: 'object',
             properties: {
