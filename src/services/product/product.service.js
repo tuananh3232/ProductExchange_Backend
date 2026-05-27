@@ -145,12 +145,25 @@ const normalizeUpdateOwnership = async (product, updateData, userContext) => {
   }
 
   if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER || product.seller) {
+    if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'seller')) {
+      const nextSellerId = getIdString(nextUpdateData.seller)
+      const currentSellerId = getIdString(product.seller)
+      if (nextSellerId && nextSellerId !== currentSellerId) {
+        throw new AppError('Không thể chuyển sản phẩm seller cá nhân sang seller khác', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+      }
+    }
     if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'shop') && nextUpdateData.shop) {
       throw new AppError('Sản phẩm seller cá nhân không được gắn shop', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
     }
     delete nextUpdateData.shop
+    delete nextUpdateData.seller
     return nextUpdateData
   }
+
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'seller') && nextUpdateData.seller) {
+    throw new AppError('Sản phẩm shop không được gắn seller cá nhân', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+  delete nextUpdateData.seller
 
   if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'shop')) {
     await ensureShopWritable(nextUpdateData.shop, userContext)
@@ -230,6 +243,23 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
   if (query.isActive === undefined) {
     filter.isActive = true
   }
+
+  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  return { products, meta }
+}
+
+export const getSellerProducts = async (userContext, query, pagination) => {
+  if (!hasSellerRole(userContext)) {
+    throw new AppError('Ban can co role seller de xem san pham ca nhan', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  const filter = buildFilter(query, { publicOnly: false })
+  filter.ownerType = PRODUCT_OWNER_TYPES.SELLER
+  filter.seller = userContext._id
+  filter.isActive = true
+
+  delete filter.shop
+  delete filter.owner
 
   const { items: products, meta } = await paginate(productRepo, filter, pagination)
   return { products, meta }

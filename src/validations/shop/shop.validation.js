@@ -36,11 +36,7 @@ export const updateShopSchema = Joi.object({
 });
 
 export const transferOwnerSchema = Joi.object({
-  newOwnerId: Joi.string().hex().length(24).required(),
-});
-
-export const addStaffSchema = Joi.object({
-  staffUserId: Joi.string().hex().length(24).required(),
+  email: Joi.string().trim().lowercase().email().required(),
 });
 
 export const updateStaffPermissionsSchema = Joi.object({
@@ -50,7 +46,7 @@ export const updateStaffPermissionsSchema = Joi.object({
 });
 
 export const sendInvitationSchema = Joi.object({
-  inviteeId: Joi.string().hex().length(24).required(),
+  email: Joi.string().trim().lowercase().email().required(),
   permissions: Joi.array()
     .items(Joi.string().valid(...Object.values(PERMISSIONS)))
     .default([]),

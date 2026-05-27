@@ -35,8 +35,13 @@ export const updateShop = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.SHOP.UPDATED, data: { shop } })
 })
 
+export const deleteShop = asyncHandler(async (req, res) => {
+  await shopService.deleteShop(req.params.id, req.user)
+  sendSuccess(res, { message: MESSAGES.SHOP.DELETED_REJECTED })
+})
+
 export const transferOwner = asyncHandler(async (req, res) => {
-  const shop = await shopService.transferOwner(req.params.id, req.user, req.body.newOwnerId)
+  const shop = await shopService.transferOwner(req.params.id, req.user, req.body.email)
   sendSuccess(res, { message: MESSAGES.SHOP.OWNER_UPDATED, data: { shop } })
 })
 
@@ -71,9 +76,8 @@ export const updateStaffPermissions = asyncHandler(async (req, res) => {
 })
 
 export const getInviteeCandidates = asyncHandler(async (req, res) => {
-  const pagination = getPaginationParams(req.query)
-  const { users, meta } = await shopService.getInviteeCandidates(req.params.id, req.user, req.query, pagination)
-  sendSuccess(res, { message: MESSAGES.SHOP.INVITEE_CANDIDATES_FETCHED, data: { users }, meta })
+  const user = await shopService.findUserByEmailForShop(req.params.id, req.user, req.query.email)
+  sendSuccess(res, { message: MESSAGES.SHOP.USER_BY_EMAIL_FETCHED, data: { user } })
 })
 
 export const getMyShops = asyncHandler(async (req, res) => {

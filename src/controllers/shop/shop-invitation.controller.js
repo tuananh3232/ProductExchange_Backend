@@ -9,7 +9,7 @@ export const sendInvitation = async (req, res, next) => {
     const invitation = await shopInvitationService.sendInvitation(
       req.params.id,
       req.user,
-      req.body.inviteeId,
+      req.body.email,
       req.body.permissions || []
     );
     sendSuccess(res, {

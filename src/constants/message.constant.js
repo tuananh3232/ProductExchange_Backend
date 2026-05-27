@@ -31,6 +31,7 @@ const MESSAGES = {
     FETCHED: 'Lấy danh sách sản phẩm thành công',
     ADMIN_FETCHED: 'Lấy danh sách sản phẩm (admin) thành công',
     SHOP_FETCHED: 'Lấy danh sách sản phẩm của shop thành công',
+    SELLER_FETCHED: 'Lấy danh sách sản phẩm cá nhân thành công',
     DETAIL_FETCHED: 'Lấy chi tiết sản phẩm thành công',
     UPDATED: 'Cập nhật sản phẩm thành công',
     DELETED: 'Xóa sản phẩm thành công',
@@ -44,6 +45,7 @@ const MESSAGES = {
     FETCHED: 'Lấy danh sách shop thành công',
     DETAIL_FETCHED: 'Lấy chi tiết shop thành công',
     UPDATED: 'Cập nhật shop thành công',
+    DELETED_REJECTED: 'Xóa shop bị từ chối thành công',
     OWNER_UPDATED: 'Cập nhật owner của shop thành công',
     STAFF_ADDED: 'Thêm staff vào shop thành công',
     STAFF_FETCHED: 'Lấy danh sách staff thành công',
@@ -66,7 +68,8 @@ const MESSAGES = {
     INVITATIONS_FETCHED: 'Lấy danh sách lời mời thành công',
     MY_INVITATIONS_FETCHED: 'Lấy danh sách lời mời của tôi thành công',
     INVITEE_CANDIDATES_FETCHED: 'Lấy danh sách người có thể mời thành công',
-    DASHBOARD_FETCHED: 'Lấy thông tin dashboard shop thành công',
+    USER_BY_EMAIL_FETCHED: 'Tìm người dùng theo email thành công',
+    DASHBOARD_FETCHED: 'Lấy thông tin shop thành công',
   },
 
   ORDER: {

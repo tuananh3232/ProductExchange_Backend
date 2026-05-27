@@ -8,10 +8,26 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js';
 import { INVITATION_STATUS } from '../../constants/status.constant.js';
 import { ROLES } from '../../constants/role.constant.js';
 
+const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null);
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
+const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
+
+const ensureStaffInviteeRole = (user) => {
+  const roleSet = new Set(user?.roles || []);
+
+  if (!roleSet.has(ROLES.MEMBER)) {
+    throw new AppError('Chỉ có thể mời member làm staff', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.INVALID_STAFF);
+  }
+
+  if (roleSet.has(ROLES.ADMIN)) {
+    throw new AppError('Không thể mời admin làm staff', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.INVALID_STAFF);
+  }
+};
+
 /**
  * Send invitation to user to join shop as staff
  */
-export const sendInvitation = async (shopId, inviterContext, inviteeId, permissions = []) => {
+export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permissions = []) => {
   // Verify shop exists and inviter has access
   const shop = await shopRepo.findById(shopId);
   if (!shop || !shop.isActive) {
@@ -26,25 +42,40 @@ export const sendInvitation = async (shopId, inviterContext, inviteeId, permissi
     throw new AppError('Chỉ chủ shop có thể gửi lời mời', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN);
   }
 
+  const email = normalizeEmail(inviteeEmail);
+  if (!email) {
+    throw new AppError('Email is required', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED);
+  }
+
+  if (!EMAIL_PATTERN.test(email)) {
+    throw new AppError('Invalid email', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT);
+  }
+
   // Verify invitee exists
-  const invitee = await User.findById(inviteeId);
+  const invitee = await User.findOne({ email });
   if (!invitee) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND);
   }
+  if (!invitee.isActive) {
+    throw new AppError('Account is inactive', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE);
+  }
+  const inviteeIdString = invitee._id.toString();
+
+  ensureStaffInviteeRole(invitee);
 
   // Cannot invite self
-  if (inviteeId.toString() === ownerId) {
+  if (userId && inviteeIdString === userId) {
     throw new AppError('Không thể gửi lời mời cho chính mình', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.CANNOT_INVITE_SELF);
   }
 
   // Cannot invite owner
-  if (inviteeId.toString() === ownerId) {
+  if (inviteeIdString === ownerId) {
     throw new AppError('Không thể mời owner là staff', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.CANNOT_INVITE_OWNER);
   }
 
   // Check if already staff
   const isAlreadyStaff = (shop.staff || []).some(
-    (staffId) => staffId?._id?.toString() === inviteeId.toString() || staffId?.toString() === inviteeId.toString()
+    (staffId) => toIdString(staffId) === inviteeIdString
   );
 
   if (isAlreadyStaff) {
@@ -54,7 +85,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeId, permissi
   // Check for active pending invitation
   const existingInvitation = await shopInvitationRepo.findOne({
     shop: shopId,
-    invitee: inviteeId,
+    invitee: invitee._id,
     status: INVITATION_STATUS.PENDING,
     expiresAt: { $gt: new Date() },
   });
@@ -66,7 +97,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeId, permissi
   // Create invitation
   const invitation = await shopInvitationRepo.create({
     shop: shopId,
-    invitee: inviteeId,
+    invitee: invitee._id,
     inviter: inviterContext._id,
     role: 'STAFF',
     permissions: permissions.length > 0 ? permissions : [],
@@ -117,6 +148,11 @@ export const acceptInvitation = async (invitationId, userContext) => {
 
   // Update user roles to include STAFF
   const user = await User.findById(userContext._id);
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND);
+  }
+  ensureStaffInviteeRole(user);
+
   const userRoles = new Set(user.roles || []);
   userRoles.add(ROLES.STAFF);
   user.roles = [...userRoles];
@@ -235,7 +271,7 @@ export const getShopInvitations = async (shopId, ownerContext, status, { page, l
 
   let [invitations, total] = [[], 0];
 
-  if (status && [INVITATION_STATUS.PENDING, INVITATION_STATUS.ACCEPTED, INVITATION_STATUS.REJECTED].includes(status)) {
+  if (status && Object.values(INVITATION_STATUS).includes(status)) {
     [invitations, total] = await Promise.all([
       shopInvitationRepo.findByShopAndStatus(shopId, status, { skip, limit, sortBy, sortOrder }),
       shopInvitationRepo.countByShopAndStatus(shopId, status),
