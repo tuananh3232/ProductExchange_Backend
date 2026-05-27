@@ -1,7 +1,8 @@
 import UserWallet from '../../models/user-wallet.model.js'
 import UserWalletTransaction from '../../models/user-wallet-transaction.model.js'
 import UserWalletTopup from '../../models/user-wallet-topup.model.js'
-import { TOPUP_STATUS } from '../../constants/status.constant.js'
+import UserWalletWithdrawal from '../../models/user-wallet-withdrawal.model.js'
+import { TOPUP_STATUS, WITHDRAWAL_STATUS } from '../../constants/status.constant.js'
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,30 @@ export const refundFromOrder = (userId, amount) =>
     { user: userId },
     { $inc: { balance: amount, totalSpent: -amount } },
     { returnDocument: 'after', upsert: true }
+  )
+
+// atomic deduct: chỉ thành công khi balance >= amount
+export const deductForWithdrawal = (userId, amount) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId, balance: { $gte: amount } },
+    { $inc: { balance: -amount, pendingBalance: amount } },
+    { returnDocument: 'after' }
+  )
+
+// hoàn tiền khi withdrawal bị reject
+export const revertWithdrawal = (userId, amount) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { balance: amount, pendingBalance: -amount } },
+    { returnDocument: 'after' }
+  )
+
+// finalize khi withdrawal hoàn tất
+export const completeWithdrawal = (userId, amount) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { pendingBalance: -amount, totalWithdrawn: amount } },
+    { returnDocument: 'after' }
   )
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
@@ -83,3 +108,100 @@ export const findTopups = ({ filter, skip, limit, sortBy = 'createdAt', sortOrde
     .limit(limit)
 
 export const countTopups = (filter) => UserWalletTopup.countDocuments(filter)
+
+// ─── Unified activity feed ────────────────────────────────────────────────────
+
+// ─── User Wallet Withdrawal ───────────────────────────────────────────────────
+
+export const createWithdrawal = (data) => UserWalletWithdrawal.create(data)
+
+export const findWithdrawalById = (id) =>
+  UserWalletWithdrawal.findById(id)
+    .populate('user', 'name email')
+    .populate('approvedBy', 'name email')
+    .populate('completedBy', 'name email')
+
+export const findWithdrawals = ({ filter, skip, limit, sortBy = 'createdAt', sortOrder = 'desc' }) =>
+  UserWalletWithdrawal.find(filter)
+    .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('user', 'name email')
+    .populate('approvedBy', 'name email')
+    .populate('completedBy', 'name email')
+
+export const countWithdrawals = (filter) => UserWalletWithdrawal.countDocuments(filter)
+
+export const updateWithdrawalById = (id, data) =>
+  UserWalletWithdrawal.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
+    .populate('user', 'name email')
+    .populate('approvedBy', 'name email')
+    .populate('completedBy', 'name email')
+
+export const hasPendingWithdrawal = (userId) =>
+  UserWalletWithdrawal.exists({ user: userId, status: WITHDRAWAL_STATUS.PENDING })
+
+// ─── Unified activity feed ────────────────────────────────────────────────────
+
+export const findActivityFeed = async ({ userId, skip, limit }) => {
+  const pipeline = [
+    { $match: { user: userId } },
+    {
+      $lookup: {
+        from: 'userwallettopups',
+        localField: 'topup',
+        foreignField: '_id',
+        as: '_topupDoc',
+      },
+    },
+    {
+      $project: {
+        kind: '$type',
+        status: 1,
+        amount: 1,
+        balanceBefore: 1,
+        balanceAfter: 1,
+        description: 1,
+        createdAt: 1,
+        orderId: '$order',
+        orderCode: { $arrayElemAt: ['$_topupDoc.orderCode', 0] },
+        source: { $literal: 'wallet_transaction' },
+      },
+    },
+    {
+      $unionWith: {
+        coll: 'userwallettopups',
+        pipeline: [
+          { $match: { user: userId, status: { $ne: 'completed' } } },
+          {
+            $project: {
+              kind: { $literal: 'topup' },
+              status: 1,
+              amount: 1,
+              balanceBefore: { $literal: null },
+              balanceAfter: { $literal: null },
+              description: { $literal: '' },
+              createdAt: 1,
+              orderId: { $literal: null },
+              orderCode: '$orderCode',
+              source: { $literal: 'topup_attempt' },
+            },
+          },
+        ],
+      },
+    },
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        items: [{ $skip: skip }, { $limit: limit }],
+        totalCount: [{ $count: 'count' }],
+      },
+    },
+  ]
+
+  const [result] = await UserWalletTransaction.aggregate(pipeline)
+  return {
+    items: result?.items ?? [],
+    total: result?.totalCount?.[0]?.count ?? 0,
+  }
+}

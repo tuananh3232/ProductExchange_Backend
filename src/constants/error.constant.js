@@ -129,6 +129,11 @@ const ERRORS = {
     TOPUP_AMOUNT_TOO_HIGH: 'Topup amount exceeds maximum',
     ALREADY_PAID_BY_OTHER: 'Order was already paid by another payment method',
     ORDER_NOT_PAYABLE: 'Order is not eligible for wallet payment',
+    WITHDRAWAL_NOT_FOUND: 'User withdrawal request not found',
+    WITHDRAWAL_AMOUNT_TOO_LOW: 'Withdrawal amount is below minimum',
+    WITHDRAWAL_AMOUNT_TOO_HIGH: 'Withdrawal amount exceeds maximum',
+    WITHDRAWAL_PENDING_EXISTS: 'A pending withdrawal request already exists',
+    WITHDRAWAL_INVALID_STATUS: 'Invalid withdrawal request status for this action',
   },
 
   WITHDRAWAL: {

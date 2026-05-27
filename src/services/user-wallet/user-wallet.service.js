@@ -1,7 +1,7 @@
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { USER_WALLET_TRANSACTION_TYPE, PAYMENT_STATUS, ORDER_STATUS } from '../../constants/status.constant.js'
+import { USER_WALLET_TRANSACTION_TYPE, PAYMENT_STATUS, ORDER_STATUS, WITHDRAWAL_STATUS } from '../../constants/status.constant.js'
 import { USER_WALLET_CONSTANTS } from '../../constants/wallet.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
@@ -39,6 +39,14 @@ export const getMyTopups = async (userId, pagination) => {
     userWalletRepo.countTopups(filter),
   ])
   return { topups, meta: buildPaginationMeta(total, page, limit) }
+}
+
+// ─── Unified activity feed ────────────────────────────────────────────────────
+
+export const getMyActivity = async (userId, pagination) => {
+  const { page, limit, skip } = pagination
+  const { items, total } = await userWalletRepo.findActivityFeed({ userId, skip, limit })
+  return { activities: items, meta: buildPaginationMeta(total, page, limit) }
 }
 
 // ─── Pay order with wallet ───────────────────────────────────────────────────
@@ -132,6 +140,148 @@ export const refundWalletForOrder = async (order) => {
     description: `Hoàn tiền đơn hàng #${orderId.toString().slice(-8)}`,
     metadata: { orderId },
   })
+}
+
+// ─── Withdrawal ───────────────────────────────────────────────────────────────
+
+const getUserWithdrawalOrThrow = async (withdrawalId) => {
+  const withdrawal = await userWalletRepo.findWithdrawalById(withdrawalId)
+  if (!withdrawal) {
+    throw new AppError('Không tìm thấy yêu cầu rút tiền', HTTP_STATUS.NOT_FOUND, ERRORS.USER_WALLET.WITHDRAWAL_NOT_FOUND)
+  }
+  return withdrawal
+}
+
+export const requestWithdrawal = async (userContext, payload) => {
+  const userId = userContext._id
+
+  if (payload.amount < USER_WALLET_CONSTANTS.MIN_WITHDRAWAL_AMOUNT) {
+    throw new AppError(
+      `Số tiền rút tối thiểu là ${USER_WALLET_CONSTANTS.MIN_WITHDRAWAL_AMOUNT.toLocaleString('vi-VN')} VNĐ`,
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.USER_WALLET.WITHDRAWAL_AMOUNT_TOO_LOW
+    )
+  }
+
+  if (payload.amount > USER_WALLET_CONSTANTS.MAX_WITHDRAWAL_AMOUNT) {
+    throw new AppError(
+      `Số tiền rút tối đa là ${USER_WALLET_CONSTANTS.MAX_WITHDRAWAL_AMOUNT.toLocaleString('vi-VN')} VNĐ`,
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.USER_WALLET.WITHDRAWAL_AMOUNT_TOO_HIGH
+    )
+  }
+
+  const hasPending = await userWalletRepo.hasPendingWithdrawal(userId)
+  if (hasPending) {
+    throw new AppError('Bạn đang có yêu cầu rút tiền đang chờ xử lý', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_PENDING_EXISTS)
+  }
+
+  const wallet = await userWalletRepo.findOrCreateByUser(userId)
+
+  const updatedWallet = await userWalletRepo.deductForWithdrawal(userId, payload.amount)
+  if (!updatedWallet) {
+    throw new AppError('Số dư ví không đủ để thực hiện yêu cầu rút tiền', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
+  }
+
+  return userWalletRepo.createWithdrawal({
+    user: userId,
+    wallet: wallet._id,
+    amount: payload.amount,
+    bankInfo: payload.bankInfo,
+    note: payload.note || '',
+  })
+}
+
+export const getMyWithdrawals = async (userId, pagination, statusFilter) => {
+  const { page, limit, skip, sortBy, sortOrder } = pagination
+  const filter = { user: userId }
+  if (statusFilter) filter.status = statusFilter
+  const [withdrawals, total] = await Promise.all([
+    userWalletRepo.findWithdrawals({ filter, skip, limit, sortBy, sortOrder }),
+    userWalletRepo.countWithdrawals(filter),
+  ])
+  return { withdrawals, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const adminGetUserWithdrawals = async (pagination, statusFilter) => {
+  const { page, limit, skip, sortBy, sortOrder } = pagination
+  const filter = {}
+  if (statusFilter) filter.status = statusFilter
+  const [withdrawals, total] = await Promise.all([
+    userWalletRepo.findWithdrawals({ filter, skip, limit, sortBy, sortOrder }),
+    userWalletRepo.countWithdrawals(filter),
+  ])
+  return { withdrawals, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const approveUserWithdrawal = async (withdrawalId, userContext) => {
+  const withdrawal = await getUserWithdrawalOrThrow(withdrawalId)
+  if (withdrawal.status !== WITHDRAWAL_STATUS.PENDING) {
+    throw new AppError('Yêu cầu rút tiền không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
+  }
+  return userWalletRepo.updateWithdrawalById(withdrawalId, {
+    status: WITHDRAWAL_STATUS.APPROVED,
+    approvedBy: userContext._id,
+    approvedAt: new Date(),
+  })
+}
+
+export const rejectUserWithdrawal = async (withdrawalId, userContext, rejectionReason, adminNote = '') => {
+  const withdrawal = await getUserWithdrawalOrThrow(withdrawalId)
+  if (withdrawal.status !== WITHDRAWAL_STATUS.PENDING) {
+    throw new AppError('Yêu cầu rút tiền không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
+  }
+
+  const userId = withdrawal.user?._id || withdrawal.user
+
+  // đánh dấu REJECTED trước để tránh double-revert nếu gọi 2 lần
+  const updated = await userWalletRepo.updateWithdrawalById(withdrawalId, {
+    status: WITHDRAWAL_STATUS.REJECTED,
+    rejectionReason,
+    adminNote,
+    approvedBy: userContext._id,
+    approvedAt: new Date(),
+  })
+
+  await userWalletRepo.revertWithdrawal(userId, withdrawal.amount)
+
+  return updated
+}
+
+export const completeUserWithdrawal = async (withdrawalId, userContext, adminNote = '', transferProof) => {
+  const withdrawal = await getUserWithdrawalOrThrow(withdrawalId)
+  if (withdrawal.status !== WITHDRAWAL_STATUS.APPROVED) {
+    throw new AppError('Yêu cầu rút tiền chưa được duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
+  }
+
+  const userId = withdrawal.user?._id || withdrawal.user
+
+  const update = {
+    status: WITHDRAWAL_STATUS.COMPLETED,
+    adminNote,
+    completedBy: userContext._id,
+    completedAt: new Date(),
+  }
+  if (transferProof) update.transferProof = transferProof
+
+  // đánh dấu COMPLETED trước để tránh double-debit wallet
+  const updated = await userWalletRepo.updateWithdrawalById(withdrawalId, update)
+
+  await userWalletRepo.completeWithdrawal(userId, withdrawal.amount)
+
+  const walletAfter = await userWalletRepo.findByUser(userId)
+  await userWalletRepo.createTransaction({
+    wallet: withdrawal.wallet,
+    user: userId,
+    type: USER_WALLET_TRANSACTION_TYPE.WITHDRAWAL,
+    amount: withdrawal.amount,
+    balanceBefore: (walletAfter?.balance ?? 0) + withdrawal.amount,
+    balanceAfter: walletAfter?.balance ?? 0,
+    description: `Rút tiền yêu cầu #${withdrawalId.toString().slice(-8)}`,
+    metadata: { withdrawalId },
+  })
+
+  return updated
 }
 
 // ─── Credit wallet after topup (called by payment service) ───────────────────

@@ -113,6 +113,12 @@ const MESSAGES = {
     TOPUP_CALLBACK_PROCESSED: 'Xử lý kết quả nạp tiền thành công',
     ORDER_PAID: 'Thanh toán đơn hàng bằng ví thành công',
     TOPUPS_FETCHED: 'Lấy lịch sử nạp tiền thành công',
+    ACTIVITY_FETCHED: 'Lấy lịch sử hoạt động ví thành công',
+    WITHDRAWAL_REQUESTED: 'Tạo yêu cầu rút tiền thành công',
+    WITHDRAWALS_FETCHED: 'Lấy danh sách yêu cầu rút tiền thành công',
+    WITHDRAWAL_APPROVED: 'Duyệt yêu cầu rút tiền thành công',
+    WITHDRAWAL_REJECTED: 'Từ chối yêu cầu rút tiền thành công',
+    WITHDRAWAL_COMPLETED: 'Xác nhận chuyển tiền thành công',
   },
 
   RBAC: {

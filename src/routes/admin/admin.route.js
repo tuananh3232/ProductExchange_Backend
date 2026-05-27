@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
 import * as shopController from '../../controllers/shop/shop.controller.js'
 import * as walletController from '../../controllers/wallet/wallet.controller.js'
+import * as userWalletController from '../../controllers/user-wallet/user-wallet.controller.js'
 import * as productController from '../../controllers/product/product.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
@@ -17,6 +18,21 @@ const rejectWithdrawalSchema = Joi.object({
 })
 
 const completeWithdrawalSchema = Joi.object({
+  adminNote: Joi.string().allow('').optional(),
+  transferProof: Joi.object({
+    transactionId: Joi.string().max(100).optional(),
+    transferDate: Joi.date().optional(),
+    bankTransferRef: Joi.string().max(100).optional(),
+    note: Joi.string().max(500).allow('').optional(),
+  }).optional(),
+})
+
+const rejectUserWithdrawalSchema = Joi.object({
+  rejectionReason: Joi.string().min(1).required(),
+  adminNote: Joi.string().allow('').optional(),
+})
+
+const completeUserWithdrawalSchema = Joi.object({
   adminNote: Joi.string().allow('').optional(),
   transferProof: Joi.object({
     transactionId: Joi.string().max(100).optional(),
@@ -582,6 +598,67 @@ router.patch(
   requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
   validate(completeWithdrawalSchema),
   walletController.completeWithdrawal
+)
+
+/**
+ * @swagger
+ * /admin/user-withdrawals:
+ *   get:
+ *     summary: Lấy danh sách yêu cầu rút tiền ví cá nhân (admin)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected, completed]
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công
+ *
+ * /admin/user-withdrawals/{id}/approve:
+ *   patch:
+ *     summary: Duyệt yêu cầu rút tiền ví cá nhân (pending → approved)
+ *     tags: [Admin]
+ *
+ * /admin/user-withdrawals/{id}/reject:
+ *   patch:
+ *     summary: Từ chối yêu cầu rút tiền ví cá nhân (pending → rejected, hoàn tiền về ví)
+ *     tags: [Admin]
+ *
+ * /admin/user-withdrawals/{id}/complete:
+ *   patch:
+ *     summary: Xác nhận đã chuyển tiền (approved → completed)
+ *     tags: [Admin]
+ */
+router.get(
+  '/user-withdrawals',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  userWalletController.adminGetUserWithdrawals
+)
+
+router.patch(
+  '/user-withdrawals/:id/approve',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  userWalletController.approveUserWithdrawal
+)
+
+router.patch(
+  '/user-withdrawals/:id/reject',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  validate(rejectUserWithdrawalSchema),
+  userWalletController.rejectUserWithdrawal
+)
+
+router.patch(
+  '/user-withdrawals/:id/complete',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  validate(completeUserWithdrawalSchema),
+  userWalletController.completeUserWithdrawal
 )
 
 export default router

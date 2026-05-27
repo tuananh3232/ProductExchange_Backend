@@ -93,6 +93,7 @@ export const USER_WALLET_TRANSACTION_TYPE = {
   TOPUP: 'topup',
   PAYMENT: 'payment',
   REFUND: 'refund',
+  WITHDRAWAL: 'withdrawal',
 }
 
 export const USER_WALLET_TRANSACTION_TYPE_ENUM = Object.values(USER_WALLET_TRANSACTION_TYPE)
