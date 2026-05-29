@@ -15,6 +15,15 @@ import sellerRoutes from './seller/seller.route.js'
 
 const router = Router()
 
+router.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'ok',
+    message: 'API is running',
+    timestamp: new Date().toISOString()
+  })
+})
+
 router.use('/auth', authRoutes)
 router.use('/users', userRoutes)
 router.use('/products', productRoutes)

@@ -37,6 +37,15 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // Global rate limit — applied to all API routes
 app.use(env.apiPrefix, apiRateLimit)
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'ok',
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  })
+})
+
 // Routes
 app.use(env.apiPrefix, router)
 
