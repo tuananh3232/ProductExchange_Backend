@@ -8,20 +8,12 @@ export const createProductSchema = Joi.object({
   stock: Joi.number().integer().min(0),
   listingType: Joi.string().valid('sell').required(),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
-  category: Joi.string().hex().length(24).required(), // MongoDB ObjectId
+  category: Joi.string().hex().length(24).required(),
   shop: Joi.when('ownerType', {
     is: 'SELLER',
     then: Joi.forbidden(),
     otherwise: Joi.string().hex().length(24),
   }),
-  images: Joi.array()
-    .items(
-      Joi.object({
-        url: Joi.string().uri().required(),
-        publicId: Joi.string().required(),
-      })
-    )
-    .optional(),
   location: Joi.object({
     province: Joi.string().optional().allow(''),
     district: Joi.string().optional().allow(''),

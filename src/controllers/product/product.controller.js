@@ -41,7 +41,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 })
 
 export const createProduct = asyncHandler(async (req, res) => {
-  const product = await productService.createProduct(req.user, req.body)
+  const product = await productService.createProduct(req.user, req.body, req.files ?? [])
   sendSuccess(res, {
     message: MESSAGES.PRODUCT.CREATED,
     data: { product },
@@ -65,7 +65,7 @@ export const updateProductStatus = asyncHandler(async (req, res) => {
 })
 
 export const addProductImages = asyncHandler(async (req, res) => {
-  const product = await productService.addProductImages(req.params.id, req.user, req.body.images)
+  const product = await productService.addProductImages(req.params.id, req.user, req.files ?? [])
   sendSuccess(res, { message: MESSAGES.PRODUCT.IMAGES_ADDED, data: { product } })
 })
 

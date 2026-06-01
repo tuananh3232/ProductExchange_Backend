@@ -4,11 +4,11 @@ import { authenticate, requirePermissions } from '../../middlewares/auth.middlew
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
-  addProductImagesSchema,
   createProductSchema,
   updateProductSchema,
   updateStatusSchema,
 } from '../../validations/product/product.validation.js'
+import { uploadProductImages, parseJsonFields } from '../../middlewares/upload.middleware.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 
@@ -73,7 +73,7 @@ const router = Router()
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [title, description, price, listingType, condition, category]
@@ -108,43 +108,11 @@ const router = Router()
  *               images:
  *                 type: array
  *                 items:
- *                   type: object
- *                   properties:
- *                     url:
- *                       type: string
- *                     publicId:
- *                       type: string
+ *                   type: string
+ *                   format: binary
  *               location:
- *                 type: object
- *                 properties:
- *                   province:
- *                     type: string
- *                   district:
- *                     type: string
- *           examples:
- *             createShopProduct:
- *               summary: Tạo sản phẩm shop
- *               value:
- *                 ownerType: SHOP
- *                 title: Wood decor table
- *                 description: Bàn decor gỗ tự nhiên cho phòng khách.
- *                 price: 650000
- *                 stock: 12
- *                 listingType: sell
- *                 condition: good
- *                 category: 507f1f77bcf86cd799439011
- *                 shop: 507f1f77bcf86cd799439012
- *             createSellerProduct:
- *               summary: Tạo sản phẩm cá nhân
- *               value:
- *                 ownerType: SELLER
- *                 title: Decor desk lamp
- *                 description: Đèn bàn ánh sáng ấm cho góc đọc sách.
- *                 price: 450000
- *                 stock: 1
- *                 listingType: sell
- *                 condition: like_new
- *                 category: 507f1f77bcf86cd799439011
+ *                 type: string
+ *                 description: 'JSON string, ví dụ: {"province":"Hà Nội","district":"Cầu Giấy"}'
  *     responses:
  *       201:
  *         description: Tạo sản phẩm thành công
@@ -154,6 +122,8 @@ router.post(
   '/',
   authenticate,
   requirePermissions(PERMISSIONS.PRODUCT_CREATE),
+  uploadProductImages,
+  parseJsonFields(['location']),
   validate(createProductSchema),
   productController.createProduct
 )
@@ -264,7 +234,7 @@ router.post(
   validateObjectId('id'),
   authenticate,
   requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
-  validate(addProductImagesSchema),
+  uploadProductImages,
   productController.addProductImages
 )
 router.delete(
@@ -324,7 +294,7 @@ export default router
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [images]
@@ -332,12 +302,8 @@ export default router
  *               images:
  *                 type: array
  *                 items:
- *                   type: object
- *                   properties:
- *                     url:
- *                       type: string
- *                     publicId:
- *                       type: string
+ *                   type: string
+ *                   format: binary
  *     responses:
  *       200:
  *         description: Thêm ảnh sản phẩm thành công

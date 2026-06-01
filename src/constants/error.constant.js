@@ -27,6 +27,7 @@ const ERRORS = {
     ALREADY_SOLD: 'Product has already been sold',
     INVALID_STATUS_TRANSITION: 'Invalid product status transition',
     IMAGE_NOT_FOUND: 'Product image not found',
+    IMAGE_REQUIRED: 'Product image is required',
   },
 
   SHOP: {

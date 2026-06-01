@@ -9,6 +9,7 @@ import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -275,14 +276,17 @@ export const getProductById = async (id) => {
   return product
 }
 
-export const createProduct = async (userContext, productData) => {
+export const createProduct = async (userContext, productData, files = []) => {
   const ownership = await resolveCreateOwnership(productData, userContext)
   const safeProductData = { ...productData }
   delete safeProductData.ownerType
 
+  const images = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
+
   return productRepo.create({
     ...safeProductData,
     ...ownership,
+    images,
   })
 }
 
@@ -341,7 +345,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
   return productRepo.updateById(productId, { status: nextStatus })
 }
 
-export const addProductImages = async (productId, userContext, images = []) => {
+export const addProductImages = async (productId, userContext, files = []) => {
   const product = await productRepo.findById(productId)
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
@@ -349,15 +353,14 @@ export const addProductImages = async (productId, userContext, images = []) => {
 
   await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
 
-  const existingIds = new Set((product.images || []).map((image) => image.publicId))
-  const normalized = images.filter((image) => !existingIds.has(image.publicId))
-
-  if (!normalized.length) {
-    return product
+  if (!files.length) {
+    throw new AppError('Vui lòng cung cấp ít nhất một ảnh sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.IMAGE_REQUIRED)
   }
 
+  const uploaded = await Promise.all(files.map((file) => uploadBuffer(file.buffer, 'products')))
+
   return productRepo.updateById(productId, {
-    $push: { images: { $each: normalized } },
+    $push: { images: { $each: uploaded } },
   })
 }
 
@@ -373,6 +376,8 @@ export const removeProductImage = async (productId, userContext, publicId) => {
   if (!existed) {
     throw new AppError('Không tìm thấy ảnh sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.IMAGE_NOT_FOUND)
   }
+
+  await deleteImage(publicId)
 
   return productRepo.updateById(productId, {
     $pull: { images: { publicId } },

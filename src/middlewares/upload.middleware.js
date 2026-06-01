@@ -19,3 +19,18 @@ export const uploadKycImages = base.fields([
   { name: 'frontImage', maxCount: 1 },
   { name: 'backImage', maxCount: 1 },
 ])
+
+export const uploadProductImages = base.array('images', 10)
+
+export const parseJsonFields = (fields) => (req, _res, next) => {
+  for (const field of fields) {
+    if (req.body[field] && typeof req.body[field] === 'string') {
+      try {
+        req.body[field] = JSON.parse(req.body[field])
+      } catch {
+        // để Joi validation bắt lỗi
+      }
+    }
+  }
+  next()
+}
