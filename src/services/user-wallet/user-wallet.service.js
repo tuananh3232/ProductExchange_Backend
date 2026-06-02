@@ -6,6 +6,8 @@ import { USER_WALLET_CONSTANTS } from '../../constants/wallet.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import Order from '../../models/order.model.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 // ─── Get wallet ──────────────────────────────────────────────────────────────
 
@@ -107,6 +109,17 @@ export const payOrderWithWallet = async (orderId, userContext) => {
     balanceAfter: updatedWallet.balance,
     description: `Thanh toán đơn hàng #${orderId.toString().slice(-8)}`,
     metadata: { orderId },
+  })
+
+  await notifySafely({
+    recipient: userId,
+    type: NOTIFICATION_TYPES.PAYMENT_SUCCESS,
+    title: 'Thanh toan thanh cong',
+    message: 'Don hang cua ban da duoc thanh toan bang vi',
+    targetType: NOTIFICATION_TARGET_TYPES.ORDER,
+    targetId: orderId,
+    actionUrl: `/orders/${orderId}`,
+    data: { orderId, transactionId: tx._id },
   })
 
   return { wallet: updatedWallet, transaction: tx }

@@ -2,6 +2,9 @@ import User from '../../models/user.model.js'
 
 export const findByEmail = (email) => User.findOne({ email })
 
+export const findByEmailWithVerificationToken = (email) =>
+  User.findOne({ email }).select('+emailVerificationToken +emailVerificationExpires')
+
 export const findByEmailWithPassword = (email) => User.findOne({ email }).select('+password')
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>

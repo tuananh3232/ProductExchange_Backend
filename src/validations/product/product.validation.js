@@ -1,4 +1,13 @@
 import Joi from 'joi'
+import { COLOR_TONES, DECOR_ROLES, PRODUCT_STYLES, ROOM_TYPES } from '../../constants/combo.constant.js'
+
+const comboFields = {
+  style: Joi.string().valid(...PRODUCT_STYLES).allow(null),
+  roomType: Joi.string().valid(...ROOM_TYPES).allow(null),
+  colorTone: Joi.string().valid(...COLOR_TONES).allow(null),
+  decorRole: Joi.string().valid(...DECOR_ROLES).allow(null),
+  comboPriority: Joi.number().min(0),
+}
 
 export const createProductSchema = Joi.object({
   ownerType: Joi.string().valid('SHOP', 'SELLER'),
@@ -18,6 +27,7 @@ export const createProductSchema = Joi.object({
     province: Joi.string().optional().allow(''),
     district: Joi.string().optional().allow(''),
   }).optional(),
+  ...comboFields,
 })
 
 export const updateProductSchema = Joi.object({
@@ -41,6 +51,7 @@ export const updateProductSchema = Joi.object({
     province: Joi.string().allow(''),
     district: Joi.string().allow(''),
   }),
+  ...comboFields,
 }).min(1)
 
 export const updateStatusSchema = Joi.object({

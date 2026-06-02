@@ -111,8 +111,50 @@ const router = Router()
  *                   type: string
  *                   format: binary
  *               location:
+ *                 type: object
+ *                 properties:
+ *                   province:
+ *                     type: string
+ *                   district:
+ *                     type: string
+ *               style:
  *                 type: string
- *                 description: 'JSON string, ví dụ: {"province":"Hà Nội","district":"Cầu Giấy"}'
+ *                 enum: [minimalist, modern, vintage, luxury, korean, bohemian]
+ *               roomType:
+ *                 type: string
+ *                 enum: [bedroom, living_room, kitchen, workspace]
+ *               colorTone:
+ *                 type: string
+ *                 enum: [warm, cool, neutral, dark, bright]
+ *               decorRole:
+ *                 type: string
+ *                 enum: [main_item, lighting, wall_decor, textile, accent_item, fragrance]
+ *               comboPriority:
+ *                 type: number
+ *           examples:
+ *             createShopProduct:
+ *               summary: Tạo sản phẩm shop
+ *               value:
+ *                 ownerType: SHOP
+ *                 title: Wood decor table
+ *                 description: Bàn decor gỗ tự nhiên cho phòng khách.
+ *                 price: 650000
+ *                 stock: 12
+ *                 listingType: sell
+ *                 condition: good
+ *                 category: 507f1f77bcf86cd799439011
+ *                 shop: 507f1f77bcf86cd799439012
+ *             createSellerProduct:
+ *               summary: Tạo sản phẩm cá nhân
+ *               value:
+ *                 ownerType: SELLER
+ *                 title: Decor desk lamp
+ *                 description: Đèn bàn ánh sáng ấm cho góc đọc sách.
+ *                 price: 450000
+ *                 stock: 1
+ *                 listingType: sell
+ *                 condition: like_new
+ *                 category: 507f1f77bcf86cd799439011
  *     responses:
  *       201:
  *         description: Tạo sản phẩm thành công
@@ -196,6 +238,20 @@ router.post(
  *                     type: string
  *                   district:
  *                     type: string
+ *               style:
+ *                 type: string
+ *                 enum: [minimalist, modern, vintage, luxury, korean, bohemian]
+ *               roomType:
+ *                 type: string
+ *                 enum: [bedroom, living_room, kitchen, workspace]
+ *               colorTone:
+ *                 type: string
+ *                 enum: [warm, cool, neutral, dark, bright]
+ *               decorRole:
+ *                 type: string
+ *                 enum: [main_item, lighting, wall_decor, textile, accent_item, fragrance]
+ *               comboPriority:
+ *                 type: number
  *     responses:
  *       200:
  *         description: Cập nhật sản phẩm thành công

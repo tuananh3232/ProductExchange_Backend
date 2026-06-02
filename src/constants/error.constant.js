@@ -70,6 +70,10 @@ const ERRORS = {
     SOCKET_ERROR: 'Socket error',
   },
 
+  NOTIFICATION: {
+    NOT_FOUND: 'Notification not found',
+  },
+
   PAYMENT: {
     NOT_FOUND: 'Payment not found',
     INVALID_SIGNATURE: 'Invalid payment signature',

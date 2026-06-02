@@ -7,10 +7,15 @@ import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 export const register = asyncHandler(async (req, res) => {
-  const user = await authService.register(req.body)
+  const result = await authService.register(req.body)
+  const data = { user: toUserResponse(result.user) }
+  if (result.debugOtp) {
+    data.debugOtp = result.debugOtp
+  }
+
   sendSuccess(res, {
     message: MESSAGES.AUTH.REGISTER_SUCCESS,
-    data: { user: toUserResponse(user) },
+    data,
     statusCode: HTTP_STATUS.CREATED,
   })
 })

@@ -405,7 +405,36 @@ describe('Auth API', () => {
         .send(TEST_USER);
     });
 
-    it('should create verification otp', async () => {
+    it('should not reissue verification otp immediately after register', async () => {
+      const existingUser = await User.findOne({ email: TEST_USER.email }).select('+emailVerificationToken +emailVerificationExpires');
+
+      const res = await request(app)
+        .post('/api/v1/auth/send-verification-email')
+        .send({ email: TEST_USER.email });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toBeUndefined();
+
+      const user = await User.findOne({ email: TEST_USER.email }).select('+emailVerificationToken +emailVerificationExpires');
+      expect(user.emailVerificationToken).toBeDefined();
+      expect(user.emailVerificationExpires).toBeDefined();
+      expect(user.emailVerificationToken).toBe(existingUser.emailVerificationToken);
+      expect(user.emailVerificationExpires.getTime()).toBe(existingUser.emailVerificationExpires.getTime());
+    });
+
+    it('should create verification otp after resend cooldown', async () => {
+      const oldOtp = '111111';
+      const oldHashedToken = crypto.createHash('sha256').update(oldOtp).digest('hex');
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        {
+          emailVerificationToken: oldHashedToken,
+          emailVerificationExpires: new Date(Date.now() + (24 * 60 * 60 * 1000) - (2 * 60 * 1000)),
+          isVerified: false,
+        }
+      );
+
       const res = await request(app)
         .post('/api/v1/auth/send-verification-email')
         .send({ email: TEST_USER.email });
@@ -417,6 +446,7 @@ describe('Auth API', () => {
       const user = await User.findOne({ email: TEST_USER.email }).select('+emailVerificationToken +emailVerificationExpires');
       expect(user.emailVerificationToken).toBeDefined();
       expect(user.emailVerificationExpires).toBeDefined();
+      expect(user.emailVerificationToken).not.toBe(oldHashedToken);
     });
 
     it('should verify email with valid otp', async () => {
