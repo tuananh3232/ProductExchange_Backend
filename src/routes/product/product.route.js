@@ -121,6 +121,20 @@ const router = Router()
  *                     type: string
  *                   district:
  *                     type: string
+ *               style:
+ *                 type: string
+ *                 enum: [minimalist, modern, vintage, luxury, korean, bohemian]
+ *               roomType:
+ *                 type: string
+ *                 enum: [bedroom, living_room, kitchen, workspace]
+ *               colorTone:
+ *                 type: string
+ *                 enum: [warm, cool, neutral, dark, bright]
+ *               decorRole:
+ *                 type: string
+ *                 enum: [main_item, lighting, wall_decor, textile, accent_item, fragrance]
+ *               comboPriority:
+ *                 type: number
  *           examples:
  *             createShopProduct:
  *               summary: Tạo sản phẩm shop
@@ -226,6 +240,20 @@ router.post(
  *                     type: string
  *                   district:
  *                     type: string
+ *               style:
+ *                 type: string
+ *                 enum: [minimalist, modern, vintage, luxury, korean, bohemian]
+ *               roomType:
+ *                 type: string
+ *                 enum: [bedroom, living_room, kitchen, workspace]
+ *               colorTone:
+ *                 type: string
+ *                 enum: [warm, cool, neutral, dark, bright]
+ *               decorRole:
+ *                 type: string
+ *                 enum: [main_item, lighting, wall_decor, textile, accent_item, fragrance]
+ *               comboPriority:
+ *                 type: number
  *     responses:
  *       200:
  *         description: Cập nhật sản phẩm thành công

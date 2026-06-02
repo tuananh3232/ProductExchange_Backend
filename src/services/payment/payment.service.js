@@ -10,6 +10,8 @@ import { env } from '../../configs/env.config.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
@@ -80,6 +82,20 @@ const resolvePaymentStatus = (responseCode, transactionStatus) => {
   if (responseCode === '00' && transactionStatus === '00') return PAYMENT_STATUS.PAID
   if (responseCode === '24') return PAYMENT_STATUS.CANCELLED
   return PAYMENT_STATUS.FAILED
+}
+
+const notifyPaymentResult = (payment, status) => {
+  if (![PAYMENT_STATUS.PAID, PAYMENT_STATUS.FAILED].includes(status)) return null
+  return notifySafely({
+    recipient: payment.buyer,
+    type: status === PAYMENT_STATUS.PAID ? NOTIFICATION_TYPES.PAYMENT_SUCCESS : NOTIFICATION_TYPES.PAYMENT_FAILED,
+    title: status === PAYMENT_STATUS.PAID ? 'Thanh toan thanh cong' : 'Thanh toan that bai',
+    message: status === PAYMENT_STATUS.PAID ? 'Don hang cua ban da duoc thanh toan' : 'Thanh toan don hang khong thanh cong',
+    targetType: NOTIFICATION_TARGET_TYPES.PAYMENT,
+    targetId: payment._id,
+    actionUrl: `/orders/${payment.order}`,
+    data: { orderId: payment.order, paymentId: payment._id },
+  })
 }
 
 export const createVnpayPayment = async (orderId, userContext, req) => {
@@ -189,6 +205,7 @@ export const handleVnpayCallback = async (callbackPayload) => {
   }
 
   await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  await notifyPaymentResult(updatedPayment, nextStatus)
 
   return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
 }
@@ -302,6 +319,7 @@ export const handlePayosWebhook = async (webhookData) => {
   }
 
   await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  await notifyPaymentResult(updatedPayment, nextStatus)
 
   return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
 }
@@ -473,7 +491,7 @@ export const handlePayosReturn = async (query) => {
         ? PAYMENT_STATUS.PAID
         : PAYMENT_STATUS.FAILED
 
-    await paymentRepo.updateById(payment._id, {
+    const updatedPayment = await paymentRepo.updateById(payment._id, {
       status: nextStatus,
       responseCode: code || '',
       paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
@@ -482,6 +500,7 @@ export const handlePayosReturn = async (query) => {
     const orderUpdate = { paymentStatus: nextStatus }
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
     await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    await notifyPaymentResult(updatedPayment, nextStatus)
 
     return { orderId: payment.order, status: nextStatus }
   }

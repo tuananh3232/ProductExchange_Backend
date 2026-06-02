@@ -18,9 +18,13 @@ const mockShopInvitationRepo = {
 
 const mockUserFindById = jest.fn()
 const mockUserFindOne = jest.fn()
+const mockSendStaffInvitationEmail = jest.fn()
 
 jest.unstable_mockModule('../src/repositories/shop/shop.repository.js', () => mockShopRepo)
 jest.unstable_mockModule('../src/repositories/shop-invitation/shop-invitation.repository.js', () => mockShopInvitationRepo)
+jest.unstable_mockModule('../src/utils/mail.util.js', () => ({
+  sendStaffInvitationEmail: mockSendStaffInvitationEmail,
+}))
 jest.unstable_mockModule('../src/repositories/permission/permission.repository.js', () => ({
   findAll: jest.fn(),
   findByKeys: jest.fn(),
@@ -157,7 +161,8 @@ describe('shop.service shop_owner role logic', () => {
 
     const makeShop = (overrides = {}) => ({
       _id: 'shop-id',
-      owner: 'owner-id',
+      name: 'Anh Decor Shop',
+      owner: { _id: 'owner-id', name: 'Owner Name' },
       staff: [],
       staffPermissions: [],
       isActive: true,
@@ -167,6 +172,7 @@ describe('shop.service shop_owner role logic', () => {
     const makeUser = (id, roles) => ({
       _id: id,
       email: `${id}@example.com`,
+      name: 'Invitee Name',
       isActive: true,
       roles,
       save: jest.fn().mockResolvedValue(undefined),
@@ -188,6 +194,7 @@ describe('shop.service shop_owner role logic', () => {
       mockShopRepo.findById.mockResolvedValue(makeShop())
       mockUserFindOne.mockResolvedValue(makeUser('invitee-id', [ROLES.MEMBER]))
       mockShopInvitationRepo.findOne.mockResolvedValue(null)
+      mockSendStaffInvitationEmail.mockResolvedValue(true)
       mockPendingInvitationCreate()
 
       const result = await sendInvitation('shop-id', ownerContext, 'invitee-id@example.com')
@@ -198,6 +205,15 @@ describe('shop.service shop_owner role logic', () => {
           invitee: 'invitee-id',
           inviter: 'owner-id',
           status: INVITATION_STATUS.PENDING,
+        })
+      )
+      expect(mockSendStaffInvitationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'invitee-id@example.com',
+          name: 'Invitee Name',
+          shopName: 'Anh Decor Shop',
+          inviterName: 'Owner Name',
+          invitationUrl: expect.stringContaining('invitationId=invitation-id'),
         })
       )
       expect(result._id).toBe('invitation-id')

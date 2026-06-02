@@ -11,6 +11,9 @@ import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import * as walletService from '../wallet/wallet.service.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import { ROLES } from '../../constants/role.constant.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -19,6 +22,23 @@ const ORDER_TRANSITIONS = {
   [ORDER_STATUS.SHIPPED]: [ORDER_STATUS.DELIVERED],
   [ORDER_STATUS.DELIVERED]: [],
   [ORDER_STATUS.CANCELLED]: [],
+}
+
+const getOrderSellerRecipient = (order) => order.shop?.owner?._id || order.shop?.owner || order.seller?._id || order.seller
+
+const notifyOrderUser = (recipient, type, order, message, sender = null) => {
+  if (!recipient) return null
+  return notifySafely({
+    recipient,
+    sender,
+    type,
+    title: 'Cap nhat don hang',
+    message,
+    targetType: NOTIFICATION_TARGET_TYPES.ORDER,
+    targetId: order._id,
+    actionUrl: `/orders/${order._id}`,
+    data: { orderId: order._id },
+  })
 }
 
 const getManagedShopIds = async (userId) => {
@@ -162,7 +182,9 @@ export const createOrder = async (buyerId, payload) => {
 
   await Product.findByIdAndUpdate(product._id, { status: 'pending' })
 
-  return orderRepo.findById(order._id)
+  const populatedOrder = await orderRepo.findById(order._id)
+  await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Ban co don hang moi', buyerId)
+  return populatedOrder
 }
 
 export const getOrderById = async (orderId, userContext) => {
@@ -233,6 +255,7 @@ export const confirmOrder = async (orderId, userContext) => {
     },
   })
 
+  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_CONFIRMED, updated, 'Don hang cua ban da duoc xac nhan', userContext._id)
   return updated
 }
 
@@ -280,8 +303,15 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   // Tự động hoàn ví nếu đơn thanh toán bằng ví
   if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
     await userWalletService.refundWalletForOrder(order)
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.PAYMENT_REFUNDED, updated, 'Khoan thanh toan da duoc hoan vao vi')
   }
 
+  const recipient = isBuyer ? getOrderSellerRecipient(order) : order.buyer?._id || order.buyer
+  const type = isBuyer ? NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER : NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER
+  await notifyOrderUser(recipient, type, updated, 'Don hang da bi huy', userContext._id)
+  if (updated.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED, updated, 'Yeu cau hoan tien dang cho xu ly')
+  }
   return updated
 }
 
@@ -315,6 +345,16 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
 
   if (nextStatus === ORDER_STATUS.CANCELLED) {
     await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+  }
+
+  const typeByStatus = {
+    [ORDER_STATUS.PROCESSING]: NOTIFICATION_TYPES.ORDER_PREPARING,
+    [ORDER_STATUS.SHIPPED]: NOTIFICATION_TYPES.ORDER_SHIPPING,
+    [ORDER_STATUS.DELIVERED]: NOTIFICATION_TYPES.ORDER_DELIVERED,
+    [ORDER_STATUS.CANCELLED]: NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER,
+  }
+  if (typeByStatus[nextStatus]) {
+    await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trang thai don hang da cap nhat: ${nextStatus}`, userContext._id)
   }
 
   return updated

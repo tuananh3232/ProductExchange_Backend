@@ -7,10 +7,50 @@ import HTTP_STATUS from '../../constants/http-status.constant.js';
 import { buildPaginationMeta } from '../../utils/pagination.util.js';
 import { INVITATION_STATUS } from '../../constants/status.constant.js';
 import { ROLES } from '../../constants/role.constant.js';
+import { env } from '../../configs/env.config.js';
+import { sendStaffInvitationEmail } from '../../utils/mail.util.js';
+import { notifySafely } from '../notification/notification.service.js';
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js';
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null);
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
+
+const buildStaffInvitationUrl = ({ invitationId, shopId }) => {
+  if (env.staffInvitation.urlTemplate) {
+    return env.staffInvitation.urlTemplate
+      .replaceAll('{invitationId}', encodeURIComponent(invitationId))
+      .replaceAll('{shopId}', encodeURIComponent(shopId));
+  }
+
+  const baseUrl = env.frontendUrl.replace(/\/+$/, '');
+  const path = env.staffInvitation.path.startsWith('/')
+    ? env.staffInvitation.path
+    : `/${env.staffInvitation.path}`;
+  const invitationUrl = new URL(path, `${baseUrl}/`);
+  invitationUrl.searchParams.set('invitationId', invitationId);
+  invitationUrl.searchParams.set('shopId', shopId);
+  return invitationUrl.toString();
+};
+
+const notifyStaffInvitation = async ({ invitation, shop, invitee, inviterContext }) => {
+  try {
+    const invitationUrl = buildStaffInvitationUrl({
+      invitationId: invitation._id.toString(),
+      shopId: shop._id.toString(),
+    });
+
+    await sendStaffInvitationEmail({
+      to: invitee.email,
+      name: invitee.name,
+      shopName: shop.name,
+      inviterName: inviterContext?.name || shop.owner?.name || '',
+      invitationUrl,
+    });
+  } catch (error) {
+    console.warn('Failed to send staff invitation email:', error.message);
+  }
+};
 
 const ensureStaffInviteeRole = (user) => {
   const roleSet = new Set(user?.roles || []);
@@ -105,6 +145,19 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
   });
 
+  await notifyStaffInvitation({ invitation, shop, invitee, inviterContext });
+  await notifySafely({
+    recipient: invitee._id,
+    sender: inviterContext._id,
+    type: NOTIFICATION_TYPES.SHOP_STAFF_INVITED,
+    title: 'Loi moi tham gia shop',
+    message: `Ban duoc moi tham gia shop ${shop.name}`,
+    targetType: NOTIFICATION_TARGET_TYPES.SHOP,
+    targetId: shop._id,
+    actionUrl: `/shops/${shop._id}/invitations`,
+    data: { shopId: shop._id, invitationId: invitation._id },
+  });
+
   return shopInvitationRepo.findById(invitation._id);
 };
 
@@ -181,6 +234,18 @@ export const acceptInvitation = async (invitationId, userContext) => {
 
     await shopRepo.updateById(shop._id, { staffPermissions: currentPermissions });
   }
+
+  await notifySafely({
+    recipient: shop.owner?._id || shop.owner,
+    sender: userContext._id,
+    type: NOTIFICATION_TYPES.SHOP_STAFF_ACCEPTED,
+    title: 'Staff da chap nhan loi moi',
+    message: 'Loi moi tham gia shop da duoc chap nhan',
+    targetType: NOTIFICATION_TARGET_TYPES.SHOP,
+    targetId: shop._id,
+    actionUrl: `/shops/${shop._id}/staff`,
+    data: { shopId: shop._id, invitationId: invitation._id, staffUserId: userContext._id },
+  });
 
   return updatedInvitation;
 };

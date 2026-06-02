@@ -10,12 +10,27 @@ import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 const DELETABLE_SHOP_STATUSES = [SHOP_STATUS.REJECTED]
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
 
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '')
+
+const notifyShopUser = (recipient, type, shop, message, sender = null, data = {}) =>
+  notifySafely({
+    recipient,
+    sender,
+    type,
+    title: 'Cap nhat shop',
+    message,
+    targetType: NOTIFICATION_TARGET_TYPES.SHOP,
+    targetId: shop._id,
+    actionUrl: `/shops/${shop._id}`,
+    data: { shopId: shop._id, ...data },
+  })
 
 const toBasicUserResponse = (user) => ({
   _id: toIdString(user),
@@ -296,6 +311,8 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
   await newOwner.save()
 
   const updatedShop = await shopRepo.updateById(shopId, updateData)
+  await notifyShopUser(newOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Ban da tro thanh chu so huu shop', userContext._id)
+  await notifyShopUser(currentOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Quyen so huu shop da duoc chuyen giao', userContext._id)
 
   if (currentOwnerId && currentOwnerId !== toIdString(newOwnerId)) {
     const oldOwnerStillOwnsShop = await shopRepo.countMany({
@@ -358,12 +375,14 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
   }
 
   ensureShopAccess(shop, userContext)
-  return shopRepo.updateById(shopId, {
+  const updatedShop = await shopRepo.updateById(shopId, {
     $pull: {
       staff: staffUserId,
       staffPermissions: { staffUser: staffUserId },
     },
   })
+  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_REMOVED, updatedShop, 'Ban da duoc go khoi staff cua shop', userContext._id)
+  return updatedShop
 }
 
 export const getShopStaff = async (shopId, userContext) => {
@@ -503,7 +522,9 @@ export const unsuspendShop = async (shopId) => {
   if (shop.status !== SHOP_STATUS.SUSPENDED) {
     throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_SUSPENDED)
   }
-  return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_UNBLOCKED, updatedShop, 'Shop cua ban da duoc mo khoa')
+  return updatedShop
 }
 
 export const approveShop = async (shopId) => {
@@ -527,7 +548,9 @@ export const approveShop = async (shopId) => {
     await shopOwner.save()
   }
 
-  return shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_APPROVED, updatedShop, 'Shop cua ban da duoc phe duyet')
+  return updatedShop
 }
 
 export const rejectShop = async (shopId, rejectionReason) => {
@@ -538,7 +561,9 @@ export const rejectShop = async (shopId, rejectionReason) => {
   if (shop.status !== SHOP_STATUS.PENDING_REVIEW) {
     throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
   }
-  return shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
+  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_REJECTED, updatedShop, 'Shop cua ban bi tu choi', null, { rejectionReason })
+  return updatedShop
 }
 
 export const suspendShop = async (shopId, reason) => {
@@ -549,7 +574,9 @@ export const suspendShop = async (shopId, reason) => {
   if (shop.status !== SHOP_STATUS.ACTIVE) {
     throw new AppError('Chỉ có thể đình chỉ shop đang hoạt động', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
   }
-  return shopRepo.updateById(shopId, { status: SHOP_STATUS.SUSPENDED, rejectionReason: reason })
+  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.SUSPENDED, rejectionReason: reason })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop cua ban da bi khoa', null, { reason })
+  return updatedShop
 }
 
 export const updateStaffPermissions = async (shopId, userContext, staffUserId, permissionKeys = []) => {
@@ -586,6 +613,7 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
   })
 
   const updatedShop = await shopRepo.updateById(shopId, { staffPermissions: nextStaffPermissions })
+  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED, updatedShop, 'Quyen staff cua ban da duoc cap nhat', userContext._id, { permissions: uniqueKeys })
 
   return {
     shop: updatedShop,

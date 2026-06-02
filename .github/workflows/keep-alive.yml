@@ -1,0 +1,52 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping backend health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping health check
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          set +e
+
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::warning::BACKEND_URL secret is not configured. Please add it in GitHub repository secrets."
+            exit 0
+          fi
+
+          BASE_URL="${BACKEND_URL%/}"
+          ENDPOINTS=("/api/v1/health" "/health")
+          SUCCESS=0
+
+          for ENDPOINT in "${ENDPOINTS[@]}"; do
+            URL="${BASE_URL}${ENDPOINT}"
+            echo "Pinging backend: ${URL}"
+
+            HTTP_CODE=$(curl --silent --show-error --location --max-time 30 --output /tmp/keep-alive-response.txt --write-out "%{http_code}" "$URL")
+            CURL_EXIT_CODE=$?
+
+            if [ "$CURL_EXIT_CODE" -eq 0 ] && [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+              echo "Health check succeeded: ${URL} returned HTTP ${HTTP_CODE}"
+              SUCCESS=1
+              break
+            fi
+
+            echo "::warning::Health check failed for ${URL}. curl exit code: ${CURL_EXIT_CODE}, HTTP status: ${HTTP_CODE}"
+            echo "Response body:"
+            cat /tmp/keep-alive-response.txt || true
+          done
+
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "::warning::All health check endpoints failed. Backend may be sleeping, unavailable, or missing a health route."
+          fi
+
+          exit 0

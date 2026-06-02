@@ -11,6 +11,8 @@ import { ROLES } from '../../constants/role.constant.js'
 import { CONVERSATION_TYPES } from '../../models/conversation.model.js'
 import { MESSAGE_TYPES } from '../../models/message.model.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 
@@ -182,7 +184,7 @@ export const getMessages = async (userContext, conversationId, pagination) => {
 }
 
 export const sendMessage = async (userContext, { conversationId, content = '', messageType = MESSAGE_TYPES.TEXT, attachments = [] }) => {
-  await assertConversationAccess(userContext, conversationId)
+  const conversation = await assertConversationAccess(userContext, conversationId)
 
   const hasContent = typeof content === 'string' && content.trim().length > 0
   if (!hasContent && !attachments.length) {
@@ -222,6 +224,35 @@ export const sendMessage = async (userContext, { conversationId, content = '', m
     sortBy: 'createdAt',
     sortOrder: 1,
   })
+
+  const senderId = toIdString(userContext._id)
+  const recipientIds = conversation.type === CONVERSATION_TYPES.DIRECT
+    ? (conversation.participants || []).map(toIdString).filter((id) => id && id !== senderId)
+    : toIdString(conversation.customerId) === senderId
+      ? [toIdString(conversation.shopId?.owner), ...(conversation.shopId?.staff || []).map(toIdString)]
+      : [toIdString(conversation.customerId)]
+
+  const notificationType = messageType === MESSAGE_TYPES.IMAGE
+    ? NOTIFICATION_TYPES.CHAT_NEW_IMAGE
+    : messageType === MESSAGE_TYPES.FILE
+      ? NOTIFICATION_TYPES.CHAT_NEW_FILE
+      : NOTIFICATION_TYPES.CHAT_NEW_MESSAGE
+
+  await notifySafely([...new Set(recipientIds.filter((id) => id && id !== senderId))].map((recipient) => ({
+    recipient,
+    sender: userContext._id,
+    type: notificationType,
+    title: 'Tin nhan moi',
+    message: hasContent ? content.trim().slice(0, 1000) : 'Ban co tin nhan moi',
+    targetType: NOTIFICATION_TARGET_TYPES.CHAT,
+    targetId: conversationId,
+    actionUrl: `/chats/${conversationId}`,
+    data: {
+      conversationId,
+      messageId: message._id,
+      senderId: userContext._id,
+    },
+  })))
 
   return populatedMessage || message
 }

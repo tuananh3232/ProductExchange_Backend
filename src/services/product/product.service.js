@@ -9,6 +9,8 @@ import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -338,7 +340,25 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
     )
   }
 
-  return productRepo.updateById(productId, { status: nextStatus })
+  const updatedProduct = await productRepo.updateById(productId, { status: nextStatus })
+  const typeByStatus = {
+    hidden: NOTIFICATION_TYPES.PRODUCT_BLOCKED,
+    available: product.status === 'hidden' ? NOTIFICATION_TYPES.PRODUCT_UNBLOCKED : NOTIFICATION_TYPES.PRODUCT_APPROVED,
+  }
+  if (typeByStatus[nextStatus]) {
+    await notifySafely({
+      recipient: product.owner?._id || product.owner,
+      sender: userContext._id,
+      type: typeByStatus[nextStatus],
+      title: 'Cap nhat san pham',
+      message: `Trang thai san pham da cap nhat: ${nextStatus}`,
+      targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
+      targetId: product._id,
+      actionUrl: `/products/${product._id}`,
+      data: { productId: product._id },
+    })
+  }
+  return updatedProduct
 }
 
 export const addProductImages = async (productId, userContext, images = []) => {

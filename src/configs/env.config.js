@@ -14,6 +14,7 @@ if (isProduction) {
 
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
+const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || appUrl;
 const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value);
 const dbName = process.env.DB_NAME || 'productexchange';
 
@@ -46,6 +47,12 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
   apiPrefix,
+  appUrl,
+  frontendUrl,
+  staffInvitation: {
+    path: process.env.STAFF_INVITATION_PATH || '/shop/invitations',
+    urlTemplate: process.env.STAFF_INVITATION_URL_TEMPLATE || '',
+  },
 
   mongodb: {
     uri: normalizeMongoUri(process.env.MONGODB_URI, dbName),

@@ -12,9 +12,12 @@ import { paginate } from '../../utils/pagination.util.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import Shop from '../../models/shop.model.js'
+import { notifySafely } from '../notification/notification.service.js'
+import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
+const VERIFY_EMAIL_RESEND_COOLDOWN_MS = 60 * 1000
 
 const createRawToken = () => crypto.randomBytes(32).toString('hex')
 const createVerificationOtp = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0')
@@ -24,7 +27,7 @@ const googleClient = new OAuth2Client()
 const dispatchVerificationOtp = async (user, otp) => {
   const sent = await sendVerificationOtpEmail({
     to: user.email,
-    name: user.name,
+    name: user.fullName || user.name || 'bạn',
     otp,
   })
 
@@ -266,6 +269,16 @@ export const banUser = async (userId, reason = '') => {
 
   user.isActive = false
   await user.save()
+  await notifySafely({
+    recipient: user._id,
+    type: NOTIFICATION_TYPES.USER_BLOCKED,
+    title: 'Tai khoan da bi khoa',
+    message: reason || 'Tai khoan cua ban da bi khoa',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetId: user._id,
+    actionUrl: '/profile',
+    data: { reason },
+  })
   return user.toPublicJSON()
 }
 
@@ -277,6 +290,15 @@ export const unbanUser = async (userId) => {
 
   user.isActive = true
   await user.save()
+  await notifySafely({
+    recipient: user._id,
+    type: NOTIFICATION_TYPES.USER_UNBLOCKED,
+    title: 'Tai khoan da duoc mo khoa',
+    message: 'Tai khoan cua ban da duoc mo khoa',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetId: user._id,
+    actionUrl: '/profile',
+  })
   return user.toPublicJSON()
 }
 
@@ -350,13 +372,24 @@ export const resetPassword = async ({ email, otp, newPassword }) => {
 }
 
 export const sendVerificationEmail = async ({ email }) => {
-  const user = await userRepo.findByEmail(email)
+  const user = await userRepo.findByEmailWithVerificationToken(email)
   if (!user) {
     return { issued: false }
   }
 
   if (user.isVerified) {
     return { issued: false, alreadyVerified: true }
+  }
+
+  const expiresAt = user.emailVerificationExpires?.getTime?.()
+  const issuedAt = expiresAt ? expiresAt - VERIFY_EMAIL_EXPIRES_IN_MS : 0
+  const hasFreshPendingOtp =
+    user.emailVerificationToken &&
+    expiresAt > Date.now() &&
+    issuedAt > Date.now() - VERIFY_EMAIL_RESEND_COOLDOWN_MS
+
+  if (hasFreshPendingOtp) {
+    return { issued: false, cooldown: true }
   }
 
   const verificationOtp = createVerificationOtp()
@@ -409,6 +442,15 @@ export const submitKyc = async (userId, { fullName, idNumber }, files) => {
   }
 
   await user.save()
+  await notifySafely({
+    recipient: user._id,
+    type: NOTIFICATION_TYPES.KYC_SUBMITTED,
+    title: 'Ho so KYC da duoc gui',
+    message: 'Ho so KYC cua ban dang cho xet duyet',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetId: user._id,
+    actionUrl: '/profile/kyc',
+  })
   return user.toPublicJSON()
 }
 
@@ -499,6 +541,15 @@ export const adminApproveKyc = async (userId) => {
   user.kyc.rejectionReason = ''
   user.roles = [...new Set([...(user.roles || []), ROLES.SELLER])]
   await user.save()
+  await notifySafely({
+    recipient: user._id,
+    type: NOTIFICATION_TYPES.KYC_APPROVED,
+    title: 'KYC da duoc phe duyet',
+    message: 'Ho so KYC cua ban da duoc phe duyet va quyen seller da duoc cap',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetId: user._id,
+    actionUrl: '/profile/kyc',
+  })
   return user.toPublicJSON()
 }
 
@@ -515,6 +566,16 @@ export const adminRejectKyc = async (userId, rejectionReason) => {
   user.kyc.reviewedAt = new Date()
   user.kyc.rejectionReason = rejectionReason
   await user.save()
+  await notifySafely({
+    recipient: user._id,
+    type: NOTIFICATION_TYPES.KYC_REJECTED,
+    title: 'KYC bi tu choi',
+    message: 'Ho so KYC cua ban bi tu choi',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetId: user._id,
+    actionUrl: '/profile/kyc',
+    data: { rejectionReason },
+  })
   return user.toPublicJSON()
 }
 

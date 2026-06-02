@@ -6,6 +6,7 @@ import User from '../src/models/user.model.js'
 import Shop from '../src/models/shop.model.js'
 import Conversation from '../src/models/conversation.model.js'
 import Message from '../src/models/message.model.js'
+import Notification from '../src/models/notification.model.js'
 import PERMISSIONS from '../src/constants/permission.constant.js'
 import { ROLES } from '../src/constants/role.constant.js'
 import { initChatSocket } from '../src/sockets/chat.socket.js'
@@ -93,6 +94,7 @@ describe('Chat conversations and realtime socket', () => {
   beforeEach(async () => {
     await Promise.all([
       Message.deleteMany({}),
+      Notification.deleteMany({}),
       Conversation.deleteMany({}),
       Shop.deleteMany({}),
       User.deleteMany({ email: /@chat\.test$/ }),
@@ -283,6 +285,16 @@ describe('Chat conversations and realtime socket', () => {
       const message = sendRes.body.data.message
       expect(message.content).toBe('Hello member B')
       expect(message.messageType).toBe('TEXT')
+
+      const notification = await Notification.findOne({ recipient: memberB._id, type: 'CHAT_NEW_MESSAGE' })
+      expect(notification).toBeTruthy()
+      expect(notification.sender.toString()).toBe(memberA._id.toString())
+      expect(notification.targetType).toBe('CHAT')
+      expect(notification.targetId.toString()).toBe(conversation._id.toString())
+      expect(notification.actionUrl).toBe(`/chats/${conversation._id}`)
+      expect(notification.data.conversationId.toString()).toBe(conversation._id.toString())
+      expect(notification.data.messageId.toString()).toBe(message._id.toString())
+      expect(notification.data.senderId.toString()).toBe(memberA._id.toString())
 
       const emptyRes = await request(app)
         .post(`${API_PREFIX}/conversations/${conversation._id}/messages`)

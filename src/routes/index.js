@@ -12,6 +12,9 @@ import walletRoutes from './wallet/wallet.route.js'
 import conversationRoutes from './conversation/conversation.route.js'
 import userWalletRoutes from './user-wallet/user-wallet.route.js'
 import sellerRoutes from './seller/seller.route.js'
+import notificationRoutes from './notification/notification.route.js'
+import comboRoutes from './combo/combo.route.js'
+import cartRoutes from './cart/cart.route.js'
 
 const router = Router()
 
@@ -37,5 +40,8 @@ router.use('/admin', adminRoutes)
 router.use('/admin/rbac', adminRbacRoutes)
 router.use('/wallet', walletRoutes)
 router.use('/user-wallet', userWalletRoutes)
+router.use('/notifications', notificationRoutes)
+router.use('/combos', comboRoutes)
+router.use('/cart', cartRoutes)
 
 export default router

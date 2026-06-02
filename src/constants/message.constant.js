@@ -40,6 +40,18 @@ const MESSAGES = {
     IMAGE_REMOVED: 'Xóa ảnh sản phẩm thành công',
   },
 
+  COMBO: {
+    GENERATED: 'Combo generated successfully',
+    NO_PRODUCTS: 'No suitable products found for the selected criteria',
+    ALTERNATIVES_FETCHED: 'Alternatives found successfully',
+    NO_ALTERNATIVES: 'No alternatives found',
+  },
+
+  CART: {
+    COMBO_ADDED: 'Combo added to cart successfully',
+    SOME_PRODUCTS_UNAVAILABLE: 'Some products are not available',
+  },
+
   SHOP: {
     CREATED: 'Đăng ký shop thành công',
     FETCHED: 'Lấy danh sách shop thành công',

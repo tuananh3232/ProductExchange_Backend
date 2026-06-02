@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { PRODUCT_STATUS_ENUM } from '../constants/status.constant.js'
+import { COLOR_TONES, DECOR_ROLES, PRODUCT_STYLES, ROOM_TYPES } from '../constants/combo.constant.js'
 
 export const PRODUCT_OWNER_TYPES = {
   SHOP: 'SHOP',
@@ -84,6 +85,11 @@ const productSchema = new mongoose.Schema(
     },
     views: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    style: { type: String, enum: PRODUCT_STYLES, default: null },
+    roomType: { type: String, enum: ROOM_TYPES, default: null },
+    colorTone: { type: String, enum: COLOR_TONES, default: null },
+    decorRole: { type: String, enum: DECOR_ROLES, default: null },
+    comboPriority: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -115,5 +121,6 @@ productSchema.index({ seller: 1, status: 1 })
 productSchema.index({ ownerType: 1, status: 1 })
 productSchema.index({ listingType: 1, status: 1 })
 productSchema.index({ createdAt: -1 })
+productSchema.index({ isActive: 1, status: 1, stock: 1, decorRole: 1, price: 1 })
 
 export default mongoose.model('Product', productSchema)
