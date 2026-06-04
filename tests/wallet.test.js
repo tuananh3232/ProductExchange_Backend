@@ -66,14 +66,13 @@ describe('Wallet API', () => {
       name: 'Outsider',
       email: 'outsider-wallet@example.com',
       password: '123456',
-      role: 'user',
-      roles: ['user'],
+      roles: ['member'],
     })
 
     ownerToken = await createToken(shopOwner._id, 'shop_owner')
     adminToken = await createToken(admin._id, 'admin')
     staffToken = await createToken(staff._id, 'staff')
-    outsiderToken = await createToken(outsider._id, 'user')
+    outsiderToken = await createToken(outsider._id, 'member')
 
     shop = await Shop.create({
       name: 'Wallet Test Shop',
@@ -471,8 +470,7 @@ describe('Wallet API', () => {
         name: 'Buyer',
         email: 'buyer-wallet@example.com',
         password: '123456',
-        role: 'user',
-        roles: ['user'],
+        roles: ['member'],
       })
     })
 

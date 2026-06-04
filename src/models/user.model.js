@@ -107,6 +107,10 @@ const userSchema = new mongoose.Schema(
       submittedAt: { type: Date, default: null },
       reviewedAt: { type: Date, default: null },
     },
+    vip: {
+      plan: { type: String, default: null },
+      expiresAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true, // Tự thêm createdAt, updatedAt

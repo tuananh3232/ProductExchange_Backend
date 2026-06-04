@@ -58,6 +58,11 @@ describe('Auth API', () => {
       await request(app)
         .post('/api/v1/auth/register')
         .send(TEST_USER);
+
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        { isVerified: true, emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationExpires: null }
+      );
     });
 
     it('should login successfully', async () => {
@@ -104,6 +109,11 @@ describe('Auth API', () => {
       await request(app)
         .post('/api/v1/auth/register')
         .send(TEST_USER);
+
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        { isVerified: true, emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationExpires: null }
+      );
 
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
@@ -155,6 +165,11 @@ describe('Auth API', () => {
         .post('/api/v1/auth/register')
         .send(TEST_USER);
 
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        { isVerified: true, emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationExpires: null }
+      );
+
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
         .send(LOGIN_USER);
@@ -172,13 +187,18 @@ describe('Auth API', () => {
     });
   });
 
-  describe('PUT /api/v1/auth/profile', () => {
+  describe('PUT /api/v1/users/profile', () => {
     let token;
 
     beforeEach(async () => {
       await request(app)
         .post('/api/v1/auth/register')
         .send(TEST_USER);
+
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        { isVerified: true, emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationExpires: null }
+      );
 
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
@@ -189,7 +209,7 @@ describe('Auth API', () => {
 
     it('should update user profile', async () => {
       const res = await request(app)
-        .put('/api/v1/auth/profile')
+        .put('/api/v1/users/profile')
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: 'Updated Name',
@@ -209,7 +229,7 @@ describe('Auth API', () => {
 
     it('should fail without authentication', async () => {
       const res = await request(app)
-        .put('/api/v1/auth/profile')
+        .put('/api/v1/users/profile')
         .send({ name: 'New Name' });
 
       expect(res.statusCode).toBe(401);
@@ -218,7 +238,7 @@ describe('Auth API', () => {
 
     it('should fail with empty update data', async () => {
       const res = await request(app)
-        .put('/api/v1/auth/profile')
+        .put('/api/v1/users/profile')
         .set('Authorization', `Bearer ${token}`)
         .send({});
 
@@ -227,13 +247,18 @@ describe('Auth API', () => {
     });
   });
 
-  describe('POST /api/v1/auth/change-password', () => {
+  describe('POST /api/v1/users/change-password', () => {
     let token;
 
     beforeEach(async () => {
       await request(app)
         .post('/api/v1/auth/register')
         .send(TEST_USER);
+
+      await User.findOneAndUpdate(
+        { email: TEST_USER.email },
+        { isVerified: true, emailVerifiedAt: new Date(), emailVerificationToken: null, emailVerificationExpires: null }
+      );
 
       const loginRes = await request(app)
         .post('/api/v1/auth/login')
@@ -244,7 +269,7 @@ describe('Auth API', () => {
 
     it('should change password successfully', async () => {
       const res = await request(app)
-        .post('/api/v1/auth/change-password')
+        .post('/api/v1/users/change-password')
         .set('Authorization', `Bearer ${token}`)
         .send({
           currentPassword: '123456',
@@ -269,7 +294,7 @@ describe('Auth API', () => {
 
     it('should fail with wrong current password', async () => {
       const res = await request(app)
-        .post('/api/v1/auth/change-password')
+        .post('/api/v1/users/change-password')
         .set('Authorization', `Bearer ${token}`)
         .send({
           currentPassword: 'wrongpassword',

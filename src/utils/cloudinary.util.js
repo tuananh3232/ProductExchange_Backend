@@ -9,13 +9,13 @@ const configure = () => {
   })
 }
 
-export const uploadBuffer = (buffer, folder) => {
+export const uploadBuffer = (buffer, folder, options = {}) => {
   configure()
   return new Promise((resolve, reject) => {
     cloudinary.uploader
-      .upload_stream({ folder, resource_type: 'image' }, (error, result) => {
+      .upload_stream({ folder, resource_type: 'image', ...options }, (error, result) => {
         if (error) reject(error)
-        else resolve({ url: result.secure_url, publicId: result.public_id })
+        else resolve({ url: result.secure_url, publicId: result.public_id, width: result.width, height: result.height })
       })
       .end(buffer)
   })

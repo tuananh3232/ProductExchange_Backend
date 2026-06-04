@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import * as productVisualController from '../../controllers/product/product-visual.controller.js'
+import { authenticate, requirePermissions, requireShopOwnerProductVisual } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
@@ -8,7 +9,11 @@ import {
   updateProductSchema,
   updateStatusSchema,
 } from '../../validations/product/product.validation.js'
-import { uploadProductImages, parseJsonFields } from '../../middlewares/upload.middleware.js'
+import {
+  updateVisualProfileSchema,
+  createCutoutSchema,
+} from '../../validations/product/product-visual.validation.js'
+import { uploadProductImages, uploadProductVisualImage, parseJsonFields } from '../../middlewares/upload.middleware.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 
@@ -306,6 +311,165 @@ router.delete(
   authenticate,
   requirePermissions(PERMISSIONS.PRODUCT_DELETE),
   productController.deleteProduct
+)
+
+/**
+ * @swagger
+ * /products/{id}/visual-assets/source:
+ *   post:
+ *     summary: Upload ảnh nguồn sản phẩm (source image)
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [image]
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Upload source image thành công
+ *
+ * /products/{id}/visual-assets/cutout:
+ *   post:
+ *     summary: Upload cutout sản phẩm (đã xóa nền)
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *               view:
+ *                 type: string
+ *                 enum: [front, left_angle, right_angle, back]
+ *                 default: front
+ *               provider:
+ *                 type: string
+ *                 enum: [manual, cloudinary, remove_bg, clipdrop, internal]
+ *                 default: manual
+ *     responses:
+ *       200:
+ *         description: Upload cutout thành công
+ *   delete:
+ *     summary: Xóa cutout sản phẩm
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: publicId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Cloudinary publicId của cutout cần xóa, ví dụ products/cutouts/abc123
+ *     responses:
+ *       200:
+ *         description: Xóa cutout thành công
+ *
+ * /products/{id}/visual-profile:
+ *   patch:
+ *     summary: Cập nhật visual profile và kích thước sản phẩm
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               dimensions:
+ *                 type: object
+ *                 properties:
+ *                   widthCm:
+ *                     type: number
+ *                     minimum: 1
+ *                     maximum: 2000
+ *                   heightCm:
+ *                     type: number
+ *                     minimum: 1
+ *                     maximum: 2000
+ *                   depthCm:
+ *                     type: number
+ *                     minimum: 0
+ *                     maximum: 2000
+ *               visualProfile:
+ *                 type: object
+ *                 properties:
+ *                   placementType:
+ *                     type: string
+ *                     enum: [wall_mounted, floor_standing, surface_standing]
+ *                   anchor:
+ *                     type: string
+ *                     enum: [center, bottom_center, bottom_left, bottom_right]
+ *     responses:
+ *       200:
+ *         description: Cập nhật visual profile thành công
+ */
+router.post(
+  '/:id/visual-assets/source',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  uploadProductVisualImage,
+  productVisualController.uploadSource
+)
+router.post(
+  '/:id/visual-assets/cutout',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  uploadProductVisualImage,
+  validate(createCutoutSchema),
+  productVisualController.uploadCutout
+)
+router.patch(
+  '/:id/visual-profile',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  validate(updateVisualProfileSchema),
+  productVisualController.updateVisualProfile
+)
+router.delete(
+  '/:id/visual-assets/cutout',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  productVisualController.deleteCutout
 )
 
 export default router

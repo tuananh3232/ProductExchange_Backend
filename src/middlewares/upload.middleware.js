@@ -22,6 +22,11 @@ export const uploadKycImages = base.fields([
 
 export const uploadProductImages = base.array('images', 10)
 
+export const uploadProductVisualImage = base.single('image')
+
+const roomSceneBase = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: imageFilter })
+export const uploadRoomSceneImage = roomSceneBase.single('image')
+
 export const parseJsonFields = (fields) => (req, _res, next) => {
   for (const field of fields) {
     if (req.body[field] && typeof req.body[field] === 'string') {

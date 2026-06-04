@@ -79,9 +79,9 @@ describe('Payment API', () => {
       quantity: 1,
       unitPrice: product.price,
       totalAmount: product.price,
-      status: 'delivered',
+      status: 'pending',
       paymentStatus: 'unpaid',
-      history: [{ status: 'delivered', updatedBy: buyer._id, note: 'Delivered for payment test' }],
+      history: [{ status: 'pending', updatedBy: buyer._id, note: 'Order awaiting payment' }],
     });
   });
 

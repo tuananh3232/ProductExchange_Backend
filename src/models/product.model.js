@@ -90,6 +90,52 @@ const productSchema = new mongoose.Schema(
     colorTone: { type: String, enum: COLOR_TONES, default: null },
     decorRole: { type: String, enum: DECOR_ROLES, default: null },
     comboPriority: { type: Number, default: 0 },
+    dimensions: {
+      widthCm: { type: Number, min: 1, default: null },
+      heightCm: { type: Number, min: 1, default: null },
+      depthCm: { type: Number, min: 0, default: null },
+    },
+    visualProfile: {
+      placementType: {
+        type: String,
+        enum: ['wall_mounted', 'floor_standing', 'surface_standing'],
+        default: 'wall_mounted',
+      },
+      anchor: {
+        type: String,
+        enum: ['center', 'bottom_center', 'bottom_left', 'bottom_right'],
+        default: 'center',
+      },
+      isVisualizerReady: { type: Boolean, default: false },
+    },
+    visualAssets: {
+      sourceImage: {
+        url: { type: String, default: null },
+        publicId: { type: String, default: null },
+      },
+      cutouts: [
+        {
+          view: {
+            type: String,
+            enum: ['front', 'left_angle', 'right_angle', 'back'],
+          },
+          url: { type: String },
+          publicId: { type: String },
+          widthPx: { type: Number },
+          heightPx: { type: Number },
+          status: {
+            type: String,
+            enum: ['processing', 'ready', 'failed'],
+            default: 'ready',
+          },
+          provider: {
+            type: String,
+            enum: ['manual', 'cloudinary', 'remove_bg', 'clipdrop', 'internal'],
+            default: 'manual',
+          },
+        },
+      ],
+    },
   },
   {
     timestamps: true,

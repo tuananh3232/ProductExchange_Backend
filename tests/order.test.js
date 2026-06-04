@@ -149,6 +149,7 @@ describe('Order API', () => {
       unitPrice: product.price,
       totalAmount: product.price,
       status: 'pending',
+      paymentStatus: 'paid',
       history: [{ status: 'pending', updatedBy: buyer._id }],
     });
 

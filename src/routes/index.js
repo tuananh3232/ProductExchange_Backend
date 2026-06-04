@@ -15,6 +15,7 @@ import sellerRoutes from './seller/seller.route.js'
 import notificationRoutes from './notification/notification.route.js'
 import comboRoutes from './combo/combo.route.js'
 import cartRoutes from './cart/cart.route.js'
+import roomProjectRoutes from './room-visualizer/room-project.route.js'
 
 const router = Router()
 
@@ -43,5 +44,6 @@ router.use('/user-wallet', userWalletRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/combos', comboRoutes)
 router.use('/cart', cartRoutes)
+router.use('/room-projects', roomProjectRoutes)
 
 export default router

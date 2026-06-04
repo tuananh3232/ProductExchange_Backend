@@ -1,11 +1,32 @@
-import request from 'supertest';
-import app from '../src/server.js';
-import User from '../src/models/user.model.js';
-import Product from '../src/models/product.model.js';
-import Category from '../src/models/category.model.js';
-import Shop from '../src/models/shop.model.js';
-import { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } from './fixtures/testData.js'
-import { SHOP_STATUS } from '../src/constants/status.constant.js'
+import { jest } from '@jest/globals'
+
+// jest.unstable_mockModule phải gọi TRƯỚC tất cả dynamic import
+// vì ESM hoist static import, cloudinary.util sẽ được load khi 'app' được import
+jest.unstable_mockModule('../src/utils/cloudinary.util.js', () => ({
+  uploadBuffer: jest.fn().mockResolvedValue({
+    url: 'https://res.cloudinary.com/test/image/upload/products/mock-image.jpg',
+    publicId: 'products/mock-image',
+    width: 100,
+    height: 100,
+  }),
+  deleteImage: jest.fn().mockResolvedValue(undefined),
+}))
+
+// Dynamic import sau khi mock đã đăng ký
+const { default: request } = await import('supertest')
+const { default: app } = await import('../src/server.js')
+const { default: User } = await import('../src/models/user.model.js')
+const { default: Product } = await import('../src/models/product.model.js')
+const { default: Category } = await import('../src/models/category.model.js')
+const { default: Shop } = await import('../src/models/shop.model.js')
+const { TEST_CATEGORIES, TEST_PRODUCTS_BY_CATEGORY, createToken } = await import('./fixtures/testData.js')
+const { SHOP_STATUS } = await import('../src/constants/status.constant.js')
+
+// Minimal valid 1x1 PNG — chỉ dùng để multer nhận đúng multipart, không cần ảnh thật
+const TEST_IMAGE_BUFFER = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjkB6QAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 let userId;
 let productId;
@@ -724,14 +745,7 @@ describe('Product API', () => {
       const res = await request(app)
         .post(`/api/v1/products/${productId}/images`)
         .set('Authorization', `Bearer ${token}`)
-        .send({
-          images: [
-            {
-              url: 'https://img.example.com/new.jpg',
-              publicId: 'new-image',
-            },
-          ],
-        });
+        .attach('images', TEST_IMAGE_BUFFER, { filename: 'test.jpg', contentType: 'image/jpeg' });
 
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);

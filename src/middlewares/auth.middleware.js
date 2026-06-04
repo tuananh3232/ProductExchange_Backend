@@ -22,7 +22,7 @@ export const authenticate = async (req, res, next) => {
     const decoded = verifyAccessToken(token)
 
     // Kiểm tra user còn tồn tại và còn active
-    const user = await User.findById(decoded.userId).select('_id roles isActive')
+    const user = await User.findById(decoded.userId).select('_id roles isActive vip')
     if (!user) {
       throw new AppError('Tài khoản không tồn tại', HTTP_STATUS.UNAUTHORIZED, ERRORS.AUTH.UNAUTHORIZED)
     }
@@ -37,6 +37,7 @@ export const authenticate = async (req, res, next) => {
       _id: user._id,
       roles: userRoles,
       isActive: user.isActive,
+      vip: user.vip,
     }
     next()
   } catch (error) {
@@ -121,5 +122,53 @@ export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
     } catch (error) {
       next(error)
     }
+  }
+}
+
+export const requireVip = async (req, res, next) => {
+  try {
+    const { roles = [], vip, permissions: cachedPermissions } = req.user || {}
+    const isAdmin = roles.includes('admin')
+    const hasVip = Boolean(vip?.expiresAt && new Date(vip.expiresAt) > new Date())
+
+    if (isAdmin || hasVip) return next()
+
+    let permissions = cachedPermissions || []
+    if (!permissions.length && roles.length) {
+      const dbRoles = await roleRepo.findByCodesWithPermissions(roles)
+      const granted = new Set()
+      for (const role of dbRoles) {
+        for (const perm of role.permissions || []) granted.add(perm.key)
+      }
+      permissions = [...granted]
+      req.user.permissions = permissions
+    }
+
+    if (permissions.includes('room_visualizer:use')) return next()
+
+    throw new AppError('Tính năng này chỉ dành cho tài khoản VIP', HTTP_STATUS.FORBIDDEN, 'VIP_REQUIRED')
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const requireShopOwnerProductVisual = (req, res, next) => {
+  try {
+    const { roles = [], permissions = [] } = req.user || {}
+    const isAdmin = roles.includes('admin')
+    const isShopOwnerWithPermission =
+      roles.includes('shop_owner') && permissions.includes('product_visual_asset:manage')
+
+    if (!isAdmin && !isShopOwnerWithPermission) {
+      throw new AppError(
+        'Chỉ chủ shop mới được quản lý visual asset sản phẩm',
+        HTTP_STATUS.FORBIDDEN,
+        'SHOP_OWNER_REQUIRED'
+      )
+    }
+
+    next()
+  } catch (error) {
+    next(error)
   }
 }

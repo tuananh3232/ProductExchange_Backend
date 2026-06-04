@@ -42,6 +42,7 @@ export const productQuerySchema = paginationQuerySchema.keys({
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
   listingType: Joi.string().valid('sell'),
   status: Joi.string().valid('available', 'hidden', 'pending', 'sold'),
+  visualizerReady: Joi.boolean(),
 })
 
 export const shopQuerySchema = paginationQuerySchema.keys({

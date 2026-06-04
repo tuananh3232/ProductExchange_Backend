@@ -50,6 +50,10 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',
   ADMIN_MANAGE_WITHDRAWALS: 'admin:manage_withdrawals',
+
+  // Room Visualizer
+  ROOM_VISUALIZER_USE: 'room_visualizer:use',
+  PRODUCT_VISUAL_ASSET_MANAGE: 'product_visual_asset:manage',
 };
 
 /**
@@ -105,6 +109,7 @@ export const ROLE_PERMISSION_MAP = {
     PERMISSIONS.ORDER_UPDATE_STATUS,
     PERMISSIONS.WALLET_VIEW,
     PERMISSIONS.WALLET_REQUEST_WITHDRAWAL,
+    PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE,
   ],
   staff: [
     PERMISSIONS.AUTH_LOGOUT,

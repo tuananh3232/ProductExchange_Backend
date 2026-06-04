@@ -218,6 +218,10 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
     filter.$text = { $search: query.search }
   }
 
+  if (query.visualizerReady === true || query.visualizerReady === 'true') {
+    filter['visualProfile.isVisualizerReady'] = true
+  }
+
   return filter
 }
 

@@ -7,5 +7,6 @@ export default {
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup-after-env.js'],
   testTimeout: 30000,
   coverageDirectory: 'coverage',
-  collectCoverageFrom: ['src/**/*.js']
+  collectCoverageFrom: ['src/**/*.js'],
+  maxWorkers: 1,
 }

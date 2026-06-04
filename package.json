@@ -11,6 +11,7 @@
     "seed": "node scripts/seed-decor-data.js",
     "seed:decor": "node scripts/seed-decor-data.js",
     "migrate:user-roles": "node scripts/migrate-user-roles.js",
+    "migrate:product-visual": "set DOTENV_CONFIG_PATH=.env.test&& node scripts/migrate-product-visual-fields.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "lint": "eslint src/**/*.js",

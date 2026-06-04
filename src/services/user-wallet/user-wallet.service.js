@@ -132,7 +132,7 @@ export const refundWalletForOrder = async (order) => {
   const userId = order.buyer?._id || order.buyer
 
   // idempotency — tránh hoàn tiền 2 lần cho cùng 1 order
-  const existing = await userWalletRepo.findTransactionByOrder(orderId)
+  const existing = await userWalletRepo.findRefundTransactionByOrder(orderId)
   if (existing) return existing
 
   const amount = Math.round(Number(order.totalAmount))

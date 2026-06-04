@@ -10,6 +10,8 @@ const handler = (_req, res) => {
   })
 }
 
+const skipInTest = () => process.env.NODE_ENV === 'test'
+
 /**
  * Strict limiter for unauthenticated auth endpoints (login, register, password reset).
  * 10 attempts per 15 minutes per IP.
@@ -17,6 +19,7 @@ const handler = (_req, res) => {
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  skip: skipInTest,
   handler,
   standardHeaders: true,
   legacyHeaders: false,
@@ -29,6 +32,7 @@ export const authRateLimit = rateLimit({
 export const apiRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
+  skip: skipInTest,
   handler,
   standardHeaders: true,
   legacyHeaders: false,

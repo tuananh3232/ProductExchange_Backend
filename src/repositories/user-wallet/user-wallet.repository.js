@@ -78,6 +78,9 @@ export const countTransactions = (filter) => UserWalletTransaction.countDocument
 export const findTransactionByOrder = (orderId) =>
   UserWalletTransaction.findOne({ order: orderId, type: 'payment' })
 
+export const findRefundTransactionByOrder = (orderId) =>
+  UserWalletTransaction.findOne({ order: orderId, type: 'refund' })
+
 export const findTransactionByTopup = (topupId) =>
   UserWalletTransaction.findOne({ topup: topupId })
 
