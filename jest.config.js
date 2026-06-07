@@ -2,11 +2,11 @@ export default {
   testEnvironment: 'node',
   transform: {},
   extensionsToTreatAsEsm: [],
-  testMatch: ['**/tests/**/*.test.js'],
-  setupFiles: ['<rootDir>/tests/jest.setup.js'],
-  setupFilesAfterEnv: ['<rootDir>/tests/jest.setup-after-env.js'],
+  testMatch: ['**/tests/{integration,unit}/**/*.test.js'],
+  testPathIgnorePatterns: ['<rootDir>/tests/_legacy/'],
+  setupFiles: ['<rootDir>/tests/setup/jest.setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup/jest.setup-after-env.js'],
   testTimeout: 30000,
   coverageDirectory: 'coverage',
-  collectCoverageFrom: ['src/**/*.js'],
-  maxWorkers: 1,
+  collectCoverageFrom: ['src/**/*.js']
 }
