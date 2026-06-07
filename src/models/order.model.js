@@ -11,7 +11,7 @@ const orderHistorySchema = new mongoose.Schema(
     note: {
       type: String,
       default: '',
-      maxlength: [500, 'Order history note must not exceed 500 characters'],
+      maxlength: [500, 'Ghi chú lịch sử đơn hàng không được vượt quá 500 ký tự'],
     },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -82,7 +82,7 @@ const orderSchema = new mongoose.Schema(
     note: {
       type: String,
       default: '',
-      maxlength: [1000, 'Order note must not exceed 1000 characters'],
+      maxlength: [1000, 'Ghi chú đơn hàng không được vượt quá 1000 ký tự'],
     },
     paymentStatus: {
       type: String,

@@ -98,9 +98,9 @@ router.get('/me/transactions', authenticate, userWalletController.getMyTransacti
  * @swagger
  * /user-wallet/me/activity:
  *   get:
- *     summary: Lấy lịch sử hoạt động ví (unified feed)
+ *     summary: Lấy lịch sử hoạt động ví tổng hợp
  *     description: |
- *       Trả về danh sách normalized gồm cả wallet_transaction (topup/payment/refund hoàn tất)
+ *       Trả về danh sách chuẩn hóa gồm cả wallet_transaction (giao dịch topup/payment/refund hoàn tất)
  *       và topup_attempt (phiên nạp tiền pending/failed/cancelled).
  *       Sắp xếp theo createdAt giảm dần.
  *     tags: [UserWallet]
@@ -259,7 +259,7 @@ router.post('/me/pay-order', authenticate, validate(payOrderSchema), userWalletC
  * @swagger
  * /user-wallet/me/topup/verify:
  *   post:
- *     summary: Xác nhận trạng thái nạp tiền sau khi PayOS redirect về FE
+ *     summary: Xác nhận trạng thái nạp tiền sau khi PayOS chuyển hướng về FE
  *     tags: [UserWallet]
  *     security:
  *       - bearerAuth: []

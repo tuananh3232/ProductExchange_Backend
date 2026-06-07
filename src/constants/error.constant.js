@@ -47,6 +47,7 @@ const ERRORS = {
     INVITATION_ALREADY_ACCEPTED: 'Invitation has already been accepted',
     INVITATION_ALREADY_REJECTED: 'Invitation has already been rejected',
     INVITATION_EXPIRED: 'Invitation has expired',
+    PENDING_INVITATION_EXISTS: 'A pending invitation already exists for this user and shop',
     ALREADY_STAFF: 'User is already a staff member of this shop',
     CANNOT_INVITE_OWNER: 'Cannot invite the shop owner as staff',
     CANNOT_INVITE_SELF: 'Cannot invite yourself to your own shop',
@@ -72,6 +73,13 @@ const ERRORS = {
 
   NOTIFICATION: {
     NOT_FOUND: 'Notification not found',
+  },
+
+  CART: {
+    ITEM_NOT_FOUND: 'Product does not exist in cart',
+    PRODUCT_NOT_FOUND: 'Product not found',
+    PRODUCT_UNAVAILABLE: 'Product is not available for sale',
+    INSUFFICIENT_STOCK: 'Product does not have enough stock',
   },
 
   PAYMENT: {
@@ -146,6 +154,6 @@ const ERRORS = {
     INVALID_STATUS: 'Invalid withdrawal request status for this action',
     TRANSFER_PROOF_REQUIRED: 'Transfer proof is required to complete withdrawal',
   },
-};
+}
 
-export default ERRORS;
+export default ERRORS

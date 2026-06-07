@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as shopInvitationController from '../../controllers/shop/shop-invitation.controller.js';
 import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
+import { validateObjectId } from '../../middlewares/object-id.middleware.js';
 import {
   sendInvitationSchema,
   invitationActionSchema,
@@ -36,6 +37,7 @@ router.delete(
 router.post(
   '/:id/invitations',
   authenticate,
+  validateObjectId('id'),
   requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
   validate(sendInvitationSchema),
   shopInvitationController.sendInvitation
@@ -45,6 +47,7 @@ router.post(
 router.get(
   '/:id/invitations',
   authenticate,
+  validateObjectId('id'),
   requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
   shopInvitationController.getShopInvitations
 );

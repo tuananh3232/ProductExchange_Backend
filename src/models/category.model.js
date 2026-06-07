@@ -4,13 +4,13 @@ const categorySchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Category name is required'],
+      required: [true, 'Tên danh mục là bắt buộc'],
       unique: true,
       trim: true,
     },
     slug: {
       type: String,
-      required: [true, 'Slug is required'],
+      required: [true, 'Slug là bắt buộc'],
       unique: true,
       lowercase: true,
     },

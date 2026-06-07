@@ -6,19 +6,19 @@ const shopInvitationSchema = new mongoose.Schema(
     shop: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Shop',
-      required: [true, 'Shop is required'],
+      required: [true, 'Shop là bắt buộc'],
       index: true,
     },
     invitee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Invitee is required'],
+      required: [true, 'Người được mời là bắt buộc'],
       index: true,
     },
     inviter: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Inviter is required'],
+      required: [true, 'Người gửi lời mời là bắt buộc'],
     },
     role: {
       type: String,

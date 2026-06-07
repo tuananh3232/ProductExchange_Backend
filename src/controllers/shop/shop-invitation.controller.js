@@ -10,11 +10,17 @@ export const sendInvitation = async (req, res, next) => {
       req.params.id,
       req.user,
       req.body.email,
-      req.body.permissions || []
+      req.body.permissions || [],
+      req.body.role
     );
     sendSuccess(res, {
       message: MESSAGES.SHOP.INVITATION_SENT,
-      data: { invitation },
+      data: {
+        shopId: req.params.id,
+        email: req.body.email,
+        status: 'PENDING',
+        invitationId: invitation._id,
+      },
       statusCode: HTTP_STATUS.CREATED,
     });
   } catch (error) {

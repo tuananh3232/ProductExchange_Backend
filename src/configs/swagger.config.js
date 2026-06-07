@@ -6,12 +6,12 @@ const swaggerDefinition = {
   info: {
     title: 'ProductExchange API',
     version: '1.0.0',
-    description: 'API cho nền tảng mua bán và trao đổi sản phẩm',
+    description: 'API for the ProductExchange platform',
     contact: { name: 'Dev Team', email: 'dev@productexchange.vn' },
   },
   servers: [
-    { url: `http://localhost:${env.port}`, description: 'Development' },
-    { url: 'https://api.productexchange.vn', description: 'Production' },
+    { url: `http://localhost:${env.port}`, description: 'Environment dev' },
+    { url: 'https://api.productexchange.vn', description: 'Environment production' },
   ],
   components: {
     securitySchemes: {
@@ -74,7 +74,7 @@ const swaggerDefinition = {
           ownerType: {
             type: 'string',
             enum: ['SHOP', 'SELLER'],
-            description: 'Sản phẩm shop dùng SHOP, sản phẩm cá nhân seller dùng SELLER.',
+            description: 'Sản phẩm của shop dùng SHOP, sản phẩm cá nhân của người bán dùng SELLER.',
           },
           shop: {
             type: 'string',
@@ -84,7 +84,7 @@ const swaggerDefinition = {
           seller: {
             type: 'string',
             nullable: true,
-            description: 'Seller sở hữu sản phẩm khi ownerType=SELLER.',
+            description: 'Người bán sở hữu sản phẩm khi ownerType=SELLER.',
           },
           location: {
             type: 'object',
@@ -151,11 +151,11 @@ const swaggerDefinition = {
           status: {
             type: 'string',
             enum: ['draft', 'pending_review', 'active', 'rejected', 'suspended'],
-            description: 'Trạng thái onboarding của shop',
+            description: 'Trạng thái đăng ký hoạt động của shop',
           },
           rejectionReason: {
             type: 'string',
-            description: 'Lý do từ chối (admin điền khi reject)',
+            description: 'Lý do từ chối (quản trị viên điền khi từ chối)',
           },
           isActive: { type: 'boolean' },
           createdAt: { type: 'string', format: 'date-time' },
@@ -305,7 +305,7 @@ const swaggerDefinition = {
           details: {
             type: 'object',
             additionalProperties: true,
-            description: 'Thông tin lỗi chi tiết, thường dùng cho validation',
+            description: 'Thông tin lỗi chi tiết, thường dùng khi kiểm tra dữ liệu đầu vào',
           },
         },
       },

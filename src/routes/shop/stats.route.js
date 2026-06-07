@@ -8,7 +8,7 @@ const router = Router({ mergeParams: true })
  * @swagger
  * tags:
  *   - name: Shop Statistics
- *     description: API thống kê dành cho shop owner/staff
+ *     description: API thống kê dành cho chủ shop và nhân viên
  *
  * /shops/{id}/stats/overview:
  *   get:

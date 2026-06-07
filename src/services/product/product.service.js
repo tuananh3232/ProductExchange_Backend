@@ -253,7 +253,7 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
 
 export const getSellerProducts = async (userContext, query, pagination) => {
   if (!hasSellerRole(userContext)) {
-    throw new AppError('Ban can co role seller de xem san pham ca nhan', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError('Bạn cần có vai trò seller để xem sản phẩm cá nhân', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
   const filter = buildFilter(query, { publicOnly: false })
@@ -354,8 +354,8 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
       recipient: product.owner?._id || product.owner,
       sender: userContext._id,
       type: typeByStatus[nextStatus],
-      title: 'Cap nhat san pham',
-      message: `Trang thai san pham da cap nhat: ${nextStatus}`,
+      title: 'Cập nhật sản phẩm',
+      message: `Trạng thái sản phẩm đã cập nhật: ${nextStatus}`,
       targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
       targetId: product._id,
       actionUrl: `/products/${product._id}`,

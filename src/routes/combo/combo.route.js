@@ -9,11 +9,11 @@ const router = Router()
  * @swagger
  * tags:
  *   - name: Combo Recommendation
- *     description: Personalized decor product combo suggestions
+ *     description: Gợi ý combo sản phẩm trang trí cá nhân hóa
  *
  * /combos/generate:
  *   post:
- *     summary: Generate personalized product combos
+ *     summary: Tạo combo sản phẩm cá nhân hóa
  *     tags: [Combo Recommendation]
  *     security: []
  *     requestBody:
@@ -31,13 +31,13 @@ const router = Router()
  *               maxItems: { type: integer, minimum: 2, maximum: 10, default: 5 }
  *     responses:
  *       200:
- *         description: Generated combos or an empty combo list
+ *         description: Danh sách combo đã tạo hoặc danh sách trống
  *       422:
- *         description: Validation error
+ *         description: Dữ liệu đầu vào không hợp lệ
  *
  * /combos/alternatives:
  *   get:
- *     summary: Get alternative products for a combo item
+ *     summary: Lấy sản phẩm thay thế cho một sản phẩm trong combo
  *     tags: [Combo Recommendation]
  *     security: []
  *     parameters:
@@ -65,9 +65,9 @@ const router = Router()
  *         schema: { type: integer, default: 10 }
  *     responses:
  *       200:
- *         description: Matching alternatives or an empty alternative list
+ *         description: Danh sách sản phẩm thay thế phù hợp hoặc danh sách trống
  *       422:
- *         description: Validation error
+ *         description: Dữ liệu đầu vào không hợp lệ
  */
 router.post('/generate', validate(generateCombosSchema), comboController.generateCombos)
 router.get('/alternatives', validate(alternativesSchema, 'query'), comboController.getAlternatives)

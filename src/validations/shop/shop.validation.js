@@ -47,6 +47,7 @@ export const updateStaffPermissionsSchema = Joi.object({
 
 export const sendInvitationSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
+  role: Joi.string().valid('STAFF', 'MANAGER').default('STAFF'),
   permissions: Joi.array()
     .items(Joi.string().valid(...Object.values(PERMISSIONS)))
     .default([]),

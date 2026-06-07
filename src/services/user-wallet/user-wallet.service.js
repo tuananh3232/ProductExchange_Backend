@@ -114,8 +114,8 @@ export const payOrderWithWallet = async (orderId, userContext) => {
   await notifySafely({
     recipient: userId,
     type: NOTIFICATION_TYPES.PAYMENT_SUCCESS,
-    title: 'Thanh toan thanh cong',
-    message: 'Don hang cua ban da duoc thanh toan bang vi',
+    title: 'Thanh toán thành công',
+    message: 'Đơn hàng của bạn đã được thanh toán bằng ví',
     targetType: NOTIFICATION_TARGET_TYPES.ORDER,
     targetId: orderId,
     actionUrl: `/orders/${orderId}`,

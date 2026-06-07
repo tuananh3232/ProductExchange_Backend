@@ -106,19 +106,19 @@ export default router
  *           type: array
  *           items:
  *             $ref: '#/components/schemas/User'
- *           description: Chỉ dùng cho DIRECT conversation
+ *           description: Chỉ dùng cho cuộc trò chuyện DIRECT
  *         shopId:
  *           oneOf:
  *             - type: string
  *             - $ref: '#/components/schemas/Shop'
  *           nullable: true
- *           description: Chỉ dùng cho SHOP conversation
+ *           description: Chỉ dùng cho cuộc trò chuyện SHOP
  *         customerId:
  *           oneOf:
  *             - type: string
  *             - $ref: '#/components/schemas/User'
  *           nullable: true
- *           description: Customer/member của SHOP conversation
+ *           description: Khách hàng hoặc thành viên của cuộc trò chuyện SHOP
  *         lastMessage:
  *           type: object
  *           nullable: true
@@ -152,7 +152,7 @@ export default router
  *
  * /conversations/direct:
  *   post:
- *     summary: Direct conversation giữa 2 user
+ *     summary: Cuộc trò chuyện trực tiếp giữa 2 người dùng
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -169,7 +169,7 @@ export default router
  *                 example: 665f1f77bcf86cd799439011
  *     responses:
  *       201:
- *         description: Tạo hoặc lấy conversation thành công
+ *         description: Tạo hoặc lấy cuộc trò chuyện thành công
  *         content:
  *           application/json:
  *             schema:
@@ -189,7 +189,7 @@ export default router
  *
  * /conversations/shop:
  *   post:
- *     summary: Shop conversation giữa customer và shop
+ *     summary: Cuộc trò chuyện giữa khách hàng và shop
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -206,7 +206,7 @@ export default router
  *                 example: 665f1f77bcf86cd799439022
  *     responses:
  *       201:
- *         description: Tạo hoặc lấy conversation shop thành công
+ *         description: Tạo hoặc lấy cuộc trò chuyện với shop thành công
  *         content:
  *           application/json:
  *             schema:
@@ -222,7 +222,7 @@ export default router
  *
  * /conversations:
  *   get:
- *     summary: Lấy danh sách conversation user
+ *     summary: Lấy danh sách cuộc trò chuyện của người dùng
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -250,7 +250,7 @@ export default router
  *           default: desc
  *     responses:
  *       200:
- *         description: Lấy danh sách conversation thành công
+ *         description: Lấy danh sách cuộc trò chuyện thành công
  *         content:
  *           application/json:
  *             schema:
@@ -268,7 +268,7 @@ export default router
  *
  * /conversations/{id}/messages:
  *   get:
- *     summary: Lấy danh sách message trong conversation
+ *     summary: Lấy danh sách tin nhắn trong cuộc trò chuyện
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -290,7 +290,7 @@ export default router
  *           default: 20
  *     responses:
  *       200:
- *         description: Lấy danh sách message thành công
+ *         description: Lấy danh sách tin nhắn thành công
  *         content:
  *           application/json:
  *             schema:
@@ -306,11 +306,11 @@ export default router
  *                           items:
  *                             $ref: '#/components/schemas/ChatMessage'
  *       403:
- *         description: Không có quyền xem conversation
+ *         description: Không có quyền xem cuộc trò chuyện
  *       404:
- *         description: Conversation không tồn tại
+ *         description: Cuộc trò chuyện không tồn tại
  *   post:
- *     summary: Gửi message vào conversation
+ *     summary: Gửi tin nhắn vào cuộc trò chuyện
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -346,7 +346,7 @@ export default router
  *             attachments: []
  *     responses:
  *       201:
- *         description: Message sent successfully
+ *         description: Gửi tin nhắn thành công
  *         content:
  *           application/json:
  *             schema:
@@ -361,7 +361,7 @@ export default router
  *                           $ref: '#/components/schemas/ChatMessage'
  *             example:
  *               success: true
- *               message: Message sent successfully
+ *               message: Gửi tin nhắn thành công
  *               data:
  *                 message:
  *                   _id: messageId
@@ -373,15 +373,15 @@ export default router
  *                   readBy: []
  *                   createdAt: 2026-01-01T00:00:00.000Z
  *       400:
- *         description: Content rỗng hoặc dữ liệu không hợp lệ
+ *         description: Nội dung rỗng hoặc dữ liệu không hợp lệ
  *       403:
- *         description: Không có quyền gửi message vào conversation
+ *         description: Không có quyền gửi tin nhắn vào cuộc trò chuyện
  *       404:
- *         description: Conversation không tồn tại
+ *         description: Cuộc trò chuyện không tồn tại
  *
  * /conversations/{id}/read:
  *   patch:
- *     summary: Đánh dấu đã đọc các message trong conversation
+ *     summary: Đánh dấu đã đọc các tin nhắn trong cuộc trò chuyện
  *     tags: [Chat - Conversations]
  *     security:
  *       - bearerAuth: []
@@ -414,7 +414,7 @@ export default router
  *                           type: string
  *                           format: date-time
  *       403:
- *         description: Không có quyền thao tác conversation
+ *         description: Không có quyền thao tác với cuộc trò chuyện
  *       404:
- *         description: Conversation không tồn tại
+ *         description: Cuộc trò chuyện không tồn tại
  */

@@ -49,7 +49,7 @@ export const getMyNotifications = async (userId, query = {}) => {
 const getOwnedNotificationOrThrow = async (userId, notificationId) => {
   const notification = await Notification.findOne({ _id: notificationId, recipient: userId })
   if (!notification) {
-    throw new AppError('Khong tim thay thong bao', HTTP_STATUS.NOT_FOUND, ERRORS.NOTIFICATION.NOT_FOUND)
+    throw new AppError('Không tìm thấy thông báo', HTTP_STATUS.NOT_FOUND, ERRORS.NOTIFICATION.NOT_FOUND)
   }
   return notification
 }

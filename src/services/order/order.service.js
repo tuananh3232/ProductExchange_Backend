@@ -32,7 +32,7 @@ const notifyOrderUser = (recipient, type, order, message, sender = null) => {
     recipient,
     sender,
     type,
-    title: 'Cap nhat don hang',
+    title: 'Cập nhật đơn hàng',
     message,
     targetType: NOTIFICATION_TARGET_TYPES.ORDER,
     targetId: order._id,
@@ -114,11 +114,61 @@ const pushOrderHistory = (order, status, updatedBy, note = '') => {
   ]
 }
 
+const getOrderProductIds = (order) => {
+  const productIds = (order.items || [])
+    .map((item) => item.product?._id || item.product || item.productId?._id || item.productId)
+    .filter(Boolean)
+
+  const productId = order.product?._id || order.product
+  if (productId) productIds.push(productId)
+
+  return [...new Set(productIds.map((id) => id.toString()))]
+}
+
 const ensureTransitionAllowed = (currentStatus, nextStatus) => {
   const allowed = ORDER_TRANSITIONS[currentStatus] || []
   if (!allowed.includes(nextStatus)) {
     throw new AppError('Không thể chuyển trạng thái đơn hàng theo vòng đời hiện tại', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
   }
+}
+
+export const cancelOrderAndRestoreProducts = async (orderId, reason = 'Cancel order') => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+
+  if (order.status === ORDER_STATUS.CANCELLED) {
+    return order
+  }
+
+  const productIds = getOrderProductIds(order)
+  await orderRepo.updateById(orderId, {
+    status: ORDER_STATUS.CANCELLED,
+    paymentStatus: PAYMENT_STATUS.CANCELLED,
+    cancelReason: reason,
+    cancelledAt: new Date(),
+    $push: {
+      history: {
+        status: ORDER_STATUS.CANCELLED,
+        note: reason,
+        updatedBy: order.buyer?._id || order.buyer,
+        updatedAt: new Date(),
+      },
+    },
+  })
+
+  if (productIds.length) {
+    await Product.updateMany(
+      {
+        _id: { $in: productIds },
+        status: 'pending',
+      },
+      { status: 'available' }
+    )
+  }
+
+  return orderRepo.findById(orderId)
 }
 
 export const createOrder = async (buyerId, payload) => {
@@ -183,7 +233,7 @@ export const createOrder = async (buyerId, payload) => {
   await Product.findByIdAndUpdate(product._id, { status: 'pending' })
 
   const populatedOrder = await orderRepo.findById(order._id)
-  await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Ban co don hang moi', buyerId)
+  await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Bạn có đơn hàng mới', buyerId)
   return populatedOrder
 }
 
@@ -255,7 +305,7 @@ export const confirmOrder = async (orderId, userContext) => {
     },
   })
 
-  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_CONFIRMED, updated, 'Don hang cua ban da duoc xac nhan', userContext._id)
+  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_CONFIRMED, updated, 'Đơn hàng của bạn đã được xác nhận', userContext._id)
   return updated
 }
 
@@ -296,21 +346,21 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
     }
   }
 
-  const updated = await orderRepo.updateById(orderId, cancelUpdate)
+  const updated = await cancelOrderAndRestoreProducts(orderId, note || 'Cancel order')
 
   await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
 
   // Tự động hoàn ví nếu đơn thanh toán bằng ví
   if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
     await userWalletService.refundWalletForOrder(order)
-    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.PAYMENT_REFUNDED, updated, 'Khoan thanh toan da duoc hoan vao vi')
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.PAYMENT_REFUNDED, updated, 'Khoản thanh toán đã được hoàn vào ví')
   }
 
   const recipient = isBuyer ? getOrderSellerRecipient(order) : order.buyer?._id || order.buyer
   const type = isBuyer ? NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER : NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER
-  await notifyOrderUser(recipient, type, updated, 'Don hang da bi huy', userContext._id)
+  await notifyOrderUser(recipient, type, updated, 'Đơn hàng đã bị hủy', userContext._id)
   if (updated.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
-    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED, updated, 'Yeu cau hoan tien dang cho xu ly')
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED, updated, 'Yêu cầu hoàn tiền đang chờ xử lý')
   }
   return updated
 }
@@ -354,7 +404,7 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
     [ORDER_STATUS.CANCELLED]: NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER,
   }
   if (typeByStatus[nextStatus]) {
-    await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trang thai don hang da cap nhat: ${nextStatus}`, userContext._id)
+    await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trạng thái đơn hàng đã cập nhật: ${nextStatus}`, userContext._id)
   }
 
   return updated

@@ -166,7 +166,7 @@ router.get(
  *       201:
  *         description: Tạo lệnh rút tiền thành công
  *       400:
- *         description: Số dư không đủ hoặc đã có lệnh pending
+ *         description: Số dư không đủ hoặc đã có lệnh chờ xử lý
  *   get:
  *     summary: Lấy danh sách lệnh rút tiền của shop
  *     tags: [Wallet]

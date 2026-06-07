@@ -134,21 +134,21 @@ export default router
  * @swagger
  * tags:
  *   - name: Public - Shops
- *     description: API shop public
+ *     description: API shop công khai
  *   - name: Shop Owner
  *     description: API quản lý shop dành cho chủ shop
  *   - name: Shop Dashboard
- *     description: API dashboard shop dành cho owner/staff
+ *     description: API tổng quan shop dành cho chủ shop và nhân viên
  *   - name: Shop Products
  *     description: API quản lý sản phẩm shop
  *   - name: Shop Staff Management
- *     description: API quản lý staff của shop
+ *     description: API quản lý nhân viên của shop
  *   - name: Shop Invitations
- *     description: API quản lý lời mời staff
+ *     description: API quản lý lời mời nhân viên
  *
  * /shops:
  *   get:
- *     summary: Lấy danh sách shop public
+ *     summary: Lấy danh sách shop công khai
  *     tags: [Public - Shops]
  *     security: []
  *     responses:
@@ -205,7 +205,7 @@ export default router
  *
  * /shops/{id}:
  *   get:
- *     summary: Xem chi tiết shop public
+ *     summary: Xem chi tiết shop công khai
  *     tags: [Public - Shops]
  *     security: []
  *     parameters:
@@ -279,7 +279,7 @@ export default router
  *
  * /shops/{id}/dashboard:
  *   get:
- *     summary: Lấy dashboard shop
+ *     summary: Lấy thông tin tổng quan shop
  *     tags: [Shop Dashboard]
  *     security:
  *       - bearerAuth: []
@@ -291,7 +291,7 @@ export default router
  *           type: string
  *     responses:
  *       200:
- *         description: Lấy dashboard shop thành công
+ *         description: Lấy thông tin tổng quan shop thành công
  *
  * /shops/{id}/products:
  *   get:
@@ -323,7 +323,7 @@ export default router
  *
  * /shops/{id}/owner:
  *   patch:
- *     summary: Chuyển owner shop bằng email
+ *     summary: Chuyển quyền chủ shop bằng email
  *     tags: [Shop Owner]
  *     security:
  *       - bearerAuth: []
@@ -347,7 +347,7 @@ export default router
  *                 example: user@example.com
  *     responses:
  *       200:
- *         description: Cập nhật owner thành công
+ *         description: Cập nhật chủ shop thành công
  *       400:
  *         description: Email không hợp lệ
  *       403:
@@ -357,7 +357,7 @@ export default router
  *
  * /shops/{id}/staff:
  *   get:
- *     summary: Lấy danh sách staff của shop
+ *     summary: Lấy danh sách nhân viên của shop
  *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
@@ -369,7 +369,7 @@ export default router
  *           type: string
  *     responses:
  *       200:
- *         description: Lấy danh sách staff thành công
+ *         description: Lấy danh sách nhân viên thành công
  *
  * /shops/{id}/users/by-email:
  *   get:
@@ -399,7 +399,7 @@ export default router
  *
  * /shops/{id}/staff/{staffUserId}/permissions:
  *   get:
- *     summary: Lấy quyền của staff
+ *     summary: Lấy quyền của nhân viên
  *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
@@ -416,9 +416,9 @@ export default router
  *           type: string
  *     responses:
  *       200:
- *         description: Lấy quyền staff thành công
+ *         description: Lấy quyền nhân viên thành công
  *   put:
- *     summary: Cập nhật quyền staff
+ *     summary: Cập nhật quyền nhân viên
  *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
@@ -447,11 +447,11 @@ export default router
  *                   type: string
  *     responses:
  *       200:
- *         description: Cập nhật quyền staff thành công
+ *         description: Cập nhật quyền nhân viên thành công
  *
  * /shops/{id}/staff/{staffUserId}:
  *   delete:
- *     summary: Gỡ staff khỏi shop
+ *     summary: Gỡ nhân viên khỏi shop
  *     tags: [Shop Staff Management]
  *     security:
  *       - bearerAuth: []
@@ -468,11 +468,11 @@ export default router
  *           type: string
  *     responses:
  *       200:
- *         description: Gỡ staff thành công
+ *         description: Gỡ nhân viên thành công
  *
  * /shops/{id}/invitations:
  *   post:
- *     summary: Gửi lời mời staff
+ *     summary: Gửi lời mời nhân viên
  *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
@@ -494,11 +494,54 @@ export default router
  *                 type: string
  *                 format: email
  *                 example: user@example.com
+ *               role:
+ *                 type: string
+ *                 enum: [STAFF, MANAGER]
+ *                 default: STAFF
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
  *     responses:
  *       201:
- *         description: Gửi lời mời staff thành công
+ *         description: Gui loi moi nhan vien thanh cong
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Da gui loi moi nhan su qua email
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     shopId:
+ *                       type: string
+ *                       example: 665f1f77bcf86cd799439011
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                       example: user@example.com
+ *                     status:
+ *                       type: string
+ *                       example: PENDING
+ *                     invitationId:
+ *                       type: string
+ *                       example: 665f1f77bcf86cd799439012
+ *       400:
+ *         description: Shop ID khong hop le hoac du lieu moi khong hop le
+ *       403:
+ *         description: Khong co quyen moi nhan vien
+ *       404:
+ *         description: Khong tim thay shop hoac nguoi dung voi email nay
+ *       409:
+ *         description: Nguoi dung da la staff hoac da co loi moi pending
  *   get:
- *     summary: Lấy danh sách lời mời staff
+ *     summary: Lấy danh sách lời mời nhân viên
  *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
@@ -519,7 +562,7 @@ export default router
  *
  * /shops/my/invitations:
  *   get:
- *     summary: Lấy lời mời staff của tôi
+ *     summary: Lấy lời mời nhân viên của tôi
  *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
@@ -534,11 +577,11 @@ export default router
  *           type: integer
  *     responses:
  *       200:
- *         description: Lấy lời mời staff của tôi thành công
+ *         description: Lấy lời mời nhân viên của tôi thành công
  *
  * /shops/invitations/{invitationId}/action:
  *   post:
- *     summary: Phản hồi lời mời staff
+ *     summary: Phản hồi lời mời nhân viên
  *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
@@ -561,11 +604,11 @@ export default router
  *                 enum: [accept, reject]
  *     responses:
  *       200:
- *         description: Phản hồi lời mời staff thành công
+ *         description: Phản hồi lời mời nhân viên thành công
  *
  * /shops/invitations/{invitationId}:
  *   delete:
- *     summary: Hủy lời mời staff
+ *     summary: Hủy lời mời nhân viên
  *     tags: [Shop Invitations]
  *     security:
  *       - bearerAuth: []
@@ -577,7 +620,7 @@ export default router
  *           type: string
  *     responses:
  *       200:
- *         description: Hủy lời mời staff thành công
+ *         description: Hủy lời mời nhân viên thành công
  *
  * /shops/{id}/submit:
  *   post:

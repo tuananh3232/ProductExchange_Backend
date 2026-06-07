@@ -17,14 +17,14 @@ const router = Router()
  * @swagger
  * /categories:
  *   get:
- *     summary: Lấy danh sách category
+ *     summary: Lấy danh sách danh mục
  *     tags: [Categories]
  *     security: []
  *     responses:
  *       200:
  *         description: Lấy danh sách thành công
  *   post:
- *     summary: Tạo category mới
+ *     summary: Tạo danh mục mới
  *     tags: [Categories]
  *     security:
  *       - bearerAuth: []
@@ -53,7 +53,7 @@ const router = Router()
  *                 example: true
  *     responses:
  *       201:
- *         description: Tạo category thành công
+ *         description: Tạo danh mục thành công
  */
 router.get('/', categoryController.getCategories)
 router.post('/', authenticate, validate(createCategorySchema), categoryController.createCategory)
@@ -62,7 +62,7 @@ router.post('/', authenticate, validate(createCategorySchema), categoryControlle
  * @swagger
  * /categories/{id}:
  *   get:
- *     summary: Lấy chi tiết category
+ *     summary: Lấy chi tiết danh mục
  *     tags: [Categories]
  *     security: []
  *     parameters:
@@ -75,7 +75,7 @@ router.post('/', authenticate, validate(createCategorySchema), categoryControlle
  *       200:
  *         description: Lấy chi tiết thành công
  *   patch:
- *     summary: Cập nhật category
+ *     summary: Cập nhật danh mục
  *     tags: [Categories]
  *     security:
  *       - bearerAuth: []
@@ -109,9 +109,9 @@ router.post('/', authenticate, validate(createCategorySchema), categoryControlle
  *                 example: true
  *     responses:
  *       200:
- *         description: Cập nhật category thành công
+ *         description: Cập nhật danh mục thành công
  *   delete:
- *     summary: Xóa category
+ *     summary: Xóa danh mục
  *     tags: [Categories]
  *     security:
  *       - bearerAuth: []
@@ -123,7 +123,7 @@ router.post('/', authenticate, validate(createCategorySchema), categoryControlle
  *           type: string
  *     responses:
  *       200:
- *         description: Xóa category thành công
+ *         description: Xóa danh mục thành công
  */
 router.get('/:id', categoryController.getCategoryById)
 router.patch('/:id', authenticate, validate(updateCategorySchema), categoryController.updateCategory)

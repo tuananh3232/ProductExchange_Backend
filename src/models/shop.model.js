@@ -5,13 +5,13 @@ const shopSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Shop name is required'],
+      required: [true, 'Tên shop là bắt buộc'],
       trim: true,
-      maxlength: [120, 'Shop name must not exceed 120 characters'],
+      maxlength: [120, 'Tên shop không được vượt quá 120 ký tự'],
     },
     slug: {
       type: String,
-      required: [true, 'Shop slug is required'],
+      required: [true, 'Slug của shop là bắt buộc'],
       unique: true,
       trim: true,
       lowercase: true,
@@ -19,7 +19,7 @@ const shopSchema = new mongoose.Schema(
     description: {
       type: String,
       default: '',
-      maxlength: [1000, 'Description must not exceed 1000 characters'],
+      maxlength: [1000, 'Mô tả không được vượt quá 1000 ký tự'],
     },
     logo: {
       url: { type: String, default: '' },
@@ -44,7 +44,7 @@ const shopSchema = new mongoose.Schema(
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Owner is required'],
+      required: [true, 'Chủ shop là bắt buộc'],
       index: true,
     },
     staff: [
@@ -84,7 +84,7 @@ const shopSchema = new mongoose.Schema(
     rejectionReason: {
       type: String,
       default: '',
-      maxlength: [500, 'Rejection reason must not exceed 500 characters'],
+      maxlength: [500, 'Lý do từ chối không được vượt quá 500 ký tự'],
     },
     isActive: {
       type: Boolean,

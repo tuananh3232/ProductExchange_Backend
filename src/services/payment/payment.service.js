@@ -10,6 +10,7 @@ import { env } from '../../configs/env.config.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import { cancelOrderAndRestoreProducts } from '../order/order.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 
@@ -89,8 +90,8 @@ const notifyPaymentResult = (payment, status) => {
   return notifySafely({
     recipient: payment.buyer,
     type: status === PAYMENT_STATUS.PAID ? NOTIFICATION_TYPES.PAYMENT_SUCCESS : NOTIFICATION_TYPES.PAYMENT_FAILED,
-    title: status === PAYMENT_STATUS.PAID ? 'Thanh toan thanh cong' : 'Thanh toan that bai',
-    message: status === PAYMENT_STATUS.PAID ? 'Don hang cua ban da duoc thanh toan' : 'Thanh toan don hang khong thanh cong',
+    title: status === PAYMENT_STATUS.PAID ? 'Thanh toán thành công' : 'Thanh toán thất bại',
+    message: status === PAYMENT_STATUS.PAID ? 'Đơn hàng của bạn đã được thanh toán' : 'Thanh toán đơn hàng không thành công',
     targetType: NOTIFICATION_TARGET_TYPES.PAYMENT,
     targetId: payment._id,
     actionUrl: `/orders/${payment.order}`,
@@ -150,7 +151,7 @@ export const createVnpayPayment = async (orderId, userContext, req) => {
     vnp_Amount: `${Math.round(amount * 100)}`,
     vnp_CurrCode: env.payment.vnpay.currCode,
     vnp_TxnRef: transactionRef,
-    vnp_OrderInfo: `Thanh toan don hang ${order._id.toString()}`,
+    vnp_OrderInfo: `Thanh toán đơn hàng ${order._id.toString()}`,
     vnp_OrderType: env.payment.vnpay.orderType,
     vnp_Locale: env.payment.vnpay.locale,
     vnp_ReturnUrl: env.payment.vnpay.returnUrl,
@@ -205,6 +206,9 @@ export const handleVnpayCallback = async (callbackPayload) => {
   }
 
   await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  if (payload.vnp_ResponseCode !== '00') {
+    await cancelOrderAndRestoreProducts(payment.order, 'VNPay payment cancelled or failed')
+  }
   await notifyPaymentResult(updatedPayment, nextStatus)
 
   return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
@@ -270,7 +274,7 @@ export const createPayosPayment = async (orderId, userContext) => {
   const paymentLink = await payos.paymentRequests.create({
     orderCode,
     amount,
-    description: `Thanh toan #${shortId}`,
+    description: `Thanh toán #${shortId}`,
     returnUrl: env.payment.payos.returnUrl,
     cancelUrl: env.payment.payos.cancelUrl,
   })
@@ -373,7 +377,7 @@ export const createWalletTopup = async (amount, userContext) => {
   const paymentLink = await payos.paymentRequests.create({
     orderCode,
     amount: roundedAmount,
-    description: `Nap vi #${shortId}`,
+    description: `Nạp ví #${shortId}`,
     returnUrl: env.payment.payos.topupReturnUrl,
     cancelUrl: env.payment.payos.topupCancelUrl,
   })
@@ -500,9 +504,16 @@ export const handlePayosReturn = async (query) => {
     const orderUpdate = { paymentStatus: nextStatus }
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
     await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    if (isCancelled || nextStatus === PAYMENT_STATUS.CANCELLED) {
+      await cancelOrderAndRestoreProducts(payment.order, 'PayOS payment cancelled')
+    }
     await notifyPaymentResult(updatedPayment, nextStatus)
 
     return { orderId: payment.order, status: nextStatus }
+  }
+
+  if (payment.status === PAYMENT_STATUS.CANCELLED) {
+    await cancelOrderAndRestoreProducts(payment.order, 'PayOS payment cancelled')
   }
 
   return { orderId: payment.order, status: payment.status }

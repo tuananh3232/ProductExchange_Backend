@@ -86,11 +86,11 @@ export const calculateComboTotal = (products) =>
 
 export const buildComboReason = (combo, criteria) => {
   const details = [
-    criteria.style && `style ${criteria.style}`,
-    criteria.roomType && `room ${criteria.roomType}`,
-    criteria.colorTone && `tone ${criteria.colorTone}`,
+    criteria.style && `phong cách ${criteria.style}`,
+    criteria.roomType && `phòng ${criteria.roomType}`,
+    criteria.colorTone && `tông màu ${criteria.colorTone}`,
   ].filter(Boolean)
-  return `${combo.comboType} combo matches ${details.join(', ') || 'your selected criteria'} without exceeding the budget.`
+  return `Combo ${combo.comboType} phù hợp với ${details.join(', ') || 'tiêu chí bạn đã chọn'} và không vượt quá ngân sách.`
 }
 
 const buildCriteriaFilter = (criteria) => {
@@ -122,7 +122,7 @@ export const generateCombos = async (criteria) => {
 
     const responseCombo = {
       comboType,
-      comboName: `${comboType} ${criteria.style || ''} ${criteria.roomType || ''} Combo`.replace(/\s+/g, ' ').trim(),
+      comboName: `Combo ${comboType} ${criteria.style || ''} ${criteria.roomType || ''}`.replace(/\s+/g, ' ').trim(),
       style: criteria.style || null,
       roomType: criteria.roomType || null,
       colorTone: criteria.colorTone || null,

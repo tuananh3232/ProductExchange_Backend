@@ -35,7 +35,7 @@ const createPaymentSchema = Joi.object({
  *                 type: string
  *     responses:
  *       201:
- *         description: Tạo payment URL thành công
+ *         description: Tạo URL thanh toán thành công
  */
 router.post('/vnpay/create', authenticate, validate(createPaymentSchema), paymentController.createVnpayPayment)
 
@@ -83,7 +83,7 @@ router.post('/vnpay/ipn', paymentController.vnpayIpn)
  *                 type: string
  *     responses:
  *       201:
- *         description: Tạo payment URL thành công
+ *         description: Tạo URL thanh toán thành công
  */
 router.post('/payos/create', authenticate, validate(createPaymentSchema), paymentController.createPayosPayment)
 

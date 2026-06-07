@@ -2,21 +2,21 @@ import Joi from 'joi';
 
 export const registerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required().messages({
-    'string.min': 'Name must be at least 2 characters',
-    'string.max': 'Name must not exceed 100 characters',
-    'any.required': 'Name is required',
+    'string.min': 'Tên phải có ít nhất 2 ký tự',
+    'string.max': 'Tên không được vượt quá 100 ký tự',
+    'any.required': 'Tên là bắt buộc',
   }),
   email: Joi.string().email().lowercase().required().messages({
-    'string.email': 'Invalid email format',
-    'any.required': 'Email is required',
+    'string.email': 'Định dạng email không hợp lệ',
+    'any.required': 'Email là bắt buộc',
   }),
   password: Joi.string().min(6).max(50).required().messages({
-    'string.min': 'Password must be at least 6 characters',
-    'any.required': 'Password is required',
+    'string.min': 'Mật khẩu phải có ít nhất 6 ký tự',
+    'any.required': 'Mật khẩu là bắt buộc',
   }),
   confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
-    'any.only': 'Passwords do not match',
-    'any.required': 'Confirm password is required',
+    'any.only': 'Mật khẩu xác nhận không khớp',
+    'any.required': 'Xác nhận mật khẩu là bắt buộc',
   }),
 });
 
@@ -33,7 +33,7 @@ export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
   newPassword: Joi.string().min(6).max(50).required(),
   confirmNewPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
-    'any.only': 'Passwords do not match',
+    'any.only': 'Mật khẩu xác nhận không khớp',
   }),
 });
 
@@ -60,7 +60,7 @@ export const resetPasswordSchema = Joi.object({
   otp: Joi.string().trim().pattern(/^\d{6}$/).required(),
   newPassword: Joi.string().min(6).max(50).required(),
   confirmNewPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
-    'any.only': 'Passwords do not match',
+    'any.only': 'Mật khẩu xác nhận không khớp',
   }),
 });
 

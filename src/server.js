@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }))
 
 // Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'ProductExchange API Docs',
+  customSiteTitle: 'Tài liệu ProductExchange API',
   swaggerOptions: {
     persistAuthorization: true
   }
@@ -41,7 +41,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
     status: 'ok',
-    message: 'Server is running',
+    message: 'Máy chủ đang hoạt động',
     timestamp: new Date().toISOString()
   })
 })

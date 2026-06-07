@@ -24,7 +24,7 @@ const notifyShopUser = (recipient, type, shop, message, sender = null, data = {}
     recipient,
     sender,
     type,
-    title: 'Cap nhat shop',
+    title: 'Cập nhật shop',
     message,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
@@ -72,11 +72,11 @@ const assertActiveUserByEmail = async (email) => {
   const normalizedEmail = normalizeEmail(email)
 
   if (!normalizedEmail) {
-    throw new AppError('Email is required', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
+    throw new AppError('Email là bắt buộc', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   if (!EMAIL_PATTERN.test(normalizedEmail)) {
-    throw new AppError('Invalid email', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    throw new AppError('Email không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
 
   const user = await User.findOne({ email: normalizedEmail }).select('_id name email avatar roles isActive')
@@ -85,7 +85,7 @@ const assertActiveUserByEmail = async (email) => {
   }
 
   if (!user.isActive) {
-    throw new AppError('Account is inactive', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE)
+    throw new AppError('Tài khoản đã bị vô hiệu hóa', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE)
   }
 
   return user
@@ -258,14 +258,14 @@ export const updateShop = async (shopId, userContext, payload) => {
 export const deleteShop = async (shopId, userContext) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
-    throw new AppError('Khong tim thay shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
   ensureShopOwnerAccess(shop, userContext)
 
   if (!DELETABLE_SHOP_STATUSES.includes(shop.status)) {
     throw new AppError(
-      'Chi co the xoa shop dang o trang thai rejected',
+      'Chỉ có thể xóa shop đang ở trạng thái rejected',
       HTTP_STATUS.BAD_REQUEST,
       ERRORS.SHOP.NOT_REJECTED
     )
@@ -311,8 +311,8 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
   await newOwner.save()
 
   const updatedShop = await shopRepo.updateById(shopId, updateData)
-  await notifyShopUser(newOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Ban da tro thanh chu so huu shop', userContext._id)
-  await notifyShopUser(currentOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Quyen so huu shop da duoc chuyen giao', userContext._id)
+  await notifyShopUser(newOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Bạn đã trở thành chủ sở hữu shop', userContext._id)
+  await notifyShopUser(currentOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Quyền sở hữu shop đã được chuyển giao', userContext._id)
 
   if (currentOwnerId && currentOwnerId !== toIdString(newOwnerId)) {
     const oldOwnerStillOwnsShop = await shopRepo.countMany({
@@ -381,7 +381,7 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
       staffPermissions: { staffUser: staffUserId },
     },
   })
-  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_REMOVED, updatedShop, 'Ban da duoc go khoi staff cua shop', userContext._id)
+  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_REMOVED, updatedShop, 'Bạn đã được gỡ khỏi danh sách nhân viên của shop', userContext._id)
   return updatedShop
 }
 
@@ -523,7 +523,7 @@ export const unsuspendShop = async (shopId) => {
     throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_SUSPENDED)
   }
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_UNBLOCKED, updatedShop, 'Shop cua ban da duoc mo khoa')
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_UNBLOCKED, updatedShop, 'Shop của bạn đã được mở khóa')
   return updatedShop
 }
 
@@ -549,7 +549,7 @@ export const approveShop = async (shopId) => {
   }
 
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_APPROVED, updatedShop, 'Shop cua ban da duoc phe duyet')
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_APPROVED, updatedShop, 'Shop của bạn đã được phê duyệt')
   return updatedShop
 }
 
@@ -562,7 +562,7 @@ export const rejectShop = async (shopId, rejectionReason) => {
     throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
   }
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_REJECTED, updatedShop, 'Shop cua ban bi tu choi', null, { rejectionReason })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_REJECTED, updatedShop, 'Shop của bạn bị từ chối', null, { rejectionReason })
   return updatedShop
 }
 
@@ -575,7 +575,7 @@ export const suspendShop = async (shopId, reason) => {
     throw new AppError('Chỉ có thể đình chỉ shop đang hoạt động', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
   }
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.SUSPENDED, rejectionReason: reason })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop cua ban da bi khoa', null, { reason })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop của bạn đã bị khóa', null, { reason })
   return updatedShop
 }
 
@@ -613,7 +613,7 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
   })
 
   const updatedShop = await shopRepo.updateById(shopId, { staffPermissions: nextStaffPermissions })
-  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED, updatedShop, 'Quyen staff cua ban da duoc cap nhat', userContext._id, { permissions: uniqueKeys })
+  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED, updatedShop, 'Quyền nhân viên của bạn đã được cập nhật', userContext._id, { permissions: uniqueKeys })
 
   return {
     shop: updatedShop,

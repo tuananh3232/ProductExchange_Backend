@@ -41,15 +41,21 @@ const MESSAGES = {
   },
 
   COMBO: {
-    GENERATED: 'Combo generated successfully',
-    NO_PRODUCTS: 'No suitable products found for the selected criteria',
-    ALTERNATIVES_FETCHED: 'Alternatives found successfully',
-    NO_ALTERNATIVES: 'No alternatives found',
+    GENERATED: 'Tạo combo sản phẩm thành công',
+    NO_PRODUCTS: 'Không tìm thấy sản phẩm phù hợp với tiêu chí đã chọn',
+    ALTERNATIVES_FETCHED: 'Tìm sản phẩm thay thế thành công',
+    NO_ALTERNATIVES: 'Không tìm thấy sản phẩm thay thế',
   },
 
   CART: {
-    COMBO_ADDED: 'Combo added to cart successfully',
-    SOME_PRODUCTS_UNAVAILABLE: 'Some products are not available',
+    COMBO_ADDED: 'Thêm combo vào giỏ hàng thành công',
+    FETCHED: 'Lấy giỏ hàng thành công',
+    ITEM_ADDED: 'Thêm sản phẩm vào giỏ hàng thành công',
+    UPDATED: 'Cập nhật giỏ hàng thành công',
+    ITEM_REMOVED: 'Xóa sản phẩm khỏi giỏ hàng thành công',
+    CLEARED: 'Xóa giỏ hàng thành công',
+    EMPTY: 'Giỏ hàng trống',
+    SOME_PRODUCTS_UNAVAILABLE: 'Một hoặc nhiều sản phẩm không còn khả dụng',
   },
 
   SHOP: {
@@ -73,7 +79,7 @@ const MESSAGES = {
     SUSPENDED: 'Đình chỉ shop thành công',
     RESUBMITTED: 'Nộp lại shop để xét duyệt thành công',
     UNSUSPENDED: 'Gỡ đình chỉ shop thành công',
-    INVITATION_SENT: 'Gửi lời mời tham gia shop thành công',
+    INVITATION_SENT: 'Đã gửi lời mời nhân sự qua email',
     INVITATION_ACCEPTED: 'Chấp nhận lời mời tham gia shop thành công',
     INVITATION_REJECTED: 'Từ chối lời mời tham gia shop thành công',
     INVITATION_CANCELLED: 'Hủy lời mời tham gia shop thành công',
@@ -158,6 +164,6 @@ const MESSAGES = {
     UPDATED: 'Cập nhật danh mục thành công',
     DELETED: 'Xóa danh mục thành công',
   },
-};
+}
 
-export default MESSAGES;
+export default MESSAGES

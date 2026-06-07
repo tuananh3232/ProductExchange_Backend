@@ -51,7 +51,7 @@ export default router
  *                 example: 1
  *               shippingAddress:
  *                 type: object
- *                 description: Nếu không cung cấp, API sẽ dùng địa chỉ trong profile của người mua (nếu có)
+ *                 description: Nếu không cung cấp, API sẽ dùng địa chỉ trong hồ sơ của người mua (nếu có)
  *                 properties:
  *                   province:
  *                     type: string

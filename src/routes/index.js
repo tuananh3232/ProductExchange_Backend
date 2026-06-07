@@ -22,7 +22,7 @@ router.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
     status: 'ok',
-    message: 'API is running',
+    message: 'API đang hoạt động',
     timestamp: new Date().toISOString()
   })
 })

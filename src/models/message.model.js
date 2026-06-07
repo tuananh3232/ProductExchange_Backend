@@ -71,7 +71,7 @@ const messageSchema = new mongoose.Schema(
     content: {
       type: String,
       default: '',
-      maxlength: [5000, 'Message content must not exceed 5000 characters'],
+      maxlength: [5000, 'Nội dung tin nhắn không được vượt quá 5000 ký tự'],
     },
     messageType: {
       type: String,

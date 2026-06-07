@@ -11,34 +11,34 @@ const productSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, 'Product title is required'],
+      required: [true, 'Tên sản phẩm là bắt buộc'],
       trim: true,
-      maxlength: [200, 'Title must not exceed 200 characters'],
+      maxlength: [200, 'Tên sản phẩm không được vượt quá 200 ký tự'],
     },
     description: {
       type: String,
-      required: [true, 'Description is required'],
-      maxlength: [3000, 'Description must not exceed 3000 characters'],
+      required: [true, 'Mô tả là bắt buộc'],
+      maxlength: [3000, 'Mô tả không được vượt quá 3000 ký tự'],
     },
     price: {
       type: Number,
-      required: [true, 'Price is required'],
-      min: [0, 'Price must be a positive number'],
+      required: [true, 'Giá là bắt buộc'],
+      min: [0, 'Giá phải là số không âm'],
     },
     stock: {
       type: Number,
       default: 1,
-      min: [0, 'Stock must not be negative'],
+      min: [0, 'Tồn kho không được là số âm'],
     },
     listingType: {
       type: String,
       enum: ['sell'],
-      required: [true, 'Listing type is required'],
+      required: [true, 'Loại đăng bán là bắt buộc'],
     },
     condition: {
       type: String,
       enum: ['new', 'like_new', 'good', 'fair', 'poor'],
-      required: [true, 'Condition is required'],
+      required: [true, 'Tình trạng sản phẩm là bắt buộc'],
     },
     images: [
       {
@@ -49,12 +49,12 @@ const productSchema = new mongoose.Schema(
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: [true, 'Category is required'],
+      required: [true, 'Danh mục là bắt buộc'],
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Owner is required'],
+      required: [true, 'Chủ sở hữu là bắt buộc'],
     },
     ownerType: {
       type: String,
@@ -103,13 +103,13 @@ productSchema.pre('validate', function () {
   }
 
   if (this.ownerType === PRODUCT_OWNER_TYPES.SHOP) {
-    if (!this.shop) this.invalidate('shop', 'Shop product requires shop')
-    if (this.seller) this.invalidate('seller', 'Shop product cannot have seller')
+    if (!this.shop) this.invalidate('shop', 'Sản phẩm shop bắt buộc phải có shop')
+    if (this.seller) this.invalidate('seller', 'Sản phẩm shop không được gắn seller')
   }
 
   if (this.ownerType === PRODUCT_OWNER_TYPES.SELLER) {
-    if (!this.seller) this.invalidate('seller', 'Seller product requires seller')
-    if (this.shop) this.invalidate('shop', 'Seller product cannot have shop')
+    if (!this.seller) this.invalidate('seller', 'Sản phẩm seller bắt buộc phải có seller')
+    if (this.shop) this.invalidate('shop', 'Sản phẩm seller không được gắn shop')
   }
 })
 

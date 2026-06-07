@@ -7,14 +7,14 @@ import Joi from 'joi'
  */
 export const paginationQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1).messages({
-    'number.base': 'page must be a number',
-    'number.min': 'page must be at least 1',
-    'number.integer': 'page must be an integer',
+    'number.base': 'page phải là một số',
+    'number.min': 'page phải lớn hơn hoặc bằng 1',
+    'number.integer': 'page phải là số nguyên',
   }),
   limit: Joi.number().integer().min(1).max(100).default(10).messages({
-    'number.base': 'limit must be a number',
-    'number.min': 'limit must be at least 1',
-    'number.max': 'limit must not exceed 100',
+    'number.base': 'limit phải là một số',
+    'number.min': 'limit phải lớn hơn hoặc bằng 1',
+    'number.max': 'limit không được vượt quá 100',
   }),
   sortBy: Joi.string().trim().max(50),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
@@ -25,16 +25,16 @@ const objectIdPattern = /^[a-f\d]{24}$/i
 export const productQuerySchema = paginationQuerySchema.keys({
   search: Joi.string().trim().max(200),
   category: Joi.string().pattern(objectIdPattern).messages({
-    'string.pattern.base': 'category must be a valid MongoDB ObjectId',
+    'string.pattern.base': 'category phải là MongoDB ObjectId hợp lệ',
   }),
   shop: Joi.string().pattern(objectIdPattern).messages({
-    'string.pattern.base': 'shop must be a valid MongoDB ObjectId',
+    'string.pattern.base': 'shop phải là MongoDB ObjectId hợp lệ',
   }),
   shopId: Joi.string().pattern(objectIdPattern).messages({
-    'string.pattern.base': 'shopId must be a valid MongoDB ObjectId',
+    'string.pattern.base': 'shopId phải là MongoDB ObjectId hợp lệ',
   }),
   sellerId: Joi.string().pattern(objectIdPattern).messages({
-    'string.pattern.base': 'sellerId must be a valid MongoDB ObjectId',
+    'string.pattern.base': 'sellerId phải là MongoDB ObjectId hợp lệ',
   }),
   ownerType: Joi.string().valid('SHOP', 'SELLER'),
   minPrice: Joi.number().min(0),

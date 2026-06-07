@@ -18,16 +18,16 @@ const router = Router()
  * @swagger
  * tags:
  *   - name: Products
- *     description: API duyệt và tìm kiếm sản phẩm public
+ *     description: API duyệt và tìm kiếm sản phẩm công khai
  *   - name: Product Management
- *     description: API tạo, cập nhật, xóa sản phẩm shop và sản phẩm cá nhân seller
+ *     description: API tạo, cập nhật, xóa sản phẩm shop và sản phẩm cá nhân của người bán
  */
 
 /**
  * @swagger
  * /products:
  *   get:
- *     summary: Lấy danh sách sản phẩm public
+ *     summary: Lấy danh sách sản phẩm công khai
  *     tags: [Products]
  *     security: []
  *     parameters:
@@ -174,7 +174,7 @@ router.post(
  * @swagger
  * /products/{id}:
  *   get:
- *     summary: Lấy chi tiết sản phẩm public
+ *     summary: Lấy chi tiết sản phẩm công khai
  *     tags: [Products]
  *     security: []
  *     parameters:

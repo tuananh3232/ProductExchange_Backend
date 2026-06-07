@@ -8,7 +8,7 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js';
 import { INVITATION_STATUS } from '../../constants/status.constant.js';
 import { ROLES } from '../../constants/role.constant.js';
 import { env } from '../../configs/env.config.js';
-import { sendStaffInvitationEmail } from '../../utils/mail.util.js';
+import { sendShopStaffInvitationEmail } from '../../utils/mail.util.js';
 import { notifySafely } from '../notification/notification.service.js';
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js';
 
@@ -40,12 +40,12 @@ const notifyStaffInvitation = async ({ invitation, shop, invitee, inviterContext
       shopId: shop._id.toString(),
     });
 
-    await sendStaffInvitationEmail({
+    await sendShopStaffInvitationEmail({
       to: invitee.email,
-      name: invitee.name,
+      memberName: invitee.name || invitee.email,
       shopName: shop.name,
-      inviterName: inviterContext?.name || shop.owner?.name || '',
-      invitationUrl,
+      ownerName: inviterContext?.name || inviterContext?.email || shop.owner?.name || shop.owner?.email || '',
+      invitationLink: invitationUrl,
     });
   } catch (error) {
     console.warn('Failed to send staff invitation email:', error.message);
@@ -67,7 +67,7 @@ const ensureStaffInviteeRole = (user) => {
 /**
  * Send invitation to user to join shop as staff
  */
-export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permissions = []) => {
+export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permissions = [], role = 'STAFF') => {
   // Verify shop exists and inviter has access
   const shop = await shopRepo.findById(shopId);
   if (!shop || !shop.isActive) {
@@ -78,26 +78,26 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
   const userId = inviterContext?._id?.toString();
   const ownerId = shop.owner?._id?.toString() || shop.owner?.toString();
   
-  if (userId !== ownerId && !new Set(inviterContext?.roles || []).has(ROLES.ADMIN)) {
+  if (userId !== ownerId) {
     throw new AppError('Chỉ chủ shop có thể gửi lời mời', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN);
   }
 
   const email = normalizeEmail(inviteeEmail);
   if (!email) {
-    throw new AppError('Email is required', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED);
+    throw new AppError('Email là bắt buộc', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED);
   }
 
   if (!EMAIL_PATTERN.test(email)) {
-    throw new AppError('Invalid email', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT);
+    throw new AppError('Email không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT);
   }
 
   // Verify invitee exists
   const invitee = await User.findOne({ email });
   if (!invitee) {
-    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND);
+    throw new AppError('Không tìm thấy người dùng với email này', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND);
   }
   if (!invitee.isActive) {
-    throw new AppError('Account is inactive', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE);
+    throw new AppError('Tài khoản đã bị vô hiệu hóa', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE);
   }
   const inviteeIdString = invitee._id.toString();
 
@@ -119,7 +119,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
   );
 
   if (isAlreadyStaff) {
-    throw new AppError('Người dùng đã là nhân viên của shop', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.ALREADY_STAFF);
+    throw new AppError('Người dùng đã là nhân viên của shop', HTTP_STATUS.CONFLICT, ERRORS.SHOP.ALREADY_STAFF);
   }
 
   // Check for active pending invitation
@@ -131,7 +131,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
   });
 
   if (existingInvitation) {
-    throw new AppError('Đã có lời mời chưa được xử lý từ trước', HTTP_STATUS.CONFLICT, ERRORS.SHOP.INVITATION_NOT_FOUND);
+    throw new AppError('Đã có lời mời chưa được xử lý từ trước', HTTP_STATUS.CONFLICT, ERRORS.SHOP.PENDING_INVITATION_EXISTS);
   }
 
   // Create invitation
@@ -139,7 +139,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     shop: shopId,
     invitee: invitee._id,
     inviter: inviterContext._id,
-    role: 'STAFF',
+    role,
     permissions: permissions.length > 0 ? permissions : [],
     status: INVITATION_STATUS.PENDING,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
@@ -150,8 +150,8 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     recipient: invitee._id,
     sender: inviterContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_INVITED,
-    title: 'Loi moi tham gia shop',
-    message: `Ban duoc moi tham gia shop ${shop.name}`,
+    title: 'Lời mời tham gia shop',
+    message: `Bạn được mời tham gia shop ${shop.name}`,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
     actionUrl: `/shops/${shop._id}/invitations`,
@@ -239,8 +239,8 @@ export const acceptInvitation = async (invitationId, userContext) => {
     recipient: shop.owner?._id || shop.owner,
     sender: userContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_ACCEPTED,
-    title: 'Staff da chap nhan loi moi',
-    message: 'Loi moi tham gia shop da duoc chap nhan',
+    title: 'Nhân viên đã chấp nhận lời mời',
+    message: 'Lời mời tham gia shop đã được chấp nhận',
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
     actionUrl: `/shops/${shop._id}/staff`,
