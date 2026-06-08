@@ -32,26 +32,6 @@ export const listConversationsQuerySchema = Joi.object({
   }),
 })
 
-export const sendMessageSchema = Joi.object({
-  conversationId: objectId.required(),
-  content: Joi.string().trim().max(5000).allow('').default(''),
-  messageType: Joi.string()
-    .valid(...MESSAGE_TYPE_ENUM)
-    .default('TEXT'),
-  attachments: Joi.array().items(attachmentSchema).default([]),
-})
-  .or('content', 'attachments')
-  .custom((value, helpers) => {
-    const hasContent = typeof value.content === 'string' && value.content.trim().length > 0
-    const hasAttachments = Array.isArray(value.attachments) && value.attachments.length > 0
-
-    if (!hasContent && !hasAttachments) {
-      return helpers.error('any.required')
-    }
-
-    return value
-  }, 'non-empty message validation')
-
 export const sendConversationMessageSchema = Joi.object({
   content: Joi.string().trim().max(5000).allow('').default(''),
   messageType: Joi.string()

@@ -1,6 +1,7 @@
 import { Server } from 'socket.io'
 import { verifyAccessToken } from '../providers/jwt.provider.js'
 import User from '../models/user.model.js'
+import { MESSAGE_ACTOR_TYPES } from '../models/message.model.js'
 import * as conversationService from '../services/conversation/conversation.service.js'
 import { corsOptions } from '../configs/cors.config.js'
 import ERRORS from '../constants/error.constant.js'
@@ -101,7 +102,7 @@ export const initChatSocket = (httpServer) => {
       }
     })
 
-    socket.on('typing_start', async ({ conversationId, actingAs = 'USER', shopId = null } = {}) => {
+    socket.on('typing_start', async ({ conversationId, actingAs = MESSAGE_ACTOR_TYPES.USER, shopId = null } = {}) => {
       try {
         const conversation = await conversationService.assertConversationAccess(socket.user, conversationId)
         const actor = await conversationService.assertConversationActorAccess(socket.user, conversation, { actingAs, shopId })
@@ -122,7 +123,7 @@ export const initChatSocket = (httpServer) => {
       }
     })
 
-    socket.on('typing_stop', async ({ conversationId, actingAs = 'USER', shopId = null } = {}) => {
+    socket.on('typing_stop', async ({ conversationId, actingAs = MESSAGE_ACTOR_TYPES.USER, shopId = null } = {}) => {
       try {
         const conversation = await conversationService.assertConversationAccess(socket.user, conversationId)
         const actor = await conversationService.assertConversationActorAccess(socket.user, conversation, { actingAs, shopId })

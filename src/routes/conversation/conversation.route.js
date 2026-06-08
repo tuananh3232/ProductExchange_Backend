@@ -65,6 +65,23 @@ export default router
  *           oneOf:
  *             - type: string
  *             - $ref: '#/components/schemas/User'
+ *         senderType:
+ *           type: string
+ *           enum: [USER, SHOP]
+ *           example: USER
+ *           description: USER = gửi với tư cách cá nhân; SHOP = gửi với tư cách shop
+ *         senderUserId:
+ *           oneOf:
+ *             - type: string
+ *             - $ref: '#/components/schemas/User'
+ *           nullable: true
+ *           description: User thực sự gửi tin nhắn
+ *         senderShopId:
+ *           oneOf:
+ *             - type: string
+ *             - $ref: '#/components/schemas/Shop'
+ *           nullable: true
+ *           description: Shop actor (chỉ có khi senderType=SHOP)
  *         content:
  *           type: string
  *           example: Xin chào
@@ -341,10 +358,20 @@ export default router
  *                 items:
  *                   $ref: '#/components/schemas/ChatAttachment'
  *                 default: []
+ *               actingAs:
+ *                 type: string
+ *                 enum: [USER, SHOP]
+ *                 default: USER
+ *                 description: USER = gửi với tư cách cá nhân; SHOP = gửi với tư cách shop (yêu cầu shopId)
+ *               shopId:
+ *                 type: string
+ *                 description: Bắt buộc khi actingAs=SHOP. Phải khớp với shopId của conversation.
+ *                 example: 665f1f77bcf86cd799439022
  *           example:
  *             content: Xin chào sốp, sốp có bán người yêu cho mình không?
  *             messageType: TEXT
  *             attachments: []
+ *             actingAs: USER
  *     responses:
  *       201:
  *         description: Message sent successfully
