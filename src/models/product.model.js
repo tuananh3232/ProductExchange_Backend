@@ -113,6 +113,13 @@ const productSchema = new mongoose.Schema(
         url: { type: String, default: null },
         publicId: { type: String, default: null },
       },
+      cutoutPreview: {
+        url: { type: String, default: null },
+        publicId: { type: String, default: null },
+        widthPx: { type: Number, default: null },
+        heightPx: { type: Number, default: null },
+        provider: { type: String, enum: ['manual', 'remove_bg'], default: null },
+      },
       cutouts: [
         {
           view: {

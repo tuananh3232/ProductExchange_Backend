@@ -45,26 +45,48 @@ export const uploadSourceImage = async (productId, buffer, requestingUser) => {
   return product.save()
 }
 
-export const uploadCutout = async (productId, buffer, { view = 'front', provider = 'manual' } = {}, requestingUser) => {
+
+export const previewCutout = async (productId, buffer, { provider = 'remove_bg' } = {}, requestingUser) => {
   const product = await _assertShopOwner(productId, requestingUser)
 
-  let cutoutBuffer = buffer
-  if (provider !== 'manual') {
-    const bgResult = await removeBackground({ buffer, provider })
-    cutoutBuffer = bgResult.buffer
+  const bgResult = await removeBackground({ buffer, provider })
+
+  // Xóa preview cũ của product này nếu có (tránh orphaned assets)
+  if (product.visualAssets?.cutoutPreview?.publicId) {
+    await deleteImage(product.visualAssets.cutoutPreview.publicId)
   }
 
-  const result = await uploadBuffer(cutoutBuffer, 'products/cutouts', { format: 'png' })
+  const result = await uploadBuffer(bgResult.buffer, 'products/cutouts-preview', { format: 'png' })
+
+  product.visualAssets.cutoutPreview = { url: result.url, publicId: result.publicId, widthPx: result.width, heightPx: result.height, provider }
+  await product.save()
+
+  return { previewUrl: result.url, tempPublicId: result.publicId, widthPx: result.width, heightPx: result.height }
+}
+
+export const confirmCutout = async (productId, { tempPublicId, view = 'front', widthCm, heightCm, depthCm } = {}, requestingUser) => {
+  const product = await _assertShopOwner(productId, requestingUser)
+
+  const preview = product.visualAssets?.cutoutPreview
+  if (!preview?.publicId || preview.publicId !== tempPublicId) {
+    throw new AppError('tempPublicId không khớp với preview hiện tại của sản phẩm', HTTP_STATUS.BAD_REQUEST, 'INVALID_TEMP_PUBLIC_ID')
+  }
 
   product.visualAssets.cutouts.push({
     view,
-    url: result.url,
-    publicId: result.publicId,
-    widthPx: result.width,
-    heightPx: result.height,
+    url: preview.url,
+    publicId: preview.publicId,
+    widthPx: preview.widthPx,
+    heightPx: preview.heightPx,
     status: 'ready',
-    provider,
+    provider: preview.provider,
   })
+
+  product.visualAssets.cutoutPreview = { url: null, publicId: null, widthPx: null, heightPx: null, provider: null }
+
+  if (widthCm) product.dimensions.widthCm = widthCm
+  if (heightCm) product.dimensions.heightCm = heightCm
+  if (depthCm !== undefined) product.dimensions.depthCm = depthCm
 
   product.visualProfile.isVisualizerReady = _computeIsReady(product)
   return product.save()

@@ -16,6 +16,7 @@ export const removeBackground = async ({ buffer, provider = DEFAULT_PROVIDER }) 
     case 'remove_bg':
       return _removeWithRemoveBg(buffer)
 
+    case 'clipdrop':
     default:
       throw new AppError(
         `Provider "${provider}" không được hỗ trợ`,

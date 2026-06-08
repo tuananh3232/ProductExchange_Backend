@@ -12,7 +12,15 @@ export const updateVisualProfileSchema = Joi.object({
   }).optional(),
 })
 
-export const createCutoutSchema = Joi.object({
+
+export const previewCutoutSchema = Joi.object({
+  provider: Joi.string().valid('manual', 'remove_bg').default('remove_bg'),
+})
+
+export const confirmCutoutSchema = Joi.object({
+  tempPublicId: Joi.string().required(),
   view: Joi.string().valid('front', 'left_angle', 'right_angle', 'back').default('front'),
-  provider: Joi.string().valid('manual', 'remove_bg', 'clipdrop').default('manual'),
+  widthCm: Joi.number().min(1).max(2000).required(),
+  heightCm: Joi.number().min(1).max(2000).required(),
+  depthCm: Joi.number().min(0).max(2000).optional(),
 })

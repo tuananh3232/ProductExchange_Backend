@@ -11,7 +11,8 @@ import {
 } from '../../validations/product/product.validation.js'
 import {
   updateVisualProfileSchema,
-  createCutoutSchema,
+  previewCutoutSchema,
+  confirmCutoutSchema,
 } from '../../validations/product/product-visual.validation.js'
 import { uploadProductImages, uploadProductVisualImage, parseJsonFields } from '../../middlewares/upload.middleware.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
@@ -435,6 +436,112 @@ router.delete(
  *       200:
  *         description: Cập nhật visual profile thành công
  */
+/**
+ * @swagger
+ * /products/{id}/visual-assets/cutout/preview:
+ *   post:
+ *     summary: Tách nền ảnh và trả về preview (chưa lưu vào sản phẩm)
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [image]
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *               provider:
+ *                 type: string
+ *                 enum: [manual, remove_bg]
+ *                 default: remove_bg
+ *     responses:
+ *       200:
+ *         description: Preview tách nền thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 previewUrl:
+ *                   type: string
+ *                 tempPublicId:
+ *                   type: string
+ *                 widthPx:
+ *                   type: integer
+ *                 heightPx:
+ *                   type: integer
+ *
+ * /products/{id}/visual-assets/cutout/confirm:
+ *   post:
+ *     summary: Xác nhận cutout preview và lưu vào sản phẩm (kèm kích thước thực)
+ *     tags: [Product Management]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tempPublicId, widthCm, heightCm]
+ *             properties:
+ *               tempPublicId:
+ *                 type: string
+ *                 description: publicId trả về từ API preview
+ *               view:
+ *                 type: string
+ *                 enum: [front, left_angle, right_angle, back]
+ *                 default: front
+ *               widthCm:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 2000
+ *               heightCm:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 2000
+ *               depthCm:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 2000
+ *     responses:
+ *       200:
+ *         description: Xác nhận cutout thành công, isVisualizerReady được tính lại
+ */
+router.post(
+  '/:id/visual-assets/cutout/preview',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  uploadProductVisualImage,
+  validate(previewCutoutSchema),
+  productVisualController.previewCutout
+)
+router.post(
+  '/:id/visual-assets/cutout/confirm',
+  authenticate,
+  validateObjectId('id'),
+  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
+  requireShopOwnerProductVisual,
+  validate(confirmCutoutSchema),
+  productVisualController.confirmCutout
+)
 router.post(
   '/:id/visual-assets/source',
   authenticate,
@@ -443,16 +550,6 @@ router.post(
   requireShopOwnerProductVisual,
   uploadProductVisualImage,
   productVisualController.uploadSource
-)
-router.post(
-  '/:id/visual-assets/cutout',
-  authenticate,
-  validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
-  uploadProductVisualImage,
-  validate(createCutoutSchema),
-  productVisualController.uploadCutout
 )
 router.patch(
   '/:id/visual-profile',
