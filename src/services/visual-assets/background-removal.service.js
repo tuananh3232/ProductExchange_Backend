@@ -16,9 +16,6 @@ export const removeBackground = async ({ buffer, provider = DEFAULT_PROVIDER }) 
     case 'remove_bg':
       return _removeWithRemoveBg(buffer)
 
-    case 'clipdrop':
-      return _removeWithClipdrop(buffer)
-
     default:
       throw new AppError(
         `Provider "${provider}" không được hỗ trợ`,
@@ -50,36 +47,6 @@ const _removeWithRemoveBg = async (buffer) => {
     const errText = await response.text()
     throw new AppError(
       `remove.bg lỗi: ${errText}`,
-      HTTP_STATUS.BAD_GATEWAY,
-      'BG_REMOVAL_FAILED'
-    )
-  }
-
-  const resultBuffer = Buffer.from(await response.arrayBuffer())
-  return { buffer: resultBuffer, mimeType: 'image/png' }
-}
-
-const _removeWithClipdrop = async (buffer) => {
-  const apiKey = process.env.CLIPDROP_API_KEY
-  if (!apiKey) {
-    throw new AppError('CLIPDROP_API_KEY chưa được cấu hình', HTTP_STATUS.SERVICE_UNAVAILABLE, 'PROVIDER_NOT_CONFIGURED')
-  }
-
-  const FormData = (await import('form-data')).default
-  const form = new FormData()
-  form.append('image_file', buffer, { filename: 'source.jpg', contentType: 'image/jpeg' })
-
-  const fetch = (await import('node-fetch')).default
-  const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, ...form.getHeaders() },
-    body: form,
-  })
-
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new AppError(
-      `Clipdrop lỗi: ${errText}`,
       HTTP_STATUS.BAD_GATEWAY,
       'BG_REMOVAL_FAILED'
     )

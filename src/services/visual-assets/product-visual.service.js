@@ -11,6 +11,8 @@ const _assertShopOwner = async (productId, requestingUser) => {
     throw new AppError('Sản phẩm không tồn tại', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND')
   }
 
+  if (requestingUser.roles?.includes('admin')) return product
+
   if (!product.shop) {
     throw new AppError('Sản phẩm không thuộc shop nào', HTTP_STATUS.BAD_REQUEST, 'PRODUCT_NO_SHOP')
   }

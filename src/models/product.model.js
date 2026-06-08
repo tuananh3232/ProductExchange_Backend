@@ -130,7 +130,7 @@ const productSchema = new mongoose.Schema(
           },
           provider: {
             type: String,
-            enum: ['manual', 'cloudinary', 'remove_bg', 'clipdrop', 'internal'],
+            enum: ['manual', 'remove_bg'],
             default: 'manual',
           },
         },
