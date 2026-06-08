@@ -16,6 +16,8 @@ import notificationRoutes from './notification/notification.route.js'
 import comboRoutes from './combo/combo.route.js'
 import cartRoutes from './cart/cart.route.js'
 import roomProjectRoutes from './room-visualizer/room-project.route.js'
+import kycOptionsRoutes from './options/kyc.route.js'
+import withdrawalOptionsRoutes from './options/withdrawal.route.js'
 
 const router = Router()
 
@@ -45,5 +47,7 @@ router.use('/notifications', notificationRoutes)
 router.use('/combos', comboRoutes)
 router.use('/cart', cartRoutes)
 router.use('/room-projects', roomProjectRoutes)
+router.use('/kyc', kycOptionsRoutes)
+router.use('/withdrawals', withdrawalOptionsRoutes)
 
 export default router

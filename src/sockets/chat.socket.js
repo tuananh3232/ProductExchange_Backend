@@ -101,32 +101,42 @@ export const initChatSocket = (httpServer) => {
       }
     })
 
-    socket.on('typing_start', async ({ conversationId } = {}) => {
+    socket.on('typing_start', async ({ conversationId, actingAs = 'USER', shopId = null } = {}) => {
       try {
-        await conversationService.assertConversationAccess(socket.user, conversationId)
+        const conversation = await conversationService.assertConversationAccess(socket.user, conversationId)
+        const actor = await conversationService.assertConversationActorAccess(socket.user, conversation, { actingAs, shopId })
         socket.to(conversationRoom(conversationId)).emit('typing_start', {
           conversationId,
           userId: socket.user._id,
+          actingAs: actor.senderType,
+          shopId: actor.senderShopId,
         })
         socket.to(conversationRoom(conversationId)).emit('user_typing', {
           conversationId,
           userId: socket.user._id,
+          actingAs: actor.senderType,
+          shopId: actor.senderShopId,
         })
       } catch {
         // Ignore unauthorized typing hints.
       }
     })
 
-    socket.on('typing_stop', async ({ conversationId } = {}) => {
+    socket.on('typing_stop', async ({ conversationId, actingAs = 'USER', shopId = null } = {}) => {
       try {
-        await conversationService.assertConversationAccess(socket.user, conversationId)
+        const conversation = await conversationService.assertConversationAccess(socket.user, conversationId)
+        const actor = await conversationService.assertConversationActorAccess(socket.user, conversation, { actingAs, shopId })
         socket.to(conversationRoom(conversationId)).emit('typing_stop', {
           conversationId,
           userId: socket.user._id,
+          actingAs: actor.senderType,
+          shopId: actor.senderShopId,
         })
         socket.to(conversationRoom(conversationId)).emit('user_stop_typing', {
           conversationId,
           userId: socket.user._id,
+          actingAs: actor.senderType,
+          shopId: actor.senderShopId,
         })
       } catch {
         // Ignore unauthorized typing hints.

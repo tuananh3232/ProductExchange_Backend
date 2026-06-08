@@ -1,10 +1,13 @@
 import { Router } from 'express'
 import * as paymentController from '../../controllers/payment/payment.controller.js'
+import * as optionsController from '../../controllers/options/options.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import Joi from 'joi'
 
 const router = Router()
+
+router.get('/options', optionsController.getPaymentOptions)
 
 /**
  * @swagger

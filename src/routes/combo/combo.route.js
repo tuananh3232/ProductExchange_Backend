@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as comboController from '../../controllers/combo/combo.controller.js'
+import * as optionsController from '../../controllers/options/options.controller.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { alternativesSchema, generateCombosSchema } from '../../validations/combo/combo.validation.js'
 
@@ -69,6 +70,7 @@ const router = Router()
  *       422:
  *         description: Validation error
  */
+router.get('/options', optionsController.getComboOptions)
 router.post('/generate', validate(generateCombosSchema), comboController.generateCombos)
 router.get('/alternatives', validate(alternativesSchema, 'query'), comboController.getAlternatives)
 

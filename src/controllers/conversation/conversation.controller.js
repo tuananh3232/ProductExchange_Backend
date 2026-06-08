@@ -26,7 +26,7 @@ export const createShopConversation = asyncHandler(async (req, res) => {
 
 export const getConversations = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
-  const { conversations, meta } = await conversationService.getConversations(req.user, pagination)
+  const { conversations, meta } = await conversationService.getConversations(req.user, pagination, req.query)
   sendSuccess(res, {
     message: MESSAGES.CONVERSATION.FETCHED,
     data: { conversations },
@@ -50,6 +50,8 @@ export const sendMessage = asyncHandler(async (req, res) => {
     content: req.body.content,
     messageType: req.body.messageType,
     attachments: req.body.attachments,
+    actingAs: req.body.actingAs,
+    shopId: req.body.shopId,
   })
 
   emitNewMessageToConversation(req.params.id, message)

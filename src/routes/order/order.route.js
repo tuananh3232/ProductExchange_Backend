@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as orderController from '../../controllers/order/order.controller.js'
+import * as optionsController from '../../controllers/options/options.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import {
@@ -11,6 +12,7 @@ const router = Router()
 
 router.use(authenticate)
 
+router.get('/filter-options', optionsController.getOrderFilterOptions)
 router.post('/', validate(createOrderSchema), orderController.createOrder)
 router.get('/', orderController.getOrders)
 router.get('/:id', orderController.getOrderById)

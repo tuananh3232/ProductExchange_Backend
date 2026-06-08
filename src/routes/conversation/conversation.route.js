@@ -6,6 +6,7 @@ import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
   createDirectConversationSchema,
   createShopConversationSchema,
+  listConversationsQuerySchema,
   sendConversationMessageSchema,
 } from '../../validations/conversation/conversation.validation.js'
 
@@ -15,7 +16,7 @@ router.use(authenticate)
 
 router.post('/direct', validate(createDirectConversationSchema), conversationController.createDirectConversation)
 router.post('/shop', validate(createShopConversationSchema), conversationController.createShopConversation)
-router.get('/', conversationController.getConversations)
+router.get('/', validate(listConversationsQuerySchema, 'query'), conversationController.getConversations)
 router.get('/:id/messages', validateObjectId('id'), conversationController.getMessages)
 router.post(
   '/:id/messages',

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { MESSAGE_ACTOR_TYPE_ENUM, MESSAGE_ACTOR_TYPES } from './message.model.js'
 
 export const CONVERSATION_TYPES = {
   DIRECT: 'DIRECT',
@@ -19,6 +20,21 @@ const lastMessageSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    senderType: {
+      type: String,
+      enum: MESSAGE_ACTOR_TYPE_ENUM,
+      default: MESSAGE_ACTOR_TYPES.USER,
+    },
+    senderUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    senderShopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shop',
+      default: null,
+    },
     content: {
       type: String,
       default: '',
@@ -28,6 +44,10 @@ const lastMessageSchema = new mongoose.Schema(
       default: 'TEXT',
     },
     sentAt: {
+      type: Date,
+      default: null,
+    },
+    createdAt: {
       type: Date,
       default: null,
     },
