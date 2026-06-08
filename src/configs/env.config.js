@@ -111,6 +111,8 @@ export const env = {
       cancelUrl: process.env.PAYOS_CANCEL_URL || `${appUrl}${apiPrefix}/payments/payos/cancel`,
       topupReturnUrl: process.env.PAYOS_TOPUP_RETURN_URL || `${appUrl}${apiPrefix}/payments/payos/topup/return`,
       topupCancelUrl: process.env.PAYOS_TOPUP_CANCEL_URL || `${appUrl}${apiPrefix}/payments/payos/topup/cancel`,
+      subReturnUrl: process.env.PAYOS_SUB_RETURN_URL || `${appUrl}${apiPrefix}/subscriptions/payos/return`,
+      subCancelUrl: process.env.PAYOS_SUB_CANCEL_URL || `${appUrl}${apiPrefix}/subscriptions/payos/cancel`,
     },
   },
 };
