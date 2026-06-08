@@ -20,6 +20,25 @@ const PRODUCT_STATUS_TRANSITIONS = {
   sold: [],
 }
 
+const normalizeImages = (images = []) => {
+  const hasPrimary = images.some((image) => image?.isPrimary)
+  return images.map((image, index) => ({
+    ...image,
+    isPrimary: hasPrimary ? Boolean(image.isPrimary) : index === 0,
+  }))
+}
+
+const normalizeProductSort = (pagination) => {
+  const sortMap = {
+    newest: { sortBy: 'createdAt', sortOrder: -1 },
+    oldest: { sortBy: 'createdAt', sortOrder: 1 },
+    price_asc: { sortBy: 'price', sortOrder: 1 },
+    price_desc: { sortBy: 'price', sortOrder: -1 },
+  }
+
+  return sortMap[pagination.sortBy] ? { ...pagination, ...sortMap[pagination.sortBy] } : pagination
+}
+
 const normalizeQueryId = (value) => {
   if (!value) return null
   if (typeof value === 'string') return value
@@ -227,13 +246,13 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
 
 export const getProducts = async (query, pagination) => {
   const filter = buildFilter(query)
-  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
   return { products, meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
   const filter = buildFilter(query, { publicOnly: false })
-  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
   return { products, meta }
 }
 
@@ -251,7 +270,7 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
     filter.isActive = true
   }
 
-  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
   return { products, meta }
 }
 
@@ -268,7 +287,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
   delete filter.shop
   delete filter.owner
 
-  const { items: products, meta } = await paginate(productRepo, filter, pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
   return { products, meta }
 }
 
@@ -287,7 +306,8 @@ export const createProduct = async (userContext, productData, files = []) => {
   const safeProductData = { ...productData }
   delete safeProductData.ownerType
 
-  const images = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
+  const uploadedImages = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
+  const images = normalizeImages(uploadedImages)
 
   return productRepo.create({
     ...safeProductData,
@@ -310,6 +330,9 @@ export const updateProduct = async (productId, userContext, updateData) => {
       ...(product.location || {}),
       ...updateData.location,
     }
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'images')) {
+    nextUpdateData.images = normalizeImages(updateData.images || [])
   }
 
   return productRepo.updateById(productId, nextUpdateData)
@@ -381,7 +404,11 @@ export const addProductImages = async (productId, userContext, files = []) => {
     throw new AppError('Vui lòng cung cấp ít nhất một ảnh sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.IMAGE_REQUIRED)
   }
 
-  const uploaded = await Promise.all(files.map((file) => uploadBuffer(file.buffer, 'products')))
+  const hasPrimary = (product.images || []).some((image) => image.isPrimary)
+  const uploaded = (await Promise.all(files.map((file) => uploadBuffer(file.buffer, 'products')))).map((image, index) => ({
+    ...image,
+    isPrimary: !hasPrimary && index === 0,
+  }))
 
   return productRepo.updateById(productId, {
     $push: { images: { $each: uploaded } },
@@ -403,7 +430,13 @@ export const removeProductImage = async (productId, userContext, publicId) => {
 
   await deleteImage(publicId)
 
-  return productRepo.updateById(productId, {
-    $pull: { images: { publicId } },
-  })
+  const nextImages = normalizeImages((product.images || [])
+    .filter((image) => image.publicId !== publicId)
+    .map((image) => ({
+      url: image.url,
+      publicId: image.publicId,
+      isPrimary: image.isPrimary,
+    })))
+
+  return productRepo.updateById(productId, { images: nextImages })
 }

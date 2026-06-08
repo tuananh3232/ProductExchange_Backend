@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
+import * as optionsController from '../../controllers/options/options.controller.js'
 import * as shopController from '../../controllers/shop/shop.controller.js'
 import * as walletController from '../../controllers/wallet/wallet.controller.js'
 import * as userWalletController from '../../controllers/user-wallet/user-wallet.controller.js'
@@ -90,6 +91,13 @@ router.use('/stats', adminStatsRoutes)
  *       200:
  *         description: Lấy danh sách người dùng thành công
  */
+router.get(
+  '/users/filter-options',
+  authenticate,
+  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  optionsController.getAdminUsersFilterOptions
+)
+
 router.get(
   '/users',
   authenticate,

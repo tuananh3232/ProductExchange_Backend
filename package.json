@@ -14,6 +14,7 @@
     "test:copy-db": "node scripts/test/copy-main-to-test-db.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:coverage:serial": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write src/**/*.js"

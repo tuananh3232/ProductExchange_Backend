@@ -3,6 +3,8 @@ import Message from '../../models/message.model.js'
 const populateMessage = (query) =>
   query
     .populate('senderId', 'name email avatar roles')
+    .populate('senderUserId', 'name email avatar roles')
+    .populate('senderShopId', 'name slug logo')
     .populate('readBy.userId', 'name email avatar')
 
 export const create = (data) => Message.create(data)

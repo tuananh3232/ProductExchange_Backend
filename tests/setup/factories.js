@@ -9,7 +9,7 @@ const uniqueSlug = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString
 
 export const createSampleCategory = (overrides = {}) =>
   Category.create({
-    name: overrides.name || 'Test Decor',
+    name: overrides.name || `Test Decor ${uniqueSlug('category')}`,
     slug: overrides.slug || uniqueSlug('test-decor'),
     ...overrides,
   })

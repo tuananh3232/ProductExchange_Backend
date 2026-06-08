@@ -9,7 +9,7 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { CONVERSATION_TYPES } from '../../models/conversation.model.js'
-import { MESSAGE_TYPES } from '../../models/message.model.js'
+import { MESSAGE_ACTOR_TYPES, MESSAGE_TYPES } from '../../models/message.model.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
@@ -37,6 +37,67 @@ const hasShopChatPermission = (shop, userId) => {
   })
 }
 
+const toPublicUser = (user) => {
+  if (!user) return null
+  return {
+    id: toIdString(user),
+    name: user.name,
+    fullName: user.fullName,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    avatar: user.avatar,
+  }
+}
+
+const toPublicShop = (shop) => {
+  if (!shop) return null
+  return {
+    id: toIdString(shop),
+    name: shop.name,
+    logoUrl: shop.logoUrl,
+    avatarUrl: shop.avatarUrl,
+  }
+}
+
+const normalizeLastMessage = (lastMessage) => {
+  if (!lastMessage) return null
+  return {
+    ...lastMessage,
+    messageId: toIdString(lastMessage.messageId),
+    senderId: toIdString(lastMessage.senderId),
+    senderType: lastMessage.senderType || MESSAGE_ACTOR_TYPES.USER,
+    senderUserId: toIdString(lastMessage.senderUserId || lastMessage.senderId),
+    senderShopId: toIdString(lastMessage.senderShopId),
+  }
+}
+
+const normalizeConversation = (conversation, context = {}, unreadCount = 0) => ({
+  ...conversation,
+  id: toIdString(conversation),
+  _id: conversation._id,
+  shopId: conversation.shopId,
+  customerId: conversation.customerId,
+  participants: conversation.participants,
+  lastMessage: normalizeLastMessage(conversation.lastMessage),
+  context,
+  unreadCount,
+})
+
+const normalizeMessage = (message) => {
+  const senderType = message.senderType || MESSAGE_ACTOR_TYPES.USER
+  return {
+    ...message,
+    id: toIdString(message),
+    conversationId: toIdString(message.conversationId),
+    senderId: toIdString(message.senderId),
+    senderType,
+    senderUserId: toIdString(message.senderUserId || message.senderId),
+    senderShopId: toIdString(message.senderShopId),
+    sender: toPublicUser(message.senderUserId || message.senderId),
+    shopActor: senderType === MESSAGE_ACTOR_TYPES.SHOP ? toPublicShop(message.senderShopId) : null,
+  }
+}
+
 const ensureUserExists = async (userId) => {
   const user = await User.findById(userId).select('_id isActive')
   if (!user || !user.isActive) {
@@ -50,6 +111,22 @@ const ensureShopExists = async (shopId) => {
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
+  return shop
+}
+
+const assertShopChatAccess = async (userContext, shopId) => {
+  if (!shopId) {
+    throw new AppError('shopId is required', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
+  }
+
+  const shop = await ensureShopExists(shopId)
+  if (isAdmin(userContext)) return shop
+
+  const userId = toIdString(userContext?._id)
+  if (!hasShopChatPermission(shop, userId)) {
+    throw new AppError('You do not have permission to chat as this shop', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
   return shop
 }
 
@@ -91,6 +168,50 @@ export const assertConversationAccess = async (userContext, conversationId) => {
   return conversation
 }
 
+export const assertConversationActorAccess = async (
+  userContext,
+  conversation,
+  { actingAs = MESSAGE_ACTOR_TYPES.USER, shopId = null } = {},
+) => {
+  const userId = toIdString(userContext?._id)
+  const actor = actingAs || MESSAGE_ACTOR_TYPES.USER
+
+  if (actor === MESSAGE_ACTOR_TYPES.SHOP) {
+    if (conversation.type !== CONVERSATION_TYPES.SHOP) {
+      throw new AppError('Shop actor is only allowed in shop conversations', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    }
+
+    const conversationShopId = toIdString(conversation.shopId)
+    if (!shopId || conversationShopId !== toIdString(shopId)) {
+      throw new AppError('shopId does not match this conversation', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    }
+
+    await assertShopChatAccess(userContext, conversationShopId)
+    return {
+      senderType: MESSAGE_ACTOR_TYPES.SHOP,
+      senderUserId: userContext._id,
+      senderShopId: conversationShopId,
+    }
+  }
+
+  if (conversation.type === CONVERSATION_TYPES.DIRECT) {
+    const isParticipant = (conversation.participants || []).some((participant) => toIdString(participant) === userId)
+    if (!isParticipant && !isAdmin(userContext)) {
+      throw new AppError('You cannot reply to this direct conversation', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    }
+  }
+
+  if (conversation.type === CONVERSATION_TYPES.SHOP && toIdString(conversation.customerId) !== userId && !isAdmin(userContext)) {
+    throw new AppError('Use actingAs=SHOP to reply from the shop workspace', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  return {
+    senderType: MESSAGE_ACTOR_TYPES.USER,
+    senderUserId: userContext._id,
+    senderShopId: null,
+  }
+}
+
 export const createDirectConversation = async (currentUserId, targetUserId) => {
   if (currentUserId.toString() === targetUserId.toString()) {
     throw new AppError('Không thể tạo cuộc trò chuyện với chính mình', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
@@ -129,31 +250,19 @@ export const createShopConversation = async (customerId, shopId) => {
   return conversationRepo.findById(conversation._id)
 }
 
-export const getConversations = async (userContext, pagination) => {
+export const getConversations = async (userContext, pagination, query = {}) => {
   const userId = toIdString(userContext._id)
   const filter = { isActive: true }
+  const scope = query.scope || 'main'
 
-  if (!isAdmin(userContext)) {
-    const manageableShopIds = await Shop.find({
-      isActive: true,
-      $or: [
-        { owner: userId },
-        {
-          staff: userId,
-          staffPermissions: {
-            $elemMatch: {
-              staffUser: userId,
-              permissions: PERMISSIONS.SHOP_CHAT_MANAGE,
-            },
-          },
-        },
-      ],
-    }).distinct('_id')
-
+  if (scope === 'workspace') {
+    await assertShopChatAccess(userContext, query.shopId)
+    filter.type = CONVERSATION_TYPES.SHOP
+    filter.shopId = query.shopId
+  } else {
     filter.$or = [
       { type: CONVERSATION_TYPES.DIRECT, participants: userId },
       { type: CONVERSATION_TYPES.SHOP, customerId: userId },
-      { type: CONVERSATION_TYPES.SHOP, shopId: { $in: manageableShopIds } },
     ]
   }
 
@@ -162,8 +271,18 @@ export const getConversations = async (userContext, pagination) => {
     conversationRepo.countMany(filter),
   ])
 
+  const unreadCounts = await Promise.all(conversations.map((conversation) => messageRepo.countMany({
+    conversationId: conversation._id,
+    senderId: { $ne: userContext._id },
+    'readBy.userId': { $ne: userContext._id },
+  })))
+
   return {
-    conversations,
+    conversations: conversations.map((conversation, index) => normalizeConversation(conversation, {
+      scope,
+      actingAs: scope === 'workspace' ? MESSAGE_ACTOR_TYPES.SHOP : MESSAGE_ACTOR_TYPES.USER,
+      shopId: scope === 'workspace' ? toIdString(query.shopId) : null,
+    }, unreadCounts[index])),
     meta: buildPaginationMeta(total, pagination.page, pagination.limit),
   }
 }
@@ -178,13 +297,24 @@ export const getMessages = async (userContext, conversationId, pagination) => {
   ])
 
   return {
-    messages: messages.reverse(),
+    messages: messages.reverse().map(normalizeMessage),
     meta: buildPaginationMeta(total, pagination.page, pagination.limit),
   }
 }
 
-export const sendMessage = async (userContext, { conversationId, content = '', messageType = MESSAGE_TYPES.TEXT, attachments = [] }) => {
+export const sendMessage = async (
+  userContext,
+  {
+    conversationId,
+    content = '',
+    messageType = MESSAGE_TYPES.TEXT,
+    attachments = [],
+    actingAs = MESSAGE_ACTOR_TYPES.USER,
+    shopId = null,
+  },
+) => {
   const conversation = await assertConversationAccess(userContext, conversationId)
+  const actor = await assertConversationActorAccess(userContext, conversation, { actingAs, shopId })
 
   const hasContent = typeof content === 'string' && content.trim().length > 0
   if (!hasContent && !attachments.length) {
@@ -192,9 +322,13 @@ export const sendMessage = async (userContext, { conversationId, content = '', m
   }
 
   const now = new Date()
+  const senderShopId = actor.senderShopId ? new mongoose.Types.ObjectId(actor.senderShopId) : null
   const message = await messageRepo.create({
     conversationId,
     senderId: userContext._id,
+    senderType: actor.senderType,
+    senderUserId: actor.senderUserId,
+    senderShopId,
     content: hasContent ? content.trim() : '',
     messageType,
     attachments,
@@ -210,9 +344,13 @@ export const sendMessage = async (userContext, { conversationId, content = '', m
     lastMessage: {
       messageId: message._id,
       senderId: userContext._id,
+      senderType: actor.senderType,
+      senderUserId: actor.senderUserId,
+      senderShopId,
       content: message.content,
       messageType: message.messageType,
       sentAt: message.createdAt || now,
+      createdAt: message.createdAt || now,
     },
     lastMessageAt: message.createdAt || now,
   })
@@ -226,11 +364,14 @@ export const sendMessage = async (userContext, { conversationId, content = '', m
   })
 
   const senderId = toIdString(userContext._id)
-  const recipientIds = conversation.type === CONVERSATION_TYPES.DIRECT
-    ? (conversation.participants || []).map(toIdString).filter((id) => id && id !== senderId)
-    : toIdString(conversation.customerId) === senderId
-      ? [toIdString(conversation.shopId?.owner), ...(conversation.shopId?.staff || []).map(toIdString)]
-      : [toIdString(conversation.customerId)]
+  let recipientIds = []
+  if (conversation.type === CONVERSATION_TYPES.DIRECT) {
+    recipientIds = (conversation.participants || []).map(toIdString).filter((id) => id && id !== senderId)
+  } else if (actor.senderType === MESSAGE_ACTOR_TYPES.SHOP) {
+    recipientIds = [toIdString(conversation.customerId)]
+  } else {
+    recipientIds = [toIdString(conversation.shopId?.owner), ...(conversation.shopId?.staff || []).map(toIdString)]
+  }
 
   const notificationType = messageType === MESSAGE_TYPES.IMAGE
     ? NOTIFICATION_TYPES.CHAT_NEW_IMAGE
@@ -251,10 +392,13 @@ export const sendMessage = async (userContext, { conversationId, content = '', m
       conversationId,
       messageId: message._id,
       senderId: userContext._id,
+      senderType: actor.senderType,
+      senderUserId: actor.senderUserId,
+      senderShopId: actor.senderShopId,
     },
   })))
 
-  return populatedMessage || message
+  return normalizeMessage(populatedMessage || message)
 }
 
 export const markAsRead = async (userContext, conversationId) => {

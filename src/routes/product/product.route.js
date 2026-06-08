@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
 import * as productVisualController from '../../controllers/product/product-visual.controller.js'
+import * as optionsController from '../../controllers/options/options.controller.js'
 import { authenticate, requirePermissions, requireShopOwnerProductVisual } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
@@ -164,6 +165,7 @@ const router = Router()
  *       201:
  *         description: Tạo sản phẩm thành công
  */
+router.get('/filter-options', optionsController.getProductFilterOptions)
 router.get('/', validate(productQuerySchema, 'query'), productController.getProducts)
 router.post(
   '/',

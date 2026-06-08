@@ -44,6 +44,7 @@ export const updateProductSchema = Joi.object({
       Joi.object({
         url: Joi.string().uri().required(),
         publicId: Joi.string().required(),
+        isPrimary: Joi.boolean(),
       })
     )
     .optional(),
@@ -64,6 +65,7 @@ export const addProductImagesSchema = Joi.object({
       Joi.object({
         url: Joi.string().uri().required(),
         publicId: Joi.string().required(),
+        isPrimary: Joi.boolean(),
       })
     )
     .min(1)

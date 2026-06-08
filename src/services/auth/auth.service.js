@@ -206,7 +206,7 @@ export const refreshToken = async (token) => {
   const newRefreshToken = generateRefreshToken(payload)
   await userRepo.saveRefreshToken(user._id, newRefreshToken)
 
-  return { accessToken: newAccessToken, refreshToken: newRefreshToken }
+  return { user: user.toPublicJSON(), accessToken: newAccessToken, refreshToken: newRefreshToken }
 }
 
 export const logout = async (userId) => {

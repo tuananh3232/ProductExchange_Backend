@@ -7,14 +7,14 @@ import User from '../../src/models/user.model.js'
 
 const DEFAULT_PASSWORD = '123456'
 
-export const createToken = (userId, role = ROLES.MEMBER) =>
-  jwt.sign({ userId: userId.toString(), role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn })
+export const createToken = (userId, roles = [ROLES.MEMBER]) =>
+  jwt.sign({ userId: userId.toString(), roles }, env.jwt.secret, { expiresIn: env.jwt.expiresIn })
 
 export const createTestUser = async (overrides = {}) => {
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`
   return User.create({
     name: overrides.name || `Test User ${unique}`,
-    email: overrides.email || `user-${unique}@test.local`,
+    email: overrides.email || `user-${unique}@example.com`,
     password: overrides.password || DEFAULT_PASSWORD,
     roles: overrides.roles || [ROLES.MEMBER],
     isVerified: overrides.isVerified ?? true,
@@ -36,9 +36,27 @@ export const createAndLogin = async (role = ROLES.MEMBER, overrides = {}) => {
     ...overrides,
   })
   const login = await loginUser({ email: user.email, password: overrides.password || DEFAULT_PASSWORD })
-  const token = login.token || createToken(user._id, role)
 
-  return { user, token, loginResponse: login.response }
+  if (login.response.status !== 200) {
+    throw new Error(`Login failed for ${user.email}: ${login.response.status} ${JSON.stringify(login.response.body)}`)
+  }
+
+  if (!login.token) {
+    throw new Error(`Login succeeded for ${user.email} but did not return an access token`)
+  }
+
+  return { user, token: login.token, loginResponse: login.response }
+}
+
+// Use this only when the test does not need to exercise the real login flow.
+// Auth/login tests should use createAndLogin or call the login endpoint directly.
+export const createUserWithToken = async (role = ROLES.MEMBER, overrides = {}) => {
+  const user = await createTestUser({
+    roles: [role],
+    ...overrides,
+  })
+
+  return { user, token: createToken(user._id, user.roles || [role]) }
 }
 
 export const loginAdmin = (overrides = {}) => createAndLogin(ROLES.ADMIN, overrides)
