@@ -50,6 +50,11 @@ const MESSAGES = {
   CART: {
     COMBO_ADDED: 'Combo added to cart successfully',
     SOME_PRODUCTS_UNAVAILABLE: 'Some products are not available',
+    FETCHED: 'Cart fetched successfully',
+    ITEM_UPDATED: 'Cart item updated successfully',
+    ITEM_REMOVED: 'Cart item removed successfully',
+    CLEARED: 'Cart cleared successfully',
+    CHECKOUT_CREATED: 'Cart checkout created successfully',
   },
 
   SHOP: {

@@ -9,22 +9,14 @@ export const getMe = asyncHandler(async (req, res) => {
   sendSuccess(res, {
     message: MESSAGES.AUTH.PROFILE_FETCHED,
     data: {
-      user: {
-        name: user.name,
-        phone: user.phone || '',
-        address: {
-          province: user.address?.province || '',
-          district: user.address?.district || '',
-          detail: user.address?.detail || '',
-        },
-      },
+      user: toUserResponse(user),
     },
   })
 })
 
 export const updateProfile = asyncHandler(async (req, res) => {
-  await authService.updateProfile(req.user._id, req.body)
-  sendSuccess(res, { message: MESSAGES.AUTH.PROFILE_UPDATED })
+  const user = await authService.updateProfile(req.user._id, req.body)
+  sendSuccess(res, { message: MESSAGES.AUTH.PROFILE_UPDATED, data: { user: toUserResponse(user) } })
 })
 
 export const changePassword = asyncHandler(async (req, res) => {

@@ -1,8 +1,13 @@
 import { Router } from 'express'
 import * as cartController from '../../controllers/cart/cart.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
+import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { addComboSchema } from '../../validations/cart/cart.validation.js'
+import {
+  addComboSchema,
+  checkoutCartSchema,
+  updateCartItemSchema,
+} from '../../validations/cart/cart.validation.js'
 
 const router = Router()
 
@@ -45,6 +50,22 @@ const router = Router()
  *       422:
  *         description: Validation error
  */
+router.get('/', authenticate, cartController.getCart)
+router.post('/checkout', authenticate, validate(checkoutCartSchema), cartController.checkoutCart)
+router.patch(
+  '/items/:productId',
+  authenticate,
+  validateObjectId('productId'),
+  validate(updateCartItemSchema),
+  cartController.updateCartItem
+)
+router.delete(
+  '/items/:productId',
+  authenticate,
+  validateObjectId('productId'),
+  cartController.removeCartItem
+)
+router.delete('/', authenticate, cartController.clearCart)
 router.post('/add-combo', authenticate, validate(addComboSchema), cartController.addCombo)
 
 export default router

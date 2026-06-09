@@ -6,6 +6,8 @@ const populateConversation = (query) =>
     .populate('shopId', 'name slug logo owner staff staffPermissions isActive')
     .populate('customerId', 'name email avatar roles')
     .populate('lastMessage.senderId', 'name email avatar')
+    .populate('lastMessage.senderUserId', 'name email avatar')
+    .populate('lastMessage.senderShopId', 'name slug logo')
 
 export const create = (data) => Conversation.create(data)
 
