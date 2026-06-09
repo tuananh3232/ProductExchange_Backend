@@ -58,10 +58,10 @@ const populateCart = (cart) => cart.populate('items.product', 'title price stock
 const assertProductAvailableForQuantity = (product, quantity) => {
   const reason = getUnavailableReason(product, quantity)
   if (reason === 'product_not_found') {
-    throw new AppError('Khong tim thay san pham', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
   if (reason) {
-    throw new AppError('San pham khong con kha dung voi so luong yeu cau', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
+    throw new AppError('Sản phẩm không còn khả dụng với số lượng yêu cầu', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
   }
 }
 
@@ -69,19 +69,19 @@ const assertProductCheckoutable = (product, quantity, userId) => {
   assertProductAvailableForQuantity(product, quantity)
 
   if (!['sell', 'both'].includes(product.listingType)) {
-    throw new AppError('San pham nay khong ho tro dat mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
+    throw new AppError('Sản phẩm này không hỗ trợ đặt mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
   }
 
   if (product.owner?.toString?.() === userId.toString()) {
-    throw new AppError('Khong the dat mua san pham cua chinh ban', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.SELF_ORDER_NOT_ALLOWED)
+    throw new AppError('Không thể đặt mua sản phẩm của chính bạn', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.SELF_ORDER_NOT_ALLOWED)
   }
 
   if (product.ownerType === 'SHOP' && !product.shop) {
-    throw new AppError('San pham chua gan voi shop', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
+    throw new AppError('Sản phẩm chưa gắn với shop', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
   }
 
   if (product.ownerType === 'SELLER' && !product.seller) {
-    throw new AppError('San pham chua gan voi seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
+    throw new AppError('Sản phẩm chưa gắn với seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
   }
 }
 
@@ -125,7 +125,7 @@ export const updateCartItem = async (userId, productId, quantity) => {
   const cart = await getOrCreateCart(userId)
   const item = cart.items.find((cartItem) => cartItem.product.toString() === productId)
   if (!item) {
-    throw new AppError('San pham khong co trong gio hang', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   const product = await Product.findById(productId).select('_id price stock status isActive')
@@ -143,7 +143,7 @@ export const removeCartItem = async (userId, productId) => {
   const originalLength = cart.items.length
   cart.items = cart.items.filter((item) => item.product.toString() !== productId)
   if (cart.items.length === originalLength) {
-    throw new AppError('San pham khong co trong gio hang', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   await cart.save()
@@ -163,7 +163,7 @@ const getCheckoutItems = (cart, selectedProductIds) => {
   const items = (cart.items || []).filter((item) => !selectedSet || selectedSet.has(item.product.toString()))
 
   if (!items.length) {
-    throw new AppError('Gio hang khong co san pham phu hop de checkout', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
+    throw new AppError('Giỏ hàng không có sản phẩm phù hợp để checkout', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   return items

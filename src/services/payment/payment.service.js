@@ -89,8 +89,8 @@ const notifyPaymentResult = (payment, status) => {
   return notifySafely({
     recipient: payment.buyer,
     type: status === PAYMENT_STATUS.PAID ? NOTIFICATION_TYPES.PAYMENT_SUCCESS : NOTIFICATION_TYPES.PAYMENT_FAILED,
-    title: status === PAYMENT_STATUS.PAID ? 'Thanh toan thanh cong' : 'Thanh toan that bai',
-    message: status === PAYMENT_STATUS.PAID ? 'Don hang cua ban da duoc thanh toan' : 'Thanh toan don hang khong thanh cong',
+    title: status === PAYMENT_STATUS.PAID ? 'Thanh toán thành công' : 'Thanh toán thất bại',
+    message: status === PAYMENT_STATUS.PAID ? 'Đơn hàng của bạn đã được thanh toán' : 'Thanh toán đơn hàng không thành công',
     targetType: NOTIFICATION_TARGET_TYPES.PAYMENT,
     targetId: payment._id,
     actionUrl: `/orders/${payment.order}`,

@@ -4,6 +4,7 @@ import SubscriptionOrder from '../../models/subscription-order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { env } from '../../configs/env.config.js'
+import { reconcileOwnerShopQuota } from '../shop/shop.service.js'
 
 export const PLANS = {
   monthly: { price: 69000, days: 30, label: 'thang' },
@@ -13,7 +14,7 @@ export const PLANS = {
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
   if (!clientId || !apiKey || !checksumKey) {
-    throw new AppError('PayOS chưa được cấu hình', HTTP_STATUS.INTERNAL_SERVER_ERROR, 'PAYOS_NOT_CONFIGURED')
+    throw new AppError('PayOS chua duoc cau hinh', HTTP_STATUS.INTERNAL_SERVER_ERROR, 'PAYOS_NOT_CONFIGURED')
   }
   return new PayOS({ clientId, apiKey, checksumKey })
 }
@@ -23,10 +24,15 @@ const _activateVip = async (userId, plan) => {
   const { days } = PLANS[plan]
   const now = new Date()
   const currentExpiry = user.vip?.expiresAt
-  // Nếu còn hạn VIP thì cộng thêm, không reset
   const base = currentExpiry && currentExpiry > now ? currentExpiry : now
   const expiresAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000)
-  await User.findByIdAndUpdate(userId, { 'vip.plan': plan, 'vip.expiresAt': expiresAt })
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { 'vip.plan': plan, 'vip.expiresAt': expiresAt },
+    { new: true }
+  )
+
+  await reconcileOwnerShopQuota(userId, { userDoc: updatedUser })
 }
 
 export const createSubscriptionCheckout = async (plan, userContext) => {
@@ -34,7 +40,6 @@ export const createSubscriptionCheckout = async (plan, userContext) => {
     throw new AppError('Gói VIP không hợp lệ', HTTP_STATUS.BAD_REQUEST, 'INVALID_SUBSCRIPTION_PLAN')
   }
 
-  // Trả lại đơn pending hiện tại nếu có (tránh tạo trùng)
   const existingPending = await SubscriptionOrder.findOne({ user: userContext._id, status: 'pending' })
   if (existingPending?.checkoutUrl) {
     return { paymentUrl: existingPending.checkoutUrl, plan: existingPending.plan }
@@ -42,10 +47,8 @@ export const createSubscriptionCheckout = async (plan, userContext) => {
 
   const { price, label } = PLANS[plan]
   const payos = getPayosClient()
-  // PayOS orderCode phải là số nguyên dương, tối đa 9 chữ số
   const orderCode = Date.now() % 1000000000
   const transactionRef = `SUB_${orderCode}`
-  // PayOS description tối đa 25 ký tự
   const shortId = userContext._id.toString().slice(-6)
 
   const paymentLink = await payos.paymentRequests.create({
@@ -84,7 +87,6 @@ export const handleSubscriptionWebhook = async (webhookData) => {
     throw new AppError('Không tìm thấy đơn đăng ký VIP', HTTP_STATUS.NOT_FOUND, 'SUBSCRIPTION_NOT_FOUND')
   }
 
-  // Idempotent: bỏ qua nếu đã xử lý
   if (sub.status !== 'pending') return { sub, status: sub.status }
 
   const nextStatus = verifiedData.code === '00' ? 'completed' : 'failed'
@@ -103,7 +105,7 @@ export const handleSubscriptionWebhook = async (webhookData) => {
 export const handleSubscriptionReturn = async (query, userId) => {
   const { orderCode, cancel, code } = query
   if (!orderCode) {
-    throw new AppError('Thiếu thông tin callback', HTTP_STATUS.BAD_REQUEST, 'MISSING_ORDER_CODE')
+    throw new AppError('Thieu thong tin callback', HTTP_STATUS.BAD_REQUEST, 'MISSING_ORDER_CODE')
   }
 
   const sub = await SubscriptionOrder.findOne({ orderCode: Number(orderCode) })
@@ -115,15 +117,13 @@ export const handleSubscriptionReturn = async (query, userId) => {
     throw new AppError('Bạn không có quyền xác minh đơn này', HTTP_STATUS.FORBIDDEN, 'FORBIDDEN')
   }
 
-  // Idempotent: trả về kết quả nếu đã xử lý (webhook về trước)
   if (sub.status !== 'pending') return { status: sub.status, plan: sub.plan }
 
-  // Xác minh trực tiếp từ PayOS API thay vì tin vào query params
   let paymentStatus
   try {
     const payos = getPayosClient()
     const paymentInfo = await payos.paymentRequests.get(Number(orderCode))
-    paymentStatus = paymentInfo.status // 'PAID' | 'CANCELLED' | 'EXPIRED' | 'PENDING' | 'PROCESSING'
+    paymentStatus = paymentInfo.status
   } catch {
     const isCancelled = cancel === 'true' || cancel === true
     if (isCancelled) paymentStatus = 'CANCELLED'

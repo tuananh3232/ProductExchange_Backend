@@ -4,12 +4,47 @@ import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
+import { emitToUser } from '../../sockets/socket-hub.js'
 
-export const createNotification = (payload) => Notification.create(payload)
+const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 
-export const createManyNotifications = (list) => {
+const serializeNotification = (notification) => {
+  const plain = typeof notification.toObject === 'function' ? notification.toObject() : { ...notification }
+
+  return {
+    ...plain,
+    _id: toIdString(plain._id),
+    recipient: toIdString(plain.recipient),
+    sender: toIdString(plain.sender),
+    targetId: toIdString(plain.targetId),
+  }
+}
+
+const emitCreatedNotification = async (notification) => {
+  const recipientId = toIdString(notification.recipient)
+  if (!recipientId) {
+    return
+  }
+
+  const unreadCount = await getUnreadCount(recipientId)
+  emitToUser(recipientId, 'notification_created', {
+    notification: serializeNotification(notification),
+    unreadCount,
+  })
+}
+
+export const createNotification = async (payload) => {
+  const notification = await Notification.create(payload)
+  await emitCreatedNotification(notification)
+  return notification
+}
+
+export const createManyNotifications = async (list) => {
   if (!Array.isArray(list) || !list.length) return []
-  return Notification.insertMany(list)
+
+  const notifications = await Notification.insertMany(list)
+  await Promise.all(notifications.map((notification) => emitCreatedNotification(notification)))
+  return notifications
 }
 
 export const notifySafely = async (payloadOrList) => {
@@ -49,7 +84,7 @@ export const getMyNotifications = async (userId, query = {}) => {
 const getOwnedNotificationOrThrow = async (userId, notificationId) => {
   const notification = await Notification.findOne({ _id: notificationId, recipient: userId })
   if (!notification) {
-    throw new AppError('Khong tim thay thong bao', HTTP_STATUS.NOT_FOUND, ERRORS.NOTIFICATION.NOT_FOUND)
+    throw new AppError('Không tìm thấy thông báo', HTTP_STATUS.NOT_FOUND, ERRORS.NOTIFICATION.NOT_FOUND)
   }
   return notification
 }

@@ -384,7 +384,7 @@ export const sendMessage = async (
     sender: userContext._id,
     type: notificationType,
     title: 'Tin nhan moi',
-    message: hasContent ? content.trim().slice(0, 1000) : 'Ban co tin nhan moi',
+    message: hasContent ? content.trim().slice(0, 1000) : 'Bạn có tin nhắn mới',
     targetType: NOTIFICATION_TARGET_TYPES.CHAT,
     targetId: conversationId,
     actionUrl: `/chats/${conversationId}`,

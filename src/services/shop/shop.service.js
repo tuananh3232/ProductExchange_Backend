@@ -1,6 +1,7 @@
 import * as shopRepo from '../../repositories/shop/shop.repository.js'
 import * as permissionRepo from '../../repositories/permission/permission.repository.js'
 import User from '../../models/user.model.js'
+import Shop from '../../models/shop.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -16,6 +17,14 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 const DELETABLE_SHOP_STATUSES = [SHOP_STATUS.REJECTED]
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
+const SHOP_LIMITS = {
+  default: 1,
+  vip: 3,
+}
+const SHOP_SUSPENSION_REASONS = {
+  ADMIN: 'admin',
+  VIP_EXPIRED: 'vip_expired',
+}
 
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '')
 
@@ -111,8 +120,107 @@ const ensureStaffTargetRole = (user) => {
   }
 }
 
+const hasActiveVip = (user) => Boolean(user?.vip?.expiresAt && new Date(user.vip.expiresAt) > new Date())
+
+const getAllowedShopCount = (user) => (hasActiveVip(user) ? SHOP_LIMITS.vip : SHOP_LIMITS.default)
+
+const buildQuotaExceededMessage = (user) => {
+  const allowedCount = getAllowedShopCount(user)
+
+  if (allowedCount <= SHOP_LIMITS.default) {
+    return 'Mỗi tài khoản chỉ được tạo 1 shop. Nâng cấp VIP cá nhân để mở thêm tối đa 3 shop'
+  }
+
+  return `Tai khoan VIP chi duoc tao toi da ${SHOP_LIMITS.vip} shop`
+}
+
+export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify = true } = {}) => {
+  const owner = userDoc ?? (await User.findById(ownerId).select('_id vip'))
+  if (!owner) {
+    return { allowedCount: SHOP_LIMITS.default, totalShops: 0, changed: false }
+  }
+
+  const allowedCount = getAllowedShopCount(owner)
+  const shops = await Shop.find({ owner: ownerId, isActive: true }).sort({ createdAt: 1 })
+  let changed = false
+
+  for (let index = 0; index < shops.length; index += 1) {
+    const shop = shops[index]
+    const shouldRemainAvailable = index < allowedCount
+    const suspensionReason = shop.suspensionMeta?.reason ?? null
+
+    if (shouldRemainAvailable) {
+      if (shop.status === SHOP_STATUS.SUSPENDED && suspensionReason === SHOP_SUSPENSION_REASONS.VIP_EXPIRED) {
+        const previousStatus = shop.suspensionMeta?.previousStatus || SHOP_STATUS.DRAFT
+        const nextStatus = previousStatus === SHOP_STATUS.SUSPENDED ? SHOP_STATUS.DRAFT : previousStatus
+        const updatedShop = await shopRepo.updateById(shop._id, {
+          status: nextStatus,
+          suspensionMeta: {
+            reason: null,
+            previousStatus: null,
+            suspendedAt: null,
+          },
+        })
+
+        if (notify) {
+          await notifyShopUser(
+            shop.owner?._id || shop.owner,
+            NOTIFICATION_TYPES.SHOP_UNBLOCKED,
+            updatedShop,
+            'Shop cua ban da duoc mo lai sau khi gia han VIP',
+            null,
+            { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED },
+          )
+        }
+
+        changed = true
+      }
+
+      continue
+    }
+
+    if (shop.status === SHOP_STATUS.SUSPENDED) {
+      continue
+    }
+
+    const updatedShop = await shopRepo.updateById(shop._id, {
+      status: SHOP_STATUS.SUSPENDED,
+      suspensionMeta: {
+        reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED,
+        previousStatus: shop.status,
+        suspendedAt: new Date(),
+      },
+    })
+
+    if (notify) {
+      await notifyShopUser(
+        shop.owner?._id || shop.owner,
+        NOTIFICATION_TYPES.SHOP_BLOCKED,
+        updatedShop,
+        'Shop của bạn tạm bị khóa vì vượt quá giới hạn shop của gói hiện tại',
+        null,
+        { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED, previousStatus: shop.status },
+      )
+    }
+
+    changed = true
+  }
+
+  return {
+    allowedCount,
+    totalShops: shops.length,
+    changed,
+  }
+}
+
 export const createShop = async (ownerId, payload) => {
-  await assertUserExists(ownerId)
+  const owner = await assertUserExists(ownerId)
+  await reconcileOwnerShopQuota(ownerId, { userDoc: owner, notify: false })
+
+  const totalOwnedShops = await Shop.countDocuments({ owner: ownerId, isActive: true })
+  if (totalOwnedShops >= getAllowedShopCount(owner)) {
+    throw new AppError(buildQuotaExceededMessage(owner), HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
 
   const slug = normalizeSlug(payload.slug || payload.name)
   if (!slug) {
@@ -258,7 +366,7 @@ export const updateShop = async (shopId, userContext, payload) => {
 export const deleteShop = async (shopId, userContext) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
-    throw new AppError('Khong tim thay shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
   ensureShopOwnerAccess(shop, userContext)
@@ -313,8 +421,10 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
   const updatedShop = await shopRepo.updateById(shopId, updateData)
   await notifyShopUser(newOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Ban da tro thanh chu so huu shop', userContext._id)
   await notifyShopUser(currentOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Quyen so huu shop da duoc chuyen giao', userContext._id)
+  await reconcileOwnerShopQuota(newOwnerId, { userDoc: newOwner })
 
   if (currentOwnerId && currentOwnerId !== toIdString(newOwnerId)) {
+    await reconcileOwnerShopQuota(currentOwnerId)
     const oldOwnerStillOwnsShop = await shopRepo.countMany({
       _id: { $ne: shopId },
       owner: currentOwnerId,
@@ -448,6 +558,8 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
 }
 
 export const getMyShops = async (userId, query, pagination) => {
+  await reconcileOwnerShopQuota(userId)
+
   const filter = {
     isActive: true,
     $or: [{ owner: userId }, { staff: userId }],
@@ -522,7 +634,16 @@ export const unsuspendShop = async (shopId) => {
   if (shop.status !== SHOP_STATUS.SUSPENDED) {
     throw new AppError('Shop không ở trạng thái đình chỉ', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_SUSPENDED)
   }
-  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  const previousStatus = shop.suspensionMeta?.previousStatus || SHOP_STATUS.ACTIVE
+  const updatedShop = await shopRepo.updateById(shopId, {
+    status: previousStatus === SHOP_STATUS.SUSPENDED ? SHOP_STATUS.ACTIVE : previousStatus,
+    rejectionReason: '',
+    suspensionMeta: {
+      reason: null,
+      previousStatus: null,
+      suspendedAt: null,
+    },
+  })
   await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_UNBLOCKED, updatedShop, 'Shop cua ban da duoc mo khoa')
   return updatedShop
 }
@@ -574,8 +695,16 @@ export const suspendShop = async (shopId, reason) => {
   if (shop.status !== SHOP_STATUS.ACTIVE) {
     throw new AppError('Chỉ có thể đình chỉ shop đang hoạt động', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_ACTIVE)
   }
-  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.SUSPENDED, rejectionReason: reason })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop cua ban da bi khoa', null, { reason })
+  const updatedShop = await shopRepo.updateById(shopId, {
+    status: SHOP_STATUS.SUSPENDED,
+    rejectionReason: reason,
+    suspensionMeta: {
+      reason: SHOP_SUSPENSION_REASONS.ADMIN,
+      previousStatus: shop.status,
+      suspendedAt: new Date(),
+    },
+  })
+  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop của bạn đã bị khóa', null, { reason })
   return updatedShop
 }
 

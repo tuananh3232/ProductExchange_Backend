@@ -5,6 +5,7 @@ import { MESSAGE_ACTOR_TYPES } from '../models/message.model.js'
 import * as conversationService from '../services/conversation/conversation.service.js'
 import { corsOptions } from '../configs/cors.config.js'
 import ERRORS from '../constants/error.constant.js'
+import { conversationRoom, getSocketServer, setSocketServer, userRoom } from './socket-hub.js'
 
 const getTokenFromSocket = (socket) => {
   const authToken = socket.handshake.auth?.token
@@ -21,9 +22,6 @@ const toSocketUser = (user) => ({
   roles: Array.isArray(user.roles) ? user.roles : [],
   isActive: user.isActive,
 })
-
-const conversationRoom = (conversationId) => `conversation:${conversationId}`
-let chatIo = null
 
 const createSocketError = (message, error) => {
   const socketError = new Error(message)
@@ -42,8 +40,9 @@ const emitSocketError = (socket, error) => {
 }
 
 export const emitNewMessageToConversation = (conversationId, message) => {
-  if (!chatIo) return
-  chatIo.to(conversationRoom(conversationId)).emit('new_message', message)
+  const io = getSocketServer()
+  if (!io) return
+  io.to(conversationRoom(conversationId)).emit('new_message', message)
 }
 
 export const initChatSocket = (httpServer) => {
@@ -55,7 +54,7 @@ export const initChatSocket = (httpServer) => {
       allowedHeaders: corsOptions.allowedHeaders,
     },
   })
-  chatIo = io
+  setSocketServer(io)
 
   io.use(async (socket, next) => {
     try {
@@ -78,6 +77,8 @@ export const initChatSocket = (httpServer) => {
   })
 
   io.on('connection', (socket) => {
+    socket.join(userRoom(socket.user._id))
+
     socket.on('join_conversation', async ({ conversationId } = {}, callback) => {
       try {
         await conversationService.assertConversationAccess(socket.user, conversationId)
