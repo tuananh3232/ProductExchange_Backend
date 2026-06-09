@@ -5,10 +5,11 @@ import ERRORS from '../constants/error.constant.js'
 import HTTP_STATUS from '../constants/http-status.constant.js'
 import * as roleRepo from '../repositories/role/role.repository.js'
 import { canAccessShopPermission } from '../utils/data-scope.util.js'
+import { reconcileOwnerShopQuota } from '../services/shop/shop.service.js'
 
 /**
- * Middleware xác thực JWT
- * Trích xuất token từ header: Authorization: Bearer <token>
+ * Middleware xac thuc JWT
+ * Trich xuat token tu header: Authorization: Bearer <token>
  */
 export const authenticate = async (req, res, next) => {
   try {
@@ -21,7 +22,7 @@ export const authenticate = async (req, res, next) => {
     const token = authHeader.split(' ')[1]
     const decoded = verifyAccessToken(token)
 
-    // Kiểm tra user còn tồn tại và còn active
+    // Kiem tra user con ton tai va con active.
     const user = await User.findById(decoded.userId).select('_id roles isActive vip')
     if (!user) {
       throw new AppError('Tài khoản không tồn tại', HTTP_STATUS.UNAUTHORIZED, ERRORS.AUTH.UNAUTHORIZED)
@@ -30,6 +31,8 @@ export const authenticate = async (req, res, next) => {
     if (!user.isActive) {
       throw new AppError('Tài khoản đã bị khóa', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.ACCOUNT_INACTIVE)
     }
+
+    await reconcileOwnerShopQuota(user._id, { userDoc: user })
 
     const userRoles = Array.isArray(user.roles) && user.roles.length ? user.roles : []
 
@@ -46,8 +49,8 @@ export const authenticate = async (req, res, next) => {
 }
 
 /**
- * Middleware phân quyền theo role
- * Dùng sau authenticate
+ * Middleware phan quyen theo role
+ * Dung sau authenticate
  */
 export const authorize = (...roles) => {
   return (req, res, next) => {
@@ -64,7 +67,7 @@ export const authorize = (...roles) => {
 }
 
 /**
- * Middleware phân quyền theo permission (RBAC database-driven)
+ * Middleware phan quyen theo permission (RBAC database-driven)
  */
 export const requirePermissions = (...requiredPermissions) => {
   return async (req, res, next) => {
@@ -101,8 +104,8 @@ export const requirePermissions = (...requiredPermissions) => {
 }
 
 /**
- * Middleware phân quyền theo permission trong phạm vi 1 shop cụ thể.
- * Owner của shop luôn được phép đi tiếp, staff cần có permission tương ứng.
+ * Middleware phan quyen theo permission trong pham vi 1 shop cu the.
+ * Owner cua shop luon duoc phep di tiep, staff can co permission tuong ung.
  */
 export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
   return async (req, res, next) => {

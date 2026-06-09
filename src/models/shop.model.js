@@ -86,6 +86,22 @@ const shopSchema = new mongoose.Schema(
       default: '',
       maxlength: [500, 'Rejection reason must not exceed 500 characters'],
     },
+    suspensionMeta: {
+      reason: {
+        type: String,
+        enum: ['admin', 'vip_expired', null],
+        default: null,
+      },
+      previousStatus: {
+        type: String,
+        enum: [...SHOP_STATUS_ENUM, null],
+        default: null,
+      },
+      suspendedAt: {
+        type: Date,
+        default: null,
+      },
+    },
     isActive: {
       type: Boolean,
       default: true,

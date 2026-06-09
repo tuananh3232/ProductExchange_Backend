@@ -1,14 +1,14 @@
 export const DECOR_CATEGORIES = [
   {
-    name: 'Do trang tri',
+    name: 'Đồ trang trí',
     slug: 'do-trang-tri',
-    description: 'Cac mon decor giup lam dep khong gian song.',
+    description: 'Các món decor giúp làm đẹp không gian sống.',
     icon: 'sparkles',
   },
   {
     name: 'Den decor',
     slug: 'den-decor',
-    description: 'Den ban, den ngu va den trang tri cho phong.',
+    description: 'Đèn bàn, đèn ngủ và đèn trang trí cho phòng.',
     icon: 'lamp',
   },
   {
@@ -41,7 +41,7 @@ export const DECOR_SHOPS = [
   {
     name: 'Decor Light Da Nang',
     slug: 'decor-light-da-nang',
-    description: 'Cua hang chuyen den decor, den ban va phu kien chieu sang trang tri.',
+    description: 'Cửa hàng chuyên đèn decor, đèn bàn và phụ kiện chiếu sáng trang trí.',
     phone: '0902002002',
     email: 'da-nang@decorhouse.example',
     address: {
@@ -53,7 +53,7 @@ export const DECOR_SHOPS = [
   {
     name: 'Decor Art Sai Gon',
     slug: 'decor-art-sai-gon',
-    description: 'Shop tranh treo tuong va ke decor cho khong gian hien dai.',
+    description: 'Shop tranh treo tường và kệ decor cho không gian hiện đại.',
     phone: '0903003003',
     email: 'sai-gon@decorhouse.example',
     address: {
@@ -97,7 +97,7 @@ export const DECOR_PRODUCTS_BY_SHOP = {
     buildProduct({
       title: 'Binh gom trang tri phong khach',
       slug: 'binh-gom-trang-tri-phong-khach',
-      description: 'Binh gom men mo cao 32cm, phu hop ban console va ke phong khach.',
+      description: 'Bình gốm men mờ cao 32cm, phù hợp bàn console và kệ phòng khách.',
       price: 650000,
       categorySlug: 'do-trang-tri',
       province: 'Ha Noi',
@@ -115,8 +115,8 @@ export const DECOR_PRODUCTS_BY_SHOP = {
       condition: 'new',
     }),
     buildProduct({
-      title: 'Den ngu de ban than go',
-      slug: 'den-ngu-de-ban-than-go',
+      title: 'Đèn ngủ để bàn thần gỗ',
+      slug: 'đèn-ngủ-để-bàn-thần-gỗ',
       description: 'Den ngu anh sang am, than go tu nhien va chup vai mau kem.',
       price: 520000,
       categorySlug: 'den-decor',
@@ -166,7 +166,7 @@ export const DECOR_PRODUCTS_BY_SHOP = {
     buildProduct({
       title: 'Tuong decor ceramic trang',
       slug: 'tuong-decor-ceramic-trang',
-      description: 'Tuong ceramic mau trang toi gian, dung trang tri ban lam viec.',
+      description: 'Tường ceramic màu trắng tối giản, dùng trang trí bàn làm việc.',
       price: 430000,
       categorySlug: 'do-trang-tri',
       province: 'Da Nang',

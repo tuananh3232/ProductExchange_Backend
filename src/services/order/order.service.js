@@ -255,7 +255,7 @@ export const confirmOrder = async (orderId, userContext) => {
     },
   })
 
-  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_CONFIRMED, updated, 'Don hang cua ban da duoc xac nhan', userContext._id)
+  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_CONFIRMED, updated, 'Đơn hàng của bạn đã được xác nhận', userContext._id)
   return updated
 }
 
@@ -303,7 +303,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   // Tự động hoàn ví nếu đơn thanh toán bằng ví
   if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
     await userWalletService.refundWalletForOrder(order)
-    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.PAYMENT_REFUNDED, updated, 'Khoan thanh toan da duoc hoan vao vi')
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.PAYMENT_REFUNDED, updated, 'Khoản thanh toán đã được hoàn vào ví')
   }
 
   const recipient = isBuyer ? getOrderSellerRecipient(order) : order.buyer?._id || order.buyer
