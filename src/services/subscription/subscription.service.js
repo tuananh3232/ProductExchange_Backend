@@ -87,7 +87,7 @@ export const handleSubscriptionWebhook = async (webhookData) => {
   // Idempotent: bỏ qua nếu đã xử lý
   if (sub.status !== 'pending') return { sub, status: sub.status }
 
-  const nextStatus = webhookData.code === '00' ? 'completed' : 'failed'
+  const nextStatus = verifiedData.code === '00' ? 'completed' : 'failed'
 
   sub.status = nextStatus
   sub.rawCallbackData = webhookData

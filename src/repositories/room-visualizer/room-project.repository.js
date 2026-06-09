@@ -3,7 +3,7 @@ import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 export const findByOwner = async (ownerId, { page = 1, limit = 10, status } = {}) => {
-  const filter = { owner: ownerId }
+  const filter = { owner: ownerId, status: { $ne: 'archived' } }
   if (status) filter.status = status
 
   const skip = (page - 1) * limit
@@ -16,7 +16,7 @@ export const findByOwner = async (ownerId, { page = 1, limit = 10, status } = {}
 }
 
 export const findByIdAndOwner = async (projectId, ownerId) => {
-  const project = await RoomProject.findOne({ _id: projectId, owner: ownerId })
+  const project = await RoomProject.findOne({ _id: projectId, owner: ownerId, status: { $ne: 'archived' } })
   if (!project) {
     throw new AppError('Project không tồn tại', HTTP_STATUS.NOT_FOUND, 'PROJECT_NOT_FOUND')
   }
