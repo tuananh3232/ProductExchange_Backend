@@ -54,5 +54,3 @@ export const updateById = (id, data) =>
     .then(normalizeProductImages)
 
 export const deleteById = (id) => Product.findByIdAndDelete(id)
-
-export const incrementViews = (id) => Product.findByIdAndUpdate(id, { $inc: { views: 1 } })

@@ -4,7 +4,6 @@ import { getPaginationParams } from '../../utils/pagination.util.js'
 import { asyncHandler } from '../../utils/async-handler.util.js'
 import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { isDuplicateView } from '../../utils/view-dedup.util.js'
 
 export const getProducts = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
@@ -41,15 +40,6 @@ export const getProductById = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.PRODUCT.DETAIL_FETCHED, data: { product } })
 })
 
-export const trackProductView = asyncHandler(async (req, res) => {
-  const viewerKey =
-    req.user?._id?.toString() ??
-    (req.headers['x-forwarded-for']?.split(',')[0]?.trim() ?? req.ip)
-  if (!isDuplicateView(req.params.id, viewerKey)) {
-    productService.trackProductView(req.params.id).catch(() => {})
-  }
-  sendSuccess(res, { message: 'Đã ghi nhận lượt xem' })
-})
 
 export const createProduct = asyncHandler(async (req, res) => {
   const product = await productService.createProduct(req.user, req.body, req.files ?? [])

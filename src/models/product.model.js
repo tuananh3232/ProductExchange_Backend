@@ -84,7 +84,6 @@ const productSchema = new mongoose.Schema(
       enum: PRODUCT_STATUS_ENUM,
       default: 'available',
     },
-    views: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     style: { type: String, enum: PRODUCT_STYLES, default: null },
     roomType: { type: String, enum: ROOM_TYPES, default: null },
@@ -167,7 +166,7 @@ productSchema.pre('validate', function () {
   }
 })
 
-productSchema.index({ title: 'text', description: 'text' })
+productSchema.index({ title: 'text', description: 'text' }, { weights: { title: 10, description: 2 }, default_language: 'none' })
 productSchema.index({ category: 1, status: 1 })
 productSchema.index({ owner: 1 })
 productSchema.index({ shop: 1, status: 1 })

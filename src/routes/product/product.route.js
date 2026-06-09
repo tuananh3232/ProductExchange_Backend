@@ -277,7 +277,6 @@ router.post(
  *         description: Xóa sản phẩm thành công
  */
 router.get('/:id', validateObjectId('id'), productController.getProductById)
-router.post('/:id/view', validateObjectId('id'), productController.trackProductView)
 router.patch(
   '/:id',
   validateObjectId('id'),
