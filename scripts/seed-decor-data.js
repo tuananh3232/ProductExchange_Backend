@@ -4,7 +4,7 @@ import { connectDB, disconnectDB } from '../src/configs/database.config.js';
 import User from '../src/models/user.model.js';
 import Category from '../src/models/category.model.js';
 import Shop from '../src/models/shop.model.js';
-import Product from '../src/models/product.model.js';
+import Product, { PRODUCT_OWNER_TYPES } from '../src/models/product.model.js';
 import Order from '../src/models/order.model.js';
 import Payment from '../src/models/payment.model.js';
 import ShopInvitation from '../src/models/shop-invitation.model.js';
@@ -161,9 +161,15 @@ const upsertProducts = async (ownerId, categoriesBySlug, shopsBySlug) => {
         location: product.location,
         category: category._id,
         owner: ownerId,
+        ownerType: PRODUCT_OWNER_TYPES.SHOP,
         shop: shop._id,
         status: 'available',
         isActive: true,
+        decorRole: product.decorRole ?? null,
+        style: product.style ?? null,
+        roomType: product.roomType ?? null,
+        colorTone: product.colorTone ?? null,
+        comboPriority: product.comboPriority ?? null,
       };
 
       const doc = await Product.findOneAndUpdate(

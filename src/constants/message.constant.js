@@ -122,6 +122,7 @@ const MESSAGES = {
 
   PAYMENT: {
     CREATED: 'Tạo yêu cầu thanh toán thành công',
+    BATCH_CREATED: 'Tạo yêu cầu thanh toán hàng loạt thành công',
     CALLBACK_PROCESSED: 'Xử lý kết quả thanh toán thành công',
     WEBHOOK_PROCESSED: 'Xử lý webhook thanh toán thành công',
   },
@@ -132,6 +133,7 @@ const MESSAGES = {
     TOPUP_CREATED: 'Tạo yêu cầu nạp tiền thành công',
     TOPUP_CALLBACK_PROCESSED: 'Xử lý kết quả nạp tiền thành công',
     ORDER_PAID: 'Thanh toán đơn hàng bằng ví thành công',
+    ORDERS_PAID: 'Thanh toán các đơn hàng bằng ví thành công',
     TOPUPS_FETCHED: 'Lấy lịch sử nạp tiền thành công',
     ACTIVITY_FETCHED: 'Lấy lịch sử hoạt động ví thành công',
     WITHDRAWAL_REQUESTED: 'Tạo yêu cầu rút tiền thành công',

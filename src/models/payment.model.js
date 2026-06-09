@@ -6,10 +6,14 @@ const paymentSchema = new mongoose.Schema(
     order: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
-      required: true,
-      unique: true,
-      index: true,
+      default: null,
     },
+    orders: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order',
+      },
+    ],
     buyer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -68,7 +72,9 @@ const paymentSchema = new mongoose.Schema(
   }
 );
 
-paymentSchema.index({ order: 1, provider: 1 });
+// Sparse unique: single-order payments cannot share the same order; batch payments (order=null) are exempt
+paymentSchema.index({ order: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ orders: 1 }, { sparse: true });
 
 const Payment = mongoose.model('Payment', paymentSchema);
 

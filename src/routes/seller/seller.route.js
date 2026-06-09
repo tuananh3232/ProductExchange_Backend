@@ -1,9 +1,9 @@
 import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
-import { authenticate, authorize } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
-import { ROLES } from '../../constants/role.constant.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 
 const router = Router()
 
@@ -47,6 +47,6 @@ const router = Router()
  *       403:
  *         description: Cần quyền seller
  */
-router.get('/products', authenticate, authorize(ROLES.SELLER), validate(productQuerySchema, 'query'), productController.getSellerProducts)
+router.get('/products', authenticate, requirePermissions(PERMISSIONS.PRODUCT_READ), validate(productQuerySchema, 'query'), productController.getSellerProducts)
 
 export default router

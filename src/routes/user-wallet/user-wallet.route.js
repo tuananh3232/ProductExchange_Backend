@@ -14,6 +14,10 @@ const payOrderSchema = Joi.object({
   orderId: Joi.string().hex().length(24).required(),
 })
 
+const payOrdersSchema = Joi.object({
+  orderIds: Joi.array().items(Joi.string().hex().length(24)).min(1).max(10).required(),
+})
+
 const verifyTopupSchema = Joi.object({
   orderCode: Joi.number().required(),
 })
@@ -254,6 +258,36 @@ router.post('/me/topup', authenticate, validate(createTopupSchema), userWalletCo
  *         description: Số dư không đủ hoặc đơn hàng không hợp lệ
  */
 router.post('/me/pay-order', authenticate, validate(payOrderSchema), userWalletController.payOrderWithWallet)
+
+/**
+ * @swagger
+ * /user-wallet/me/pay-orders:
+ *   post:
+ *     summary: Thanh toán nhiều đơn hàng cùng lúc bằng ví cá nhân
+ *     tags: [UserWallet]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 minItems: 1
+ *                 maxItems: 10
+ *     responses:
+ *       200:
+ *         description: Thanh toán thành công
+ *       400:
+ *         description: Số dư không đủ hoặc đơn hàng không hợp lệ
+ */
+router.post('/me/pay-orders', authenticate, validate(payOrdersSchema), userWalletController.payOrdersWithWallet)
 
 /**
  * @swagger

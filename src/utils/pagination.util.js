@@ -43,9 +43,9 @@ export const buildPaginationMeta = (total, page, limit) => {
  * @param {{ page, limit, skip, sortBy, sortOrder }} pagination - From getPaginationParams()
  * @returns {{ items: Array, meta: Object }}
  */
-export const paginate = async (repo, filter, { page, limit, skip, sortBy, sortOrder }) => {
+export const paginate = async (repo, filter, { page, limit, skip, sortBy, sortOrder }, options = {}) => {
   const [items, total] = await Promise.all([
-    repo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    repo.findMany({ filter, skip, limit, sortBy, sortOrder, ...options }),
     repo.countMany(filter),
   ]);
   return { items, meta: buildPaginationMeta(total, page, limit) };

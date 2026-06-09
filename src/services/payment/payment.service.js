@@ -86,15 +86,19 @@ const resolvePaymentStatus = (responseCode, transactionStatus) => {
 
 const notifyPaymentResult = (payment, status) => {
   if (![PAYMENT_STATUS.PAID, PAYMENT_STATUS.FAILED].includes(status)) return null
+  const isBatch = payment.orders?.length > 0
+  const primaryOrderId = isBatch ? payment.orders[0] : payment.order
   return notifySafely({
     recipient: payment.buyer,
     type: status === PAYMENT_STATUS.PAID ? NOTIFICATION_TYPES.PAYMENT_SUCCESS : NOTIFICATION_TYPES.PAYMENT_FAILED,
     title: status === PAYMENT_STATUS.PAID ? 'Thanh toán thành công' : 'Thanh toán thất bại',
-    message: status === PAYMENT_STATUS.PAID ? 'Đơn hàng của bạn đã được thanh toán' : 'Thanh toán đơn hàng không thành công',
+    message: status === PAYMENT_STATUS.PAID
+      ? isBatch ? `${payment.orders.length} đơn hàng đã được thanh toán` : 'Đơn hàng của bạn đã được thanh toán'
+      : 'Thanh toán đơn hàng không thành công',
     targetType: NOTIFICATION_TARGET_TYPES.PAYMENT,
     targetId: payment._id,
-    actionUrl: `/orders/${payment.order}`,
-    data: { orderId: payment.order, paymentId: payment._id },
+    actionUrl: isBatch ? '/orders' : `/orders/${payment.order}`,
+    data: { orderId: primaryOrderId, paymentId: payment._id },
   })
 }
 
@@ -318,10 +322,19 @@ export const handlePayosWebhook = async (webhookData) => {
     orderUpdate.paidAt = new Date()
   }
 
-  await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  const isBatchWebhook = updatedPayment.orders?.length > 0
+  if (isBatchWebhook) {
+    await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+  } else {
+    await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  }
   await notifyPaymentResult(updatedPayment, nextStatus)
 
-  return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
+  return {
+    payment: updatedPayment,
+    orderIds: isBatchWebhook ? updatedPayment.orders : [payment.order],
+    status: nextStatus,
+  }
 }
 
 // ─── Wallet Topup via PayOS ───────────────────────────────────────────────────
@@ -499,11 +512,23 @@ export const handlePayosReturn = async (query) => {
 
     const orderUpdate = { paymentStatus: nextStatus }
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
-    await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    const isBatchReturn = updatedPayment.orders?.length > 0
+    if (isBatchReturn) {
+      await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+    } else {
+      await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    }
     await notifyPaymentResult(updatedPayment, nextStatus)
 
-    return { orderId: payment.order, status: nextStatus }
+    return {
+      orderIds: isBatchReturn ? updatedPayment.orders : [payment.order],
+      status: nextStatus,
+    }
   }
 
-  return { orderId: payment.order, status: payment.status }
+  const isBatch = payment.orders?.length > 0
+  return {
+    orderIds: isBatch ? payment.orders : [payment.order],
+    status: payment.status,
+  }
 }

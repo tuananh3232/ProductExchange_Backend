@@ -1,4 +1,5 @@
 import * as authService from '../../services/auth/auth.service.js'
+import * as capabilityService from '../../services/user/capability.service.js'
 import { sendSuccess } from '../../utils/response.util.js'
 import { toUserResponse } from '../../utils/user.util.js'
 import { asyncHandler } from '../../utils/async-handler.util.js'
@@ -33,4 +34,9 @@ export const submitKyc = asyncHandler(async (req, res) => {
 export const getMyKyc = asyncHandler(async (req, res) => {
   const result = await authService.getMyKyc(req.user._id)
   sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
+})
+
+export const getMyCapabilities = asyncHandler(async (req, res) => {
+  const capabilities = await capabilityService.getUserCapabilities(req.user.roles)
+  sendSuccess(res, { message: 'Capabilities fetched successfully', data: capabilities })
 })

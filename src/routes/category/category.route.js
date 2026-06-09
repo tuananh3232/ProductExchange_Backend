@@ -1,8 +1,9 @@
 import { Router } from 'express'
 import * as categoryController from '../../controllers/category/category.controller.js'
-import { authenticate } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { createCategorySchema, updateCategorySchema } from '../../validations/category/category.validation.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 
 const router = Router()
 
@@ -56,7 +57,7 @@ const router = Router()
  *         description: Tạo category thành công
  */
 router.get('/', categoryController.getCategories)
-router.post('/', authenticate, validate(createCategorySchema), categoryController.createCategory)
+router.post('/', authenticate, requirePermissions(PERMISSIONS.ADMIN_MANAGE_PRODUCTS), validate(createCategorySchema), categoryController.createCategory)
 
 /**
  * @swagger
@@ -126,7 +127,7 @@ router.post('/', authenticate, validate(createCategorySchema), categoryControlle
  *         description: Xóa category thành công
  */
 router.get('/:id', categoryController.getCategoryById)
-router.patch('/:id', authenticate, validate(updateCategorySchema), categoryController.updateCategory)
-router.delete('/:id', authenticate, categoryController.deleteCategory)
+router.patch('/:id', authenticate, requirePermissions(PERMISSIONS.ADMIN_MANAGE_PRODUCTS), validate(updateCategorySchema), categoryController.updateCategory)
+router.delete('/:id', authenticate, requirePermissions(PERMISSIONS.ADMIN_MANAGE_PRODUCTS), categoryController.deleteCategory)
 
 export default router

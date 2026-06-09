@@ -9,7 +9,7 @@ export const getComboOptions = asyncHandler(async (req, res) => {
 })
 
 export const getProductFilterOptions = asyncHandler(async (req, res) => {
-  sendOptions(res, optionsService.getProductFilterOptions())
+  sendOptions(res, await optionsService.getProductFilterOptions())
 })
 
 export const getOrderFilterOptions = asyncHandler(async (req, res) => {
@@ -34,4 +34,8 @@ export const getWithdrawalFilterOptions = asyncHandler(async (req, res) => {
 
 export const getPaymentOptions = asyncHandler(async (req, res) => {
   sendOptions(res, optionsService.getPaymentOptions())
+})
+
+export const getAnalyticsFilterOptions = asyncHandler(async (req, res) => {
+  sendOptions(res, optionsService.getAnalyticsFilterOptions())
 })

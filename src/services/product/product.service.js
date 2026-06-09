@@ -28,6 +28,10 @@ const normalizeImages = (images = []) => {
   }))
 }
 
+// Khi có $text, ưu tiên điểm liên quan trước rồi mới sort theo tiêu chí người dùng chọn
+const textSearchOptions = (filter, pag) =>
+  '$text' in filter ? { sort: { score: { $meta: 'textScore' }, [pag.sortBy]: pag.sortOrder } } : {}
+
 const normalizeProductSort = (pagination) => {
   const sortMap = {
     newest: { sortBy: 'createdAt', sortOrder: -1 },
@@ -232,9 +236,10 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
     if (query.maxPrice) filter.price.$lte = Number(query.maxPrice)
   }
 
-  // Tìm kiếm full-text
+  // Tìm kiếm full-text — normalize input trước khi truyền vào MongoDB
   if (query.search) {
-    filter.$text = { $search: query.search }
+    const q = String(query.search).trim().replace(/\s+/g, ' ')
+    if (q.length > 0) filter.$text = { $search: q }
   }
 
   if (query.visualizerReady === true || query.visualizerReady === 'true') {
@@ -246,13 +251,15 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
 
 export const getProducts = async (query, pagination) => {
   const filter = buildFilter(query)
-  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
+  const pag = normalizeProductSort(pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
   return { products, meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
   const filter = buildFilter(query, { publicOnly: false })
-  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
+  const pag = normalizeProductSort(pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
   return { products, meta }
 }
 
@@ -270,7 +277,8 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
     filter.isActive = true
   }
 
-  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
+  const pag = normalizeProductSort(pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
   return { products, meta }
 }
 
@@ -287,7 +295,8 @@ export const getSellerProducts = async (userContext, query, pagination) => {
   delete filter.shop
   delete filter.owner
 
-  const { items: products, meta } = await paginate(productRepo, filter, normalizeProductSort(pagination))
+  const pag = normalizeProductSort(pagination)
+  const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
   return { products, meta }
 }
 
@@ -296,10 +305,11 @@ export const getProductById = async (id) => {
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  // Tăng lượt xem bất đồng bộ (không chờ)
-  productRepo.incrementViews(id)
   return product
 }
+
+// Tăng lượt xem atomic — chỉ gọi sau khi dedup đã pass ở controller
+export const trackProductView = (id) => productRepo.incrementViews(id)
 
 export const createProduct = async (userContext, productData, files = []) => {
   const ownership = await resolveCreateOwnership(productData, userContext)

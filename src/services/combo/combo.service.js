@@ -1,6 +1,9 @@
 import mongoose from 'mongoose'
 import Product from '../../models/product.model.js'
 import { COMBO_TYPES, DECOR_ROLES } from '../../constants/combo.constant.js'
+import { createPrng } from '../../utils/seeded-random.util.js'
+
+const MAX_COMBO_ROUNDS = 5 // tối đa 5 vòng × 3 loại = 15 combo
 
 const getId = (product) => product._id.toString()
 
@@ -41,36 +44,72 @@ const sortProducts = (products, criteria) =>
     return left.price - right.price
   })
 
+// Bản seeded: tie-break cuối bằng random từ seed → thứ tự ổn định cho cùng seed
+const sortProductsWithSeed = (products, criteria, seed) => {
+  const rand = createPrng(seed)
+  const tagged = products.map((p) => ({ p, r: rand() }))
+  return tagged
+    .sort((a, b) => {
+      const sd = getMatchScore(b.p, criteria) - getMatchScore(a.p, criteria)
+      if (sd !== 0) return sd
+      const pd = a.p.price - b.p.price
+      if (pd !== 0) return pd
+      return a.r - b.r // seeded tiebreak: chỉ áp dụng khi score và giá bằng nhau
+    })
+    .map(({ p }) => p)
+}
+
 export const groupProductsByDecorRole = (products) =>
   products.reduce((groups, product) => {
     groups[product.decorRole] = [...(groups[product.decorRole] || []), product]
     return groups
   }, {})
 
-const pickProduct = (products, selectedIds, usedProductIds, remainingBudget) => {
+// Fix 3: tính tone màu chiếm ưu thế trong combo đang build (để dùng làm tiebreaker)
+const getDominantTone = (products) => {
+  const counts = {}
+  for (const p of products) {
+    if (p.colorTone) counts[p.colorTone] = (counts[p.colorTone] || 0) + 1
+  }
+  const entries = Object.entries(counts)
+  return entries.length ? entries.sort((a, b) => b[1] - a[1])[0][0] : null
+}
+
+const pickProduct = (products, selectedIds, usedProductIds, remainingBudget, dominantTone = null) => {
   const affordableProducts = products.filter(
     (product) => !selectedIds.has(getId(product)) && product.price <= remainingBudget
   )
+  // Soft preference: ưu tiên sản phẩm cùng tone màu với các món đã chọn (chỉ là tiebreaker)
+  if (dominantTone) {
+    const toneMatch = affordableProducts.find(
+      (product) => !usedProductIds.has(getId(product)) && product.colorTone === dominantTone
+    )
+    if (toneMatch) return toneMatch
+  }
   return affordableProducts.find((product) => !usedProductIds.has(getId(product))) || affordableProducts[0]
 }
 
-export const buildCombo = ({ productsByRole, targetBudget, maxItems, usedProductIds }) => {
+export const buildCombo = ({ productsByRole, targetBudget, maxItems, usedProductIds, rotationOffset = 0 }) => {
+  // Fix 2: xoay thứ tự role theo offset — tránh main_item luôn được ưu tiên khi budget hẹp
+  const roleOrder = [...DECOR_ROLES.slice(rotationOffset), ...DECOR_ROLES.slice(0, rotationOffset)]
   const selectedProducts = []
   const selectedIds = new Set()
   let totalPrice = 0
 
-  for (const role of DECOR_ROLES) {
+  for (const role of roleOrder) {
     if (selectedProducts.length >= maxItems) break
-    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice)
+    const dominantTone = getDominantTone(selectedProducts)
+    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice, dominantTone)
     if (!product) continue
     selectedProducts.push(product)
     selectedIds.add(getId(product))
     totalPrice += product.price
   }
 
-  for (const role of DECOR_ROLES) {
+  for (const role of roleOrder) {
     if (selectedProducts.length >= maxItems) break
-    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice)
+    const dominantTone = getDominantTone(selectedProducts)
+    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice, dominantTone)
     if (!product) continue
     selectedProducts.push(product)
     selectedIds.add(getId(product))
@@ -108,31 +147,55 @@ const buildCriteriaFilter = (criteria) => {
   return filter
 }
 
-export const generateCombos = async (criteria) => {
+export const generateCombos = async (criteria, { seed: inputSeed, page = 1, pageSize = 3 } = {}) => {
+  const seed = inputSeed || Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+  // Fix 2: tính starting role offset từ seed — đảm bảo cùng seed cho cùng rotation
+  const seedOffset = Math.floor(createPrng(seed)() * DECOR_ROLES.length)
+
   const products = await Product.find(buildCriteriaFilter(criteria)).populate('category', 'name slug').lean()
-  const sortedProducts = sortProducts(products, criteria)
+  const sortedProducts = sortProductsWithSeed(products, criteria, seed)
   const productsByRole = groupProductsByDecorRole(sortedProducts)
+
+  // Sinh nhiều vòng combo cho đến khi hết sản phẩm hoặc đạt giới hạn
+  const allCombos = []
   const usedProductIds = new Set()
 
-  return COMBO_TYPES.map(({ comboType, budgetRatio, itemReduction }) => {
-    const targetBudget = Math.floor(criteria.budget * budgetRatio)
-    const maxItems = Math.max(2, criteria.maxItems - itemReduction)
-    const combo = buildCombo({ productsByRole, targetBudget, maxItems, usedProductIds })
-    if (!combo.products.length) return null
+  while (allCombos.length < MAX_COMBO_ROUNDS * COMBO_TYPES.length) {
+    const roundIndex = Math.floor(allCombos.length / COMBO_TYPES.length)
+    const rotationOffset = (seedOffset + roundIndex) % DECOR_ROLES.length
+    const roundCombos = COMBO_TYPES.map(({ comboType, budgetRatio, itemReduction }) => {
+      const targetBudget = Math.floor(criteria.budget * budgetRatio)
+      const maxItems = Math.max(2, criteria.maxItems - itemReduction)
+      const combo = buildCombo({ productsByRole, targetBudget, maxItems, usedProductIds, rotationOffset })
+      if (!combo.products.length) return null
 
-    const responseCombo = {
-      comboType,
-      comboName: `${comboType} ${criteria.style || ''} ${criteria.roomType || ''} Combo`.replace(/\s+/g, ' ').trim(),
-      style: criteria.style || null,
-      roomType: criteria.roomType || null,
-      colorTone: criteria.colorTone || null,
-      budget: criteria.budget,
-      targetBudget,
-      totalPrice: calculateComboTotal(combo.products),
-      products: combo.products.map((product) => formatProduct(product, { canReplace: true })),
-    }
-    return { ...responseCombo, reason: buildComboReason(responseCombo, criteria) }
-  }).filter(Boolean)
+      const responseCombo = {
+        comboType,
+        comboName: `${comboType} ${criteria.style || ''} ${criteria.roomType || ''} Combo`.replace(/\s+/g, ' ').trim(),
+        style: criteria.style || null,
+        roomType: criteria.roomType || null,
+        colorTone: criteria.colorTone || null,
+        budget: criteria.budget,
+        targetBudget,
+        totalPrice: calculateComboTotal(combo.products),
+        products: combo.products.map((product) => formatProduct(product, { canReplace: true })),
+      }
+      return { ...responseCombo, reason: buildComboReason(responseCombo, criteria) }
+    }).filter(Boolean)
+
+    if (!roundCombos.length) break // sản phẩm cạn, không tạo thêm được
+    allCombos.push(...roundCombos)
+  }
+
+  const skip = (page - 1) * pageSize
+  return {
+    combos: allCombos.slice(skip, skip + pageSize),
+    total: allCombos.length,
+    hasMore: skip + pageSize < allCombos.length,
+    seed,
+    page,
+    pageSize,
+  }
 }
 
 export const getAlternatives = async (query) => {

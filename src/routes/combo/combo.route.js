@@ -28,7 +28,7 @@ const router = Router()
  *               style: { type: string, enum: [minimalist, modern, vintage, luxury, korean, bohemian] }
  *               roomType: { type: string, enum: [bedroom, living_room, kitchen, workspace] }
  *               colorTone: { type: string, enum: [warm, cool, neutral, dark, bright] }
- *               budget: { type: number, minimum: 1 }
+ *               budget: { type: number, minimum: 1000 }
  *               maxItems: { type: integer, minimum: 2, maximum: 10, default: 5 }
  *     responses:
  *       200:

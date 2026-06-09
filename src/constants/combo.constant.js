@@ -11,3 +11,30 @@ export const COMBO_TYPES = [
   { comboType: 'Standard', budgetRatio: 0.9, itemReduction: 1 },
   { comboType: 'Premium', budgetRatio: 1, itemReduction: 0 },
 ]
+
+// Single source of truth cho label – import vào options.service thay vì hardcode ở đó
+export const COMBO_LABELS = {
+  minimalist: 'Minimalist',
+  modern: 'Modern',
+  vintage: 'Vintage',
+  luxury: 'Luxury',
+  korean: 'Korean',
+  bohemian: 'Bohemian',
+  bedroom: 'Bedroom',
+  living_room: 'Living Room',
+  kitchen: 'Kitchen',
+  workspace: 'Workspace',
+  warm: 'Warm',
+  cool: 'Cool',
+  neutral: 'Neutral',
+  dark: 'Dark',
+  bright: 'Bright',
+}
+
+// Single source of truth cho constraints – import vào validation thay vì hardcode số
+export const COMBO_CONSTRAINTS = {
+  budgetMin: 1000,
+  maxItemsMin: 2,
+  maxItemsMax: 10,
+  maxItemsDefault: 5,
+}

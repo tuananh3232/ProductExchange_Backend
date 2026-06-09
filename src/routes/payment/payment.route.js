@@ -20,6 +20,7 @@ const createPaymentSchema = Joi.object({
 	orderId: Joi.string().hex().length(24).required(),
 })
 
+
 /**
  * @swagger
  * /payments/vnpay/create:

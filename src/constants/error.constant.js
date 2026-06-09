@@ -81,6 +81,7 @@ const ERRORS = {
     ORDER_NOT_ELIGIBLE: 'Order is not eligible for payment',
     ALREADY_PAID: 'Order has already been paid',
     PAYOS_NOT_CONFIGURED: 'PayOS is not configured',
+    MIXED_BUYERS: 'All orders must belong to the same buyer',
   },
 
   STATS: {

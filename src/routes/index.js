@@ -19,6 +19,7 @@ import roomProjectRoutes from './room-visualizer/room-project.route.js'
 import subscriptionRoutes from './subscription/subscription.route.js'
 import kycOptionsRoutes from './options/kyc.route.js'
 import withdrawalOptionsRoutes from './options/withdrawal.route.js'
+import analyticsRoutes from './analytics/analytics.route.js'
 
 const router = Router()
 
@@ -51,5 +52,6 @@ router.use('/room-projects', roomProjectRoutes)
 router.use('/subscriptions', subscriptionRoutes)
 router.use('/kyc', kycOptionsRoutes)
 router.use('/withdrawals', withdrawalOptionsRoutes)
+router.use('/analytics', analyticsRoutes)
 
 export default router

@@ -29,6 +29,7 @@ const router = Router()
  *         description: Thành công
  */
 router.get('/me', authenticate, requirePermissions(PERMISSIONS.USER_READ), userController.getMe)
+router.get('/me/capabilities', authenticate, userController.getMyCapabilities)
 
 /**
  * @swagger

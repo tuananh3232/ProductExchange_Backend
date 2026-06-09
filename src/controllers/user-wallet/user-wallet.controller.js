@@ -55,6 +55,11 @@ export const payOrderWithWallet = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.USER_WALLET.ORDER_PAID, data: result })
 })
 
+export const payOrdersWithWallet = asyncHandler(async (req, res) => {
+  const result = await userWalletService.payOrdersWithWallet(req.body.orderIds, req.user)
+  sendSuccess(res, { message: MESSAGES.USER_WALLET.ORDERS_PAID, data: result })
+})
+
 export const verifyTopup = asyncHandler(async (req, res) => {
   const orderCode = req.body.orderCode ?? req.query.orderCode
   const result = await paymentService.handleTopupReturn({ orderCode }, req.user._id)

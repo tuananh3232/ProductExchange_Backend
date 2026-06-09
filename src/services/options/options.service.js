@@ -1,4 +1,4 @@
-import { COLOR_TONES, DECOR_ROLES, PRODUCT_STYLES, ROOM_TYPES } from '../../constants/combo.constant.js'
+import { COLOR_TONES, COMBO_CONSTRAINTS, COMBO_LABELS, DECOR_ROLES, PRODUCT_STYLES, ROOM_TYPES } from '../../constants/combo.constant.js'
 import { ROLE_ENUM } from '../../constants/role.constant.js'
 import {
   ORDER_STATUS_ENUM,
@@ -7,6 +7,7 @@ import {
   SHOP_STATUS_ENUM,
   WITHDRAWAL_STATUS_ENUM,
 } from '../../constants/status.constant.js'
+import * as categoryRepo from '../../repositories/category/category.repository.js'
 
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair', 'poor']
 const PRODUCT_LISTING_TYPES = ['sell']
@@ -16,21 +17,7 @@ const KYC_STATUSES = ['none', 'pending', 'approved', 'rejected']
 const PAYMENT_METHODS = ['PAYOS', 'VNPAY', 'WALLET']
 
 const LABELS = {
-  minimalist: 'Minimalist',
-  modern: 'Modern',
-  vintage: 'Vintage',
-  luxury: 'Luxury',
-  korean: 'Korean',
-  bohemian: 'Bohemian',
-  bedroom: 'Bedroom',
-  living_room: 'Living Room',
-  kitchen: 'Kitchen',
-  workspace: 'Workspace',
-  warm: 'Warm',
-  cool: 'Cool',
-  neutral: 'Neutral',
-  dark: 'Dark',
-  bright: 'Bright',
+  ...COMBO_LABELS,
   sell: 'Sell',
   new: 'New',
   like_new: 'Like New',
@@ -85,21 +72,20 @@ export const getComboOptions = () => ({
   roomTypes: toOptions(ROOM_TYPES),
   colorTones: toOptions(COLOR_TONES),
   decorRoles: toOptions(DECOR_ROLES),
-  constraints: {
-    budgetMin: 1,
-    maxItemsMin: 2,
-    maxItemsMax: 10,
-    maxItemsDefault: 5,
-  },
+  constraints: COMBO_CONSTRAINTS,
 })
 
-export const getProductFilterOptions = () => ({
-  listingTypes: toOptions(PRODUCT_LISTING_TYPES),
-  conditions: toOptions(PRODUCT_CONDITIONS),
-  statuses: toOptions(PRODUCT_STATUS_ENUM),
-  ownerTypes: toOptions(PRODUCT_OWNER_TYPES),
-  sortOptions: toOptions(['newest', 'oldest', 'price_asc', 'price_desc']),
-})
+export const getProductFilterOptions = async () => {
+  const rawCategories = await categoryRepo.findMany({ filter: { isActive: true }, limit: 200, sortBy: 'name', sortOrder: 1 })
+  return {
+    listingTypes: toOptions(PRODUCT_LISTING_TYPES),
+    conditions: toOptions(PRODUCT_CONDITIONS),
+    statuses: toOptions(PRODUCT_STATUS_ENUM),
+    ownerTypes: toOptions(PRODUCT_OWNER_TYPES),
+    sortOptions: toOptions(['newest', 'oldest', 'price_asc', 'price_desc']),
+    categories: rawCategories.map((c) => ({ value: c._id.toString(), label: c.name })),
+  }
+}
 
 export const getOrderFilterOptions = () => ({
   statuses: toOptions(ORDER_STATUS_ENUM),
@@ -127,4 +113,12 @@ export const getWithdrawalFilterOptions = () => ({
 export const getPaymentOptions = () => ({
   methods: toOptions(PAYMENT_METHODS),
   statuses: toOptions(PAYMENT_STATUS_ENUM),
+})
+
+// periods: giá trị thực từ stats.service.js — normalizePeriod chỉ nhận 'day' | 'month'
+const ANALYTICS_LABELS = { day: 'Day', month: 'Month' }
+const STATS_PERIODS = ['day', 'month']
+
+export const getAnalyticsFilterOptions = () => ({
+  periods: STATS_PERIODS.map((v) => ({ value: v, label: ANALYTICS_LABELS[v] })),
 })

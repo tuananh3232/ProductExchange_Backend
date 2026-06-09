@@ -35,13 +35,13 @@ export const findById = (id) =>
     .populate('shop', 'name slug owner staff')
     .then(normalizeProductImages)
 
-export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
+export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1, sort = null }) =>
   Product.find(filter)
     .populate('owner', 'name avatar rating')
     .populate('seller', 'name avatar rating')
     .populate('category', 'name slug')
     .populate('shop', 'name slug')
-    .sort({ [sortBy]: sortOrder })
+    .sort(sort || { [sortBy]: sortOrder })
     .skip(skip)
     .limit(limit)
     .lean()
