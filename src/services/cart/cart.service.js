@@ -204,7 +204,7 @@ const toCheckoutOrder = (order) => ({
 export const checkoutCart = async (userId, payload = {}, userContext, req) => {
   const cart = await getOrCreateCart(userId)
   if (!cart.items.length) {
-    throw new AppError('Gio hang dang trong', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
+    throw new AppError('Giỏ hàng đang trống', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   const checkoutItems = getCheckoutItems(cart, payload.selectedProductIds)

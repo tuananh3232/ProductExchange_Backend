@@ -390,7 +390,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
       sender: userContext._id,
       type: typeByStatus[nextStatus],
       title: 'Cập nhật sản phẩm',
-      message: `Trang thai san pham da cap nhat: ${nextStatus}`,
+      message: `Trạng thái sản phẩm đã cập nhật: ${nextStatus}`,
       targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
       targetId: product._id,
       actionUrl: `/products/${product._id}`,

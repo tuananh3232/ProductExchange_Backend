@@ -7,14 +7,14 @@ import { env } from '../../configs/env.config.js'
 import { reconcileOwnerShopQuota } from '../shop/shop.service.js'
 
 export const PLANS = {
-  monthly: { price: 69000, days: 30, label: 'thang' },
-  yearly: { price: 499000, days: 365, label: 'nam' },
+  monthly: { price: 69000, days: 30, label: 'tháng' },
+  yearly: { price: 499000, days: 365, label: 'năm' },
 }
 
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
   if (!clientId || !apiKey || !checksumKey) {
-    throw new AppError('PayOS chua duoc cau hinh', HTTP_STATUS.INTERNAL_SERVER_ERROR, 'PAYOS_NOT_CONFIGURED')
+    throw new AppError('PayOS chưa được cấu hình', HTTP_STATUS.INTERNAL_SERVER_ERROR, 'PAYOS_NOT_CONFIGURED')
   }
   return new PayOS({ clientId, apiKey, checksumKey })
 }
@@ -105,7 +105,7 @@ export const handleSubscriptionWebhook = async (webhookData) => {
 export const handleSubscriptionReturn = async (query, userId) => {
   const { orderCode, cancel, code } = query
   if (!orderCode) {
-    throw new AppError('Thieu thong tin callback', HTTP_STATUS.BAD_REQUEST, 'MISSING_ORDER_CODE')
+    throw new AppError('Thiếu thông tin callback', HTTP_STATUS.BAD_REQUEST, 'MISSING_ORDER_CODE')
   }
 
   const sub = await SubscriptionOrder.findOne({ orderCode: Number(orderCode) })

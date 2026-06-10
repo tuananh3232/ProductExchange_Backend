@@ -367,7 +367,7 @@ router.patch(
  * @swagger
  * /admin/kyc:
  *   get:
- *     summary: Lay danh sach ho so KYC
+ *     summary: Lấy danh sách hồ sơ KYC
  *     tags: [Admin - KYC]
  *     parameters:
  *       - in: query
@@ -389,7 +389,7 @@ router.patch(
  *           type: integer
  *     responses:
  *       200:
- *         description: Lay danh sach KYC thanh cong
+ *         description: Lấy danh sách KYC thành công
  *
  * /admin/users/{userId}/kyc:
  *   get:

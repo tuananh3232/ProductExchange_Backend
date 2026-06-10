@@ -8,8 +8,8 @@ import { canAccessShopPermission } from '../utils/data-scope.util.js'
 import { reconcileOwnerShopQuota } from '../services/shop/shop.service.js'
 
 /**
- * Middleware xac thuc JWT
- * Trich xuat token tu header: Authorization: Bearer <token>
+ * Middleware xác thực JWT
+ * Trích xuất token từ header: Authorization: Bearer <token>
  */
 export const authenticate = async (req, res, next) => {
   try {
@@ -22,7 +22,7 @@ export const authenticate = async (req, res, next) => {
     const token = authHeader.split(' ')[1]
     const decoded = verifyAccessToken(token)
 
-    // Kiem tra user con ton tai va con active.
+    // Kiểm tra user còn tồn tại và còn active.
     const user = await User.findById(decoded.userId).select('_id roles isActive vip')
     if (!user) {
       throw new AppError('Tài khoản không tồn tại', HTTP_STATUS.UNAUTHORIZED, ERRORS.AUTH.UNAUTHORIZED)
@@ -49,8 +49,8 @@ export const authenticate = async (req, res, next) => {
 }
 
 /**
- * Middleware phan quyen theo role
- * Dung sau authenticate
+ * Middleware phân quyền theo role
+ * Dùng sau authenticate
  */
 export const authorize = (...roles) => {
   return (req, res, next) => {
@@ -67,7 +67,7 @@ export const authorize = (...roles) => {
 }
 
 /**
- * Middleware phan quyen theo permission (RBAC database-driven)
+ * Middleware phân quyền theo permission (RBAC database-driven)
  */
 export const requirePermissions = (...requiredPermissions) => {
   return async (req, res, next) => {
@@ -104,8 +104,8 @@ export const requirePermissions = (...requiredPermissions) => {
 }
 
 /**
- * Middleware phan quyen theo permission trong pham vi 1 shop cu the.
- * Owner cua shop luon duoc phep di tiep, staff can co permission tuong ung.
+ * Middleware phân quyền theo permission trong phạm vi 1 shop cụ thể.
+ * Owner của shop luôn được phép đi tiếp, staff cần có permission tương ứng.
  */
 export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
   return async (req, res, next) => {

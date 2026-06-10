@@ -445,7 +445,7 @@ export const submitKyc = async (userId, { fullName, idNumber }, files) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_SUBMITTED,
-    title: 'Ho so KYC da duoc gui',
+    title: 'Hồ sơ KYC đã được gửi',
     message: 'Hồ sơ KYC của bạn đang chờ xét duyệt',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
@@ -544,7 +544,7 @@ export const adminApproveKyc = async (userId) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_APPROVED,
-    title: 'KYC da duoc phe duyet',
+    title: 'KYC đã được phê duyệt',
     message: 'Hồ sơ KYC của bạn đã được phê duyệt và quyền seller đã được cấp',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
@@ -569,7 +569,7 @@ export const adminRejectKyc = async (userId, rejectionReason) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_REJECTED,
-    title: 'KYC bi tu choi',
+    title: 'KYC bị từ chối',
     message: 'Hồ sơ KYC của bạn bị từ chối',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
