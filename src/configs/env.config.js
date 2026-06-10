@@ -16,7 +16,7 @@ const apiPrefix = process.env.API_PREFIX || '/api/v1';
 const appUrl = process.env.APP_URL || 'http://localhost:3000';
 const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || appUrl;
 const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value);
-const dbName = process.env.DB_NAME || 'productexchange';
+const dbName = process.env.DB_NAME || 'anhdecor';
 
 const normalizeMongoUri = (uri, databaseName) => {
   if (!uri) return uri;
