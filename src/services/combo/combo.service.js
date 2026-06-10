@@ -37,6 +37,7 @@ const getMatchScore = (product, criteria) => {
   return score
 }
 
+// Dùng cho getAlternatives: ưu tiên khớp criteria cao, sau đó rẻ hơn trước
 const sortProducts = (products, criteria) =>
   [...products].sort((left, right) => {
     const scoreDifference = getMatchScore(right, criteria) - getMatchScore(left, criteria)
@@ -44,7 +45,8 @@ const sortProducts = (products, criteria) =>
     return left.price - right.price
   })
 
-// Bản seeded: tie-break cuối bằng random từ seed → thứ tự ổn định cho cùng seed
+// [FIX 2] Sort GIẢM dần theo giá (đắt nhất trước) trong cùng score tier
+// → pickProduct sẽ lấy sản phẩm đắt nhất vừa túi → tận dụng ngân sách tối đa
 const sortProductsWithSeed = (products, criteria, seed) => {
   const rand = createPrng(seed)
   const tagged = products.map((p) => ({ p, r: rand() }))
@@ -52,9 +54,9 @@ const sortProductsWithSeed = (products, criteria, seed) => {
     .sort((a, b) => {
       const sd = getMatchScore(b.p, criteria) - getMatchScore(a.p, criteria)
       if (sd !== 0) return sd
-      const pd = a.p.price - b.p.price
+      const pd = b.p.price - a.p.price // FIX: descending → đắt nhất trước
       if (pd !== 0) return pd
-      return a.r - b.r // seeded tiebreak: chỉ áp dụng khi score và giá bằng nhau
+      return a.r - b.r // seeded tiebreak
     })
     .map(({ p }) => p)
 }
@@ -65,7 +67,6 @@ export const groupProductsByDecorRole = (products) =>
     return groups
   }, {})
 
-// Fix 3: tính tone màu chiếm ưu thế trong combo đang build (để dùng làm tiebreaker)
 const getDominantTone = (products) => {
   const counts = {}
   for (const p of products) {
@@ -75,11 +76,12 @@ const getDominantTone = (products) => {
   return entries.length ? entries.sort((a, b) => b[1] - a[1])[0][0] : null
 }
 
-const pickProduct = (products, selectedIds, usedProductIds, remainingBudget, dominantTone = null) => {
+// [FIX 2] perSlotBudget thay vì toàn bộ remainingBudget
+// → phân bổ ngân sách đều cho mỗi slot còn lại
+const pickProduct = (products, selectedIds, usedProductIds, perSlotBudget, dominantTone = null) => {
   const affordableProducts = products.filter(
-    (product) => !selectedIds.has(getId(product)) && product.price <= remainingBudget
+    (product) => !selectedIds.has(getId(product)) && product.price <= perSlotBudget
   )
-  // Soft preference: ưu tiên sản phẩm cùng tone màu với các món đã chọn (chỉ là tiebreaker)
   if (dominantTone) {
     const toneMatch = affordableProducts.find(
       (product) => !usedProductIds.has(getId(product)) && product.colorTone === dominantTone
@@ -90,30 +92,41 @@ const pickProduct = (products, selectedIds, usedProductIds, remainingBudget, dom
 }
 
 export const buildCombo = ({ productsByRole, targetBudget, maxItems, usedProductIds, rotationOffset = 0 }) => {
-  // Fix 2: xoay thứ tự role theo offset — tránh main_item luôn được ưu tiên khi budget hẹp
   const roleOrder = [...DECOR_ROLES.slice(rotationOffset), ...DECOR_ROLES.slice(0, rotationOffset)]
   const selectedProducts = []
   const selectedIds = new Set()
   let totalPrice = 0
 
-  for (const role of roleOrder) {
-    if (selectedProducts.length >= maxItems) break
+  // [FIX 2] Tính perSlotBudget động: chia ngân sách còn lại cho số slot còn lại
+  // → tránh việc slot đầu tiên "chiếm" hết ngân sách bằng sản phẩm đắt
+  const pickForRole = (role) => {
+    const remainingSlots = maxItems - selectedProducts.length
+    if (remainingSlots <= 0) return
+    const perSlotBudget = (targetBudget - totalPrice) / remainingSlots
     const dominantTone = getDominantTone(selectedProducts)
-    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice, dominantTone)
-    if (!product) continue
+    const product = pickProduct(
+      productsByRole[role] || [],
+      selectedIds,
+      usedProductIds,
+      perSlotBudget,
+      dominantTone,
+    )
+    if (!product) return
     selectedProducts.push(product)
     selectedIds.add(getId(product))
     totalPrice += product.price
   }
 
+  // Pass 1: mỗi role lấy 1 sản phẩm
   for (const role of roleOrder) {
     if (selectedProducts.length >= maxItems) break
-    const dominantTone = getDominantTone(selectedProducts)
-    const product = pickProduct(productsByRole[role] || [], selectedIds, usedProductIds, targetBudget - totalPrice, dominantTone)
-    if (!product) continue
-    selectedProducts.push(product)
-    selectedIds.add(getId(product))
-    totalPrice += product.price
+    pickForRole(role)
+  }
+
+  // Pass 2: lặp lại role để fill đủ maxItems khi pass 1 thiếu slot
+  for (const role of roleOrder) {
+    if (selectedProducts.length >= maxItems) break
+    pickForRole(role)
   }
 
   selectedProducts.forEach((product) => usedProductIds.add(getId(product)))
@@ -125,38 +138,77 @@ export const calculateComboTotal = (products) =>
 
 export const buildComboReason = (combo, criteria) => {
   const details = [
-    criteria.style && `style ${criteria.style}`,
-    criteria.roomType && `room ${criteria.roomType}`,
-    criteria.colorTone && `tone ${criteria.colorTone}`,
+    criteria.style && `phong cách ${criteria.style}`,
+    criteria.roomType && `không gian ${criteria.roomType}`,
+    criteria.colorTone && `tông màu ${criteria.colorTone}`,
   ].filter(Boolean)
-  return `${combo.comboType} combo matches ${details.join(', ') || 'your selected criteria'} without exceeding the budget.`
+  return `Combo ${combo.comboType} phù hợp ${details.join(', ') || 'tiêu chí đã chọn'} trong ngân sách dự kiến.`
 }
 
-const buildCriteriaFilter = (criteria) => {
-  const filter = {
-    isActive: true,
-    status: 'available',
-    stock: { $gt: 0 },
-    price: { $lte: criteria.budget },
-    decorRole: { $in: DECOR_ROLES },
+const buildBaseFilter = (criteria) => ({
+  isActive: true,
+  status: 'available',
+  stock: { $gt: 0 },
+  price: { $lte: criteria.budget },
+  decorRole: { $in: DECOR_ROLES },
+})
+
+// [FIX 3] Fallback query khi pool sản phẩm quá ít:
+// - Lần 1: lọc strict (style + roomType + colorTone, cho phép null)
+// - Lần 2: bỏ colorTone nếu pool vẫn nhỏ
+// - Lần 3: bỏ thêm style nếu vẫn nhỏ (giữ roomType vì quan trọng nhất với người dùng)
+const fetchProductPool = async (criteria) => {
+  const minPoolSize = Math.max((criteria.maxItems || 5) * COMBO_TYPES.length * 2, 20)
+
+  // Strict filter
+  const strictFilter = buildBaseFilter(criteria)
+  for (const field of ['style', 'roomType', 'colorTone']) {
+    if (criteria[field]) strictFilter[field] = { $in: [criteria[field], null] }
+  }
+  const products = await Product.find(strictFilter).populate('category', 'name slug').lean()
+  if (products.length >= minPoolSize) return products
+
+  // Fallback 1: thả lỏng colorTone
+  const seen = new Set(products.map((p) => p._id.toString()))
+  if (criteria.colorTone) {
+    const f1 = buildBaseFilter(criteria)
+    if (criteria.style) f1.style = { $in: [criteria.style, null] }
+    if (criteria.roomType) f1.roomType = { $in: [criteria.roomType, null] }
+    const extras1 = await Product.find(f1).populate('category', 'name slug').lean()
+    for (const p of extras1) {
+      if (!seen.has(p._id.toString())) {
+        seen.add(p._id.toString())
+        products.push(p)
+      }
+    }
+    if (products.length >= minPoolSize) return products
   }
 
-  for (const field of ['style', 'roomType', 'colorTone']) {
-    if (criteria[field]) filter[field] = { $in: [criteria[field], null] }
+  // Fallback 2: thả lỏng thêm style (giữ roomType)
+  if (criteria.style) {
+    const f2 = buildBaseFilter(criteria)
+    if (criteria.roomType) f2.roomType = { $in: [criteria.roomType, null] }
+    const extras2 = await Product.find(f2).populate('category', 'name slug').lean()
+    for (const p of extras2) {
+      if (!seen.has(p._id.toString())) {
+        seen.add(p._id.toString())
+        products.push(p)
+      }
+    }
   }
-  return filter
+
+  return products
 }
 
 export const generateCombos = async (criteria, { seed: inputSeed, page = 1, pageSize = 3 } = {}) => {
   const seed = inputSeed || Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-  // Fix 2: tính starting role offset từ seed — đảm bảo cùng seed cho cùng rotation
   const seedOffset = Math.floor(createPrng(seed)() * DECOR_ROLES.length)
 
-  const products = await Product.find(buildCriteriaFilter(criteria)).populate('category', 'name slug').lean()
+  // [FIX 3] Dùng pool có fallback thay vì query cứng
+  const products = await fetchProductPool(criteria)
   const sortedProducts = sortProductsWithSeed(products, criteria, seed)
   const productsByRole = groupProductsByDecorRole(sortedProducts)
 
-  // Sinh nhiều vòng combo cho đến khi hết sản phẩm hoặc đạt giới hạn
   const allCombos = []
   const usedProductIds = new Set()
 
@@ -169,9 +221,12 @@ export const generateCombos = async (criteria, { seed: inputSeed, page = 1, page
       const combo = buildCombo({ productsByRole, targetBudget, maxItems, usedProductIds, rotationOffset })
       if (!combo.products.length) return null
 
+      const styleLabel = criteria.style || ''
+      const roomLabel = criteria.roomType || ''
       const responseCombo = {
         comboType,
-        comboName: `${comboType} ${criteria.style || ''} ${criteria.roomType || ''} Combo`.replace(/\s+/g, ' ').trim(),
+        // [FIX 1] Thêm số thứ tự vòng → tên duy nhất qua các trang → tránh trùng key ở FE
+        comboName: `${comboType} ${styleLabel} ${roomLabel} Combo #${roundIndex + 1}`.replace(/\s+/g, ' ').trim(),
         style: criteria.style || null,
         roomType: criteria.roomType || null,
         colorTone: criteria.colorTone || null,
@@ -183,7 +238,7 @@ export const generateCombos = async (criteria, { seed: inputSeed, page = 1, page
       return { ...responseCombo, reason: buildComboReason(responseCombo, criteria) }
     }).filter(Boolean)
 
-    if (!roundCombos.length) break // sản phẩm cạn, không tạo thêm được
+    if (!roundCombos.length) break
     allCombos.push(...roundCombos)
   }
 

@@ -32,11 +32,6 @@ const normalizeImages = (images = []) => {
 const textSearchOptions = (filter, pag) =>
   '$text' in filter ? { sort: { score: { $meta: 'textScore' }, [pag.sortBy]: pag.sortOrder } } : {}
 
-// Ngưỡng tối thiểu kết quả phrase search trước khi fallback về từ chính
-const PHRASE_THRESHOLD = 5
-
-// Tách từ đầu tiên làm primary keyword khi phrase search không đủ kết quả
-const extractPrimaryKeyword = (search) => search.trim().split(/\s+/)[0]
 
 const normalizeProductSort = (pagination) => {
   const sortMap = {
@@ -257,26 +252,9 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
 
 export const getProducts = async (query, pagination) => {
   const pag = normalizeProductSort(pagination)
-  const rawSearch = query.search ? String(query.search).trim().replace(/\s+/g, ' ') : ''
-  const isMultiWord = rawSearch.split(/\s+/).length > 1
-
-  if (!rawSearch || !isMultiWord) {
-    const filter = buildFilter(query)
-    const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-    return { products, meta }
-  }
-
-  // Bước 1: Phrase search — chỉ khớp đúng cụm từ liên tiếp (e.g. "đèn phòng ngủ")
-  const phraseFilter = buildFilter({ ...query, search: `"${rawSearch}"` })
-  const { items: phraseProducts, meta: phraseMeta } = await paginate(productRepo, phraseFilter, pag, textSearchOptions(phraseFilter, pag))
-
-  if (phraseMeta.total >= PHRASE_THRESHOLD) return { products: phraseProducts, meta: phraseMeta }
-
-  // Bước 2: Fallback về từ chính (từ đầu tiên) nếu phrase search không đủ kết quả
-  const primaryKeyword = extractPrimaryKeyword(rawSearch)
-  const fallbackFilter = buildFilter({ ...query, search: primaryKeyword })
-  const { items: fallbackProducts, meta: fallbackMeta } = await paginate(productRepo, fallbackFilter, pag, textSearchOptions(fallbackFilter, pag))
-  return { products: fallbackProducts, meta: fallbackMeta }
+  const filter = buildFilter(query)
+  const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
+  return { products, meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
