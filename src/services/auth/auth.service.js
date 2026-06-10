@@ -445,11 +445,11 @@ export const submitKyc = async (userId, { fullName, idNumber }, files) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_SUBMITTED,
-    title: 'Ho so KYC da duoc gui',
+    title: 'Hồ sơ KYC đã được gửi',
     message: 'Hồ sơ KYC của bạn đang chờ xét duyệt',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
-    actionUrl: '/profile/kyc',
+    actionUrl: '/profile',
   })
   return user.toPublicJSON()
 }
