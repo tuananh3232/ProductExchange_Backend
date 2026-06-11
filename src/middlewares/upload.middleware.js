@@ -20,6 +20,8 @@ export const uploadKycImages = base.fields([
   { name: 'backImage', maxCount: 1 },
 ])
 
+export const uploadAvatarImage = base.single('avatar')
+
 export const uploadProductImages = base.array('images', 10)
 
 export const uploadProductVisualImage = base.single('image')

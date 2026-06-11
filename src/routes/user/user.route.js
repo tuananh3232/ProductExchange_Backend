@@ -2,7 +2,7 @@ import { Router } from 'express'
 import * as userController from '../../controllers/user/user.controller.js'
 import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { uploadKycImages } from '../../middlewares/upload.middleware.js'
+import { uploadAvatarImage, uploadKycImages } from '../../middlewares/upload.middleware.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import {
   changePasswordSchema,
@@ -67,6 +67,43 @@ router.put(
   requirePermissions(PERMISSIONS.USER_UPDATE),
   validate(updateProfileSchema),
   userController.updateProfile
+)
+
+/**
+ * @swagger
+ * /users/avatar:
+ *   patch:
+ *     summary: Cập nhật ảnh đại diện bằng file upload hoặc avatarUrl
+ *     tags: [Users]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatarUrl:
+ *                 type: string
+ *                 format: uri
+ *               removeAvatar:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Cập nhật avatar thành công
+ */
+router.patch(
+  '/avatar',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_UPDATE),
+  uploadAvatarImage,
+  userController.updateAvatar
 )
 
 /**

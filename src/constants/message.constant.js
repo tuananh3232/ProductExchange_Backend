@@ -7,6 +7,7 @@ const MESSAGES = {
     REFRESH_TOKEN_SUCCESS: 'Làm mới token thành công',
     PROFILE_FETCHED: 'Lấy thông tin cá nhân thành công',
     PROFILE_UPDATED: 'Cập nhật thông tin thành công',
+    AVATAR_UPDATED: 'Cập nhật ảnh đại diện thành công',
     PASSWORD_CHANGED: 'Đổi mật khẩu thành công',
     GOOGLE_LOGIN_SUCCESS: 'Đăng nhập Google thành công',
     FORGOT_PASSWORD_SENT: 'Nếu email tồn tại, hệ thống đã gửi hướng dẫn đặt lại mật khẩu',

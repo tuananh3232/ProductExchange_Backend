@@ -20,6 +20,15 @@ export const updateProfile = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.AUTH.PROFILE_UPDATED, data: { user: toUserResponse(user) } })
 })
 
+export const updateAvatar = asyncHandler(async (req, res) => {
+  const user = await authService.updateAvatar(req.user._id, {
+    file: req.file,
+    avatarUrl: req.body?.avatarUrl,
+    removeAvatar: req.body?.removeAvatar,
+  })
+  sendSuccess(res, { message: MESSAGES.AUTH.AVATAR_UPDATED, data: { user: toUserResponse(user) } })
+})
+
 export const changePassword = asyncHandler(async (req, res) => {
   await authService.changePassword(req.user._id, req.body)
   sendSuccess(res, { message: MESSAGES.AUTH.PASSWORD_CHANGED })
