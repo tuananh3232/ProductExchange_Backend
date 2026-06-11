@@ -23,6 +23,55 @@ const createRawToken = () => crypto.randomBytes(32).toString('hex')
 const createVerificationOtp = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0')
 const hashToken = (rawToken) => crypto.createHash('sha256').update(rawToken).digest('hex')
 const googleClient = new OAuth2Client()
+const emptyAvatarPayload = { url: '', publicId: '' }
+
+const ensureUserExists = async (userId) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  return user
+}
+
+const ensureProfileUnlocked = async (userId) => {
+  const pendingShop = await Shop.exists({ owner: userId, status: SHOP_STATUS.PENDING_REVIEW, isActive: true })
+  if (pendingShop) {
+    throw new AppError(
+      'Không thể cập nhật hồ sơ khi shop đang chờ xét duyệt',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.LOCKED_FOR_REVIEW
+    )
+  }
+}
+
+const normalizeAvatarUrlInput = (value) => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const normalized = value.trim()
+  if (!normalized) {
+    return ''
+  }
+
+  try {
+    const parsed = new URL(normalized)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('INVALID_PROTOCOL')
+    }
+
+    return parsed.toString()
+  } catch {
+    throw new AppError('Avatar URL không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+}
+
+const deleteStoredAvatarIfNeeded = async (user) => {
+  if (user.avatar?.publicId) {
+    await deleteImage(user.avatar.publicId)
+  }
+}
 
 const dispatchVerificationOtp = async (user, otp) => {
   const sent = await sendVerificationOtpEmail({
@@ -255,6 +304,52 @@ export const updateProfile = async (userId, updateData) => {
   if (updateData.phone !== undefined) user.phone = updateData.phone
   if (updateData.address) {
     user.address = { ...user.address, ...updateData.address }
+  }
+
+  await user.save()
+  return user.toPublicJSON()
+}
+
+export const updateAvatar = async (userId, { file, avatarUrl, removeAvatar = false }) => {
+  const user = await ensureUserExists(userId)
+  await ensureProfileUnlocked(userId)
+
+  const hasFile = Boolean(file?.buffer)
+  const normalizedAvatarUrl = normalizeAvatarUrlInput(avatarUrl)
+  const shouldRemoveAvatar = removeAvatar === true || removeAvatar === 'true' || (!hasFile && avatarUrl === '')
+
+  if (hasFile && normalizedAvatarUrl) {
+    throw new AppError(
+      'Chỉ được gửi một trong hai: file avatar hoặc avatarUrl',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.VALIDATION.INVALID_FORMAT
+    )
+  }
+
+  if (!hasFile && !normalizedAvatarUrl && !shouldRemoveAvatar) {
+    throw new AppError(
+      'Vui lòng cung cấp file avatar hoặc avatarUrl',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.VALIDATION.REQUIRED
+    )
+  }
+
+  if (shouldRemoveAvatar) {
+    await deleteStoredAvatarIfNeeded(user)
+    user.avatar = { ...emptyAvatarPayload }
+    await user.save()
+    return user.toPublicJSON()
+  }
+
+  await deleteStoredAvatarIfNeeded(user)
+
+  if (hasFile) {
+    user.avatar = await uploadBuffer(file.buffer, 'avatars/users')
+  } else {
+    user.avatar = {
+      url: normalizedAvatarUrl,
+      publicId: '',
+    }
   }
 
   await user.save()
@@ -544,11 +639,11 @@ export const adminApproveKyc = async (userId) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_APPROVED,
-    title: 'KYC da duoc phe duyet',
+    title: 'KYC đã được phê duyệt',
     message: 'Hồ sơ KYC của bạn đã được phê duyệt và quyền seller đã được cấp',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
-    actionUrl: '/profile/kyc',
+    actionUrl: '/profile',
   })
   return user.toPublicJSON()
 }
@@ -569,11 +664,11 @@ export const adminRejectKyc = async (userId, rejectionReason) => {
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_REJECTED,
-    title: 'KYC bi tu choi',
+    title: 'KYC bị từ chối',
     message: 'Hồ sơ KYC của bạn bị từ chối',
     targetType: NOTIFICATION_TARGET_TYPES.USER,
     targetId: user._id,
-    actionUrl: '/profile/kyc',
+    actionUrl: '/profile',
     data: { rejectionReason },
   })
   return user.toPublicJSON()
