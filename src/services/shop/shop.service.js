@@ -19,11 +19,11 @@ const DELETABLE_SHOP_STATUSES = [SHOP_STATUS.REJECTED]
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
 const SHOP_LIMITS = {
   default: 1,
-  vip: 3,
+  vip: 3
 }
 const SHOP_SUSPENSION_REASONS = {
   ADMIN: 'admin',
-  VIP_EXPIRED: 'vip_expired',
+  VIP_EXPIRED: 'vip_expired'
 }
 
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '')
@@ -38,14 +38,14 @@ const notifyShopUser = (recipient, type, shop, message, sender = null, data = {}
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
     actionUrl: `/shops/${shop._id}`,
-    data: { shopId: shop._id, ...data },
+    data: { shopId: shop._id, ...data }
   })
 
 const toBasicUserResponse = (user) => ({
   _id: toIdString(user),
   name: user.name,
   email: user.email,
-  avatar: user.avatar || { url: '', publicId: '' },
+  avatar: user.avatar || { url: '', publicId: '' }
 })
 
 // eslint-disable-next-line no-unused-vars
@@ -59,7 +59,9 @@ const ensureShopAccess = (shop, userContext) => {
   }
 
   const isOwner = shop.owner?._id?.toString() === userId || shop.owner?.toString() === userId
-  const isStaff = (shop.staff || []).some((staffId) => staffId?._id?.toString() === userId || staffId?.toString() === userId)
+  const isStaff = (shop.staff || []).some(
+    (staffId) => staffId?._id?.toString() === userId || staffId?.toString() === userId
+  )
 
   if (!isOwner && !isStaff) {
     throw new AppError('Bạn không có quyền truy cập shop này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
@@ -74,7 +76,11 @@ const ensureShopOwnerAccess = (shop, userContext) => {
   const ownerId = shop.owner?._id?.toString() || shop.owner?.toString()
 
   if (!userId || ownerId !== userId) {
-    throw new AppError('Bạn không có quyền quản lý quyền staff của shop này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError(
+      'Bạn không có quyền quản lý quyền staff của shop này',
+      HTTP_STATUS.FORBIDDEN,
+      ERRORS.AUTH.FORBIDDEN
+    )
   }
 }
 
@@ -135,6 +141,16 @@ const buildQuotaExceededMessage = (user) => {
   return `Tai khoan VIP chi duoc tao toi da ${SHOP_LIMITS.vip} shop`
 }
 
+const assertCanCreateShopDraft = (owner) => {
+  const roleSet = new Set(owner?.roles || [])
+  const hasSellerRole = roleSet.has(ROLES.SELLER)
+  const hasApprovedKyc = owner?.kyc?.status === 'approved'
+
+  if (!hasSellerRole && !hasApprovedKyc) {
+    throw new AppError('Bạn cần được duyệt KYC trước khi tạo shop', HTTP_STATUS.FORBIDDEN, ERRORS.KYC.APPROVAL_REQUIRED)
+  }
+}
+
 export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify = true } = {}) => {
   const owner = userDoc ?? (await User.findById(ownerId).select('_id vip'))
   if (!owner) {
@@ -159,8 +175,8 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
           suspensionMeta: {
             reason: null,
             previousStatus: null,
-            suspendedAt: null,
-          },
+            suspendedAt: null
+          }
         })
 
         if (notify) {
@@ -170,7 +186,7 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
             updatedShop,
             'Shop cua ban da duoc mo lai sau khi gia han VIP',
             null,
-            { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED },
+            { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED }
           )
         }
 
@@ -189,8 +205,8 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
       suspensionMeta: {
         reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED,
         previousStatus: shop.status,
-        suspendedAt: new Date(),
-      },
+        suspendedAt: new Date()
+      }
     })
 
     if (notify) {
@@ -200,7 +216,7 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
         updatedShop,
         'Shop của bạn tạm bị khóa vì vượt quá giới hạn shop của gói hiện tại',
         null,
-        { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED, previousStatus: shop.status },
+        { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED, previousStatus: shop.status }
       )
     }
 
@@ -210,12 +226,13 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
   return {
     allowedCount,
     totalShops: shops.length,
-    changed,
+    changed
   }
 }
 
 export const createShop = async (ownerId, payload) => {
   const owner = await assertUserExists(ownerId)
+  assertCanCreateShopDraft(owner)
   await reconcileOwnerShopQuota(ownerId, { userDoc: owner, notify: false })
 
   const totalOwnedShops = await Shop.countDocuments({ owner: ownerId, isActive: true })
@@ -238,7 +255,7 @@ export const createShop = async (ownerId, payload) => {
     slug,
     owner: ownerId,
     staff: [],
-    status: SHOP_STATUS.DRAFT,
+    status: SHOP_STATUS.DRAFT
   })
 
   return shopRepo.findById(shop._id)
@@ -291,7 +308,7 @@ export const submitForReview = async (shopId, userContext) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
     message: 'Bạn không có quyền xem quyền staff của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   const owner = await User.findById(userContext._id).select('kyc')
@@ -304,14 +321,15 @@ export const submitForReview = async (shopId, userContext) => {
   }
 
   if (shop.status !== SHOP_STATUS.DRAFT) {
-    throw new AppError('Shop phải ở trạng thái draft mới có thể nộp xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_DRAFT)
+    throw new AppError(
+      'Shop phải ở trạng thái draft mới có thể nộp xét duyệt',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.NOT_DRAFT
+    )
   }
 
   const isComplete =
-    shop.phone?.trim() &&
-    shop.email?.trim() &&
-    shop.address?.province?.trim() &&
-    shop.address?.district?.trim()
+    shop.phone?.trim() && shop.email?.trim() && shop.address?.province?.trim() && shop.address?.district?.trim()
 
   if (!isComplete) {
     throw new AppError(
@@ -335,11 +353,15 @@ export const updateShop = async (shopId, userContext, payload) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_PROFILE_UPDATE,
     message: 'Bạn không có quyền cập nhật shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   if (shop.status === SHOP_STATUS.PENDING_REVIEW) {
-    throw new AppError('Không thể sửa thông tin shop khi đang chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.LOCKED_FOR_REVIEW)
+    throw new AppError(
+      'Không thể sửa thông tin shop khi đang chờ xét duyệt',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.LOCKED_FOR_REVIEW
+    )
   }
 
   const updateData = { ...payload }
@@ -347,14 +369,14 @@ export const updateShop = async (shopId, userContext, payload) => {
   if (Object.prototype.hasOwnProperty.call(payload, 'address') && payload.address) {
     updateData.address = {
       ...(shop.address || {}),
-      ...payload.address,
+      ...payload.address
     }
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'logo') && payload.logo) {
     updateData.logo = {
       ...(shop.logo || {}),
-      ...payload.logo,
+      ...payload.logo
     }
   }
 
@@ -381,7 +403,7 @@ export const deleteShop = async (shopId, userContext) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
     message: 'Bạn không có quyền xem quyền staff của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   if (!DELETABLE_SHOP_STATUSES.includes(shop.status)) {
@@ -394,7 +416,7 @@ export const deleteShop = async (shopId, userContext) => {
 
   await shopRepo.updateById(shopId, {
     isActive: false,
-    slug: `${shop.slug}-deleted-${shop._id.toString()}`,
+    slug: `${shop.slug}-deleted-${shop._id.toString()}`
   })
 }
 
@@ -409,7 +431,7 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
     message: 'Bạn không có quyền xem quyền staff của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
   const newOwner = await assertActiveUserByEmail(newOwnerEmail)
   const newOwnerId = newOwner._id
@@ -417,11 +439,19 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
   const currentOwnerId = toIdString(shop.owner)
 
   if (requesterId && requesterId === toIdString(newOwnerId)) {
-    throw new AppError('Không thể chuyển quyền shop cho chính mình', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    throw new AppError(
+      'Không thể chuyển quyền shop cho chính mình',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.VALIDATION.INVALID_FORMAT
+    )
   }
 
   if (currentOwnerId === toIdString(newOwnerId)) {
-    throw new AppError('Người dùng này đang là owner của shop', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    throw new AppError(
+      'Người dùng này đang là owner của shop',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.VALIDATION.INVALID_FORMAT
+    )
   }
 
   const updateData = {
@@ -429,7 +459,7 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
     staff: (shop.staff || []).filter((staffId) => toIdString(staffId) !== toIdString(newOwnerId)),
     staffPermissions: (shop.staffPermissions || []).filter(
       (entry) => toIdString(entry.staffUser) !== toIdString(newOwnerId)
-    ),
+    )
   }
 
   const ownerRoles = new Set(newOwner.roles || [])
@@ -438,8 +468,20 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
   await newOwner.save()
 
   const updatedShop = await shopRepo.updateById(shopId, updateData)
-  await notifyShopUser(newOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Ban da tro thanh chu so huu shop', userContext._id)
-  await notifyShopUser(currentOwnerId, NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED, updatedShop, 'Quyen so huu shop da duoc chuyen giao', userContext._id)
+  await notifyShopUser(
+    newOwnerId,
+    NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED,
+    updatedShop,
+    'Ban da tro thanh chu so huu shop',
+    userContext._id
+  )
+  await notifyShopUser(
+    currentOwnerId,
+    NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED,
+    updatedShop,
+    'Quyen so huu shop da duoc chuyen giao',
+    userContext._id
+  )
   await reconcileOwnerShopQuota(newOwnerId, { userDoc: newOwner })
 
   if (currentOwnerId && currentOwnerId !== toIdString(newOwnerId)) {
@@ -447,7 +489,7 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
     const oldOwnerStillOwnsShop = await shopRepo.countMany({
       _id: { $ne: shopId },
       owner: currentOwnerId,
-      isActive: true,
+      isActive: true
     })
 
     if (!oldOwnerStillOwnsShop) {
@@ -473,7 +515,7 @@ export const addStaff = async (shopId, userContext, staffUserId) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
     message: 'Bạn không có quyền thêm staff cho shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
   const staffUser = await assertUserExists(staffUserId)
   const staffId = staffUserId.toString()
@@ -514,15 +556,21 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_REMOVE,
     message: 'Bạn không có quyền xóa staff khỏi shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
   const updatedShop = await shopRepo.updateById(shopId, {
     $pull: {
       staff: staffUserId,
-      staffPermissions: { staffUser: staffUserId },
-    },
+      staffPermissions: { staffUser: staffUserId }
+    }
   })
-  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_REMOVED, updatedShop, 'Ban da duoc go khoi staff cua shop', userContext._id)
+  await notifyShopUser(
+    staffUserId,
+    NOTIFICATION_TYPES.SHOP_STAFF_REMOVED,
+    updatedShop,
+    'Ban da duoc go khoi staff cua shop',
+    userContext._id
+  )
   return updatedShop
 }
 
@@ -537,7 +585,7 @@ export const getShopStaff = async (shopId, userContext) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_READ,
     message: 'Bạn không có quyền xem staff của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   const permissionByStaffId = new Map(
@@ -546,8 +594,8 @@ export const getShopStaff = async (shopId, userContext) => {
       {
         permissions: entry.permissions || [],
         updatedAt: entry.updatedAt || null,
-        updatedBy: entry.updatedBy || null,
-      },
+        updatedBy: entry.updatedBy || null
+      }
     ])
   )
 
@@ -559,7 +607,7 @@ export const getShopStaff = async (shopId, userContext) => {
       user: member,
       permissions: permissionEntry?.permissions || [],
       permissionUpdatedAt: permissionEntry?.updatedAt || null,
-      permissionUpdatedBy: permissionEntry?.updatedBy || null,
+      permissionUpdatedBy: permissionEntry?.updatedBy || null
     }
   })
 
@@ -584,13 +632,15 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
 
   const availablePermissions = await permissionRepo.findByKeys(SHOP_STAFF_PERMISSIONS)
   const assigned = (shop.staffPermissions || []).find(
-    (entry) => entry.staffUser?._id?.toString() === staffUserId.toString() || entry.staffUser?.toString() === staffUserId.toString()
+    (entry) =>
+      entry.staffUser?._id?.toString() === staffUserId.toString() ||
+      entry.staffUser?.toString() === staffUserId.toString()
   )
 
   return {
     availablePermissions,
     assignedPermissions: assigned?.permissions || [],
-    staffUserId,
+    staffUserId
   }
 }
 
@@ -599,7 +649,7 @@ export const getMyShops = async (userId, query, pagination) => {
 
   const filter = {
     isActive: true,
-    $or: [{ owner: userId }, { staff: userId }],
+    $or: [{ owner: userId }, { staff: userId }]
   }
   if (query.status) filter.status = query.status
 
@@ -636,7 +686,7 @@ export const resubmitShop = async (shopId, userContext) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW,
     message: 'Bạn không có quyền nộp lại shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   const owner = await User.findById(userContext._id).select('kyc')
@@ -649,14 +699,15 @@ export const resubmitShop = async (shopId, userContext) => {
   }
 
   if (shop.status !== SHOP_STATUS.REJECTED) {
-    throw new AppError('Shop phải ở trạng thái bị từ chối mới có thể nộp lại', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_REJECTED)
+    throw new AppError(
+      'Shop phải ở trạng thái bị từ chối mới có thể nộp lại',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.NOT_REJECTED
+    )
   }
 
   const isComplete =
-    shop.phone?.trim() &&
-    shop.email?.trim() &&
-    shop.address?.province?.trim() &&
-    shop.address?.district?.trim()
+    shop.phone?.trim() && shop.email?.trim() && shop.address?.province?.trim() && shop.address?.district?.trim()
 
   if (!isComplete) {
     throw new AppError(
@@ -684,10 +735,15 @@ export const unsuspendShop = async (shopId) => {
     suspensionMeta: {
       reason: null,
       previousStatus: null,
-      suspendedAt: null,
-    },
+      suspendedAt: null
+    }
   })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_UNBLOCKED, updatedShop, 'Shop cua ban da duoc mo khoa')
+  await notifyShopUser(
+    shop.owner?._id || shop.owner,
+    NOTIFICATION_TYPES.SHOP_UNBLOCKED,
+    updatedShop,
+    'Shop cua ban da duoc mo khoa'
+  )
   return updatedShop
 }
 
@@ -702,7 +758,11 @@ export const approveShop = async (shopId) => {
 
   const shopOwner = await User.findById(shop.owner?._id || shop.owner).select('kyc roles role')
   if (!shopOwner?.kyc || shopOwner.kyc.status !== 'approved') {
-    throw new AppError('Chủ shop chưa được xác minh danh tính (KYC), không thể duyệt shop', HTTP_STATUS.BAD_REQUEST, ERRORS.KYC.NOT_APPROVED)
+    throw new AppError(
+      'Chủ shop chưa được xác minh danh tính (KYC), không thể duyệt shop',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.KYC.NOT_APPROVED
+    )
   }
 
   const ownerRoles = new Set(Array.isArray(shopOwner.roles) ? shopOwner.roles : [])
@@ -713,7 +773,12 @@ export const approveShop = async (shopId) => {
   }
 
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_APPROVED, updatedShop, 'Shop cua ban da duoc phe duyet')
+  await notifyShopUser(
+    shop.owner?._id || shop.owner,
+    NOTIFICATION_TYPES.SHOP_APPROVED,
+    updatedShop,
+    'Shop cua ban da duoc phe duyet'
+  )
   return updatedShop
 }
 
@@ -726,7 +791,14 @@ export const rejectShop = async (shopId, rejectionReason) => {
     throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
   }
   const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_REJECTED, updatedShop, 'Shop cua ban bi tu choi', null, { rejectionReason })
+  await notifyShopUser(
+    shop.owner?._id || shop.owner,
+    NOTIFICATION_TYPES.SHOP_REJECTED,
+    updatedShop,
+    'Shop cua ban bi tu choi',
+    null,
+    { rejectionReason }
+  )
   return updatedShop
 }
 
@@ -744,10 +816,17 @@ export const suspendShop = async (shopId, reason) => {
     suspensionMeta: {
       reason: SHOP_SUSPENSION_REASONS.ADMIN,
       previousStatus: shop.status,
-      suspendedAt: new Date(),
-    },
+      suspendedAt: new Date()
+    }
   })
-  await notifyShopUser(shop.owner?._id || shop.owner, NOTIFICATION_TYPES.SHOP_BLOCKED, updatedShop, 'Shop của bạn đã bị khóa', null, { reason })
+  await notifyShopUser(
+    shop.owner?._id || shop.owner,
+    NOTIFICATION_TYPES.SHOP_BLOCKED,
+    updatedShop,
+    'Shop của bạn đã bị khóa',
+    null,
+    { reason }
+  )
   return updatedShop
 }
 
@@ -762,7 +841,7 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_UPDATE,
     message: 'Bạn không có quyền sửa quyền staff của shop này',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
 
   if (userContext?._id?.toString() === staffUserId.toString()) {
@@ -780,7 +859,11 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
   const uniqueKeys = [...new Set(permissionKeys)]
   const invalidKeys = uniqueKeys.filter((key) => !SHOP_STAFF_PERMISSIONS.includes(key))
   if (invalidKeys.length) {
-    throw new AppError('Danh sách quyền staff chứa quyền không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.PERMISSION_NOT_FOUND)
+    throw new AppError(
+      'Danh sách quyền staff chứa quyền không hợp lệ',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.RBAC.PERMISSION_NOT_FOUND
+    )
   }
 
   const permissions = uniqueKeys.length ? await permissionRepo.findByKeys(uniqueKeys) : []
@@ -789,23 +872,32 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
   }
 
   const nextStaffPermissions = (shop.staffPermissions || []).filter(
-    (entry) => entry.staffUser?._id?.toString() !== staffUserId.toString() && entry.staffUser?.toString() !== staffUserId.toString()
+    (entry) =>
+      entry.staffUser?._id?.toString() !== staffUserId.toString() &&
+      entry.staffUser?.toString() !== staffUserId.toString()
   )
 
   nextStaffPermissions.push({
     staffUser: staffUserId,
     permissions: uniqueKeys,
     updatedBy: userContext._id,
-    updatedAt: new Date(),
+    updatedAt: new Date()
   })
 
   const updatedShop = await shopRepo.updateById(shopId, { staffPermissions: nextStaffPermissions })
-  await notifyShopUser(staffUserId, NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED, updatedShop, 'Quyen staff cua ban da duoc cap nhat', userContext._id, { permissions: uniqueKeys })
+  await notifyShopUser(
+    staffUserId,
+    NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED,
+    updatedShop,
+    'Quyen staff cua ban da duoc cap nhat',
+    userContext._id,
+    { permissions: uniqueKeys }
+  )
 
   return {
     shop: updatedShop,
     staffUserId,
-    permissions: permissions.map((permission) => permission.key),
+    permissions: permissions.map((permission) => permission.key)
   }
 }
 
@@ -820,7 +912,7 @@ export const findUserByEmailForShop = async (shopId, userContext, email) => {
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
     message: 'Bạn không có quyền tìm người dùng để mời staff',
-    errorCode: ERRORS.AUTH.FORBIDDEN,
+    errorCode: ERRORS.AUTH.FORBIDDEN
   })
   const user = await assertActiveUserByEmail(email)
   return toBasicUserResponse(user)

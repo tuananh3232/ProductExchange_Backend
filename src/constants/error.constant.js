@@ -108,6 +108,7 @@ const ERRORS = {
   KYC: {
     NOT_SUBMITTED: 'KYC has not been submitted',
     NOT_APPROVED: 'KYC has not been approved',
+    APPROVAL_REQUIRED: 'KYC_APPROVAL_REQUIRED',
     NOT_PENDING: 'KYC is not in pending status',
     ALREADY_APPROVED: 'KYC has already been approved',
     IMAGE_REQUIRED: 'Front and back CCCD images are required',

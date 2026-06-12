@@ -7,9 +7,165 @@ import { loginMember, loginShopOwner } from '../setup/auth.js'
 import { createSampleShop } from '../setup/factories.js'
 import Notification from '../../src/models/notification.model.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../src/constants/notification.constant.js'
-import { createNotification as createNotificationService } from '../../src/services/notification/notification.service.js'
+import {
+  createManyNotifications,
+  createNotification as createNotificationService
+} from '../../src/services/notification/notification.service.js'
 
 const api = env.apiPrefix
+
+const navigationCases = [
+  {
+    types: [
+      NOTIFICATION_TYPES.CHAT_NEW_MESSAGE,
+      NOTIFICATION_TYPES.CHAT_NEW_IMAGE,
+      NOTIFICATION_TYPES.CHAT_NEW_FILE,
+      NOTIFICATION_TYPES.CHAT_CONVERSATION_CREATED,
+      NOTIFICATION_TYPES.CHAT_REPORTED,
+      NOTIFICATION_TYPES.CHAT_BLOCKED
+    ],
+    field: 'conversationId',
+    targetType: NOTIFICATION_TARGET_TYPES.CHAT,
+    path: 'chats'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.ORDER_CREATED,
+      NOTIFICATION_TYPES.ORDER_CONFIRMED,
+      NOTIFICATION_TYPES.ORDER_REJECTED,
+      NOTIFICATION_TYPES.ORDER_PREPARING,
+      NOTIFICATION_TYPES.ORDER_SHIPPING,
+      NOTIFICATION_TYPES.ORDER_DELIVERED,
+      NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER,
+      NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER,
+      NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED,
+      NOTIFICATION_TYPES.ORDER_REFUND_APPROVED,
+      NOTIFICATION_TYPES.ORDER_REFUND_REJECTED,
+      NOTIFICATION_TYPES.ORDER_REVIEW_REQUIRED,
+      NOTIFICATION_TYPES.PAYMENT_REFUNDED
+    ],
+    field: 'orderId',
+    targetType: NOTIFICATION_TARGET_TYPES.ORDER,
+    path: 'orders'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.PRODUCT_APPROVED,
+      NOTIFICATION_TYPES.PRODUCT_REJECTED,
+      NOTIFICATION_TYPES.PRODUCT_BLOCKED,
+      NOTIFICATION_TYPES.PRODUCT_UNBLOCKED,
+      NOTIFICATION_TYPES.PRODUCT_OUT_OF_STOCK,
+      NOTIFICATION_TYPES.PRODUCT_LOW_STOCK,
+      NOTIFICATION_TYPES.PRODUCT_REPORTED,
+      NOTIFICATION_TYPES.PRODUCT_REVIEWED,
+      NOTIFICATION_TYPES.PRODUCT_WISHLISTED,
+      NOTIFICATION_TYPES.PRODUCT_PRICE_DROPPED
+    ],
+    field: 'productId',
+    targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
+    path: 'products'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.SHOP_APPROVED,
+      NOTIFICATION_TYPES.SHOP_REJECTED,
+      NOTIFICATION_TYPES.SHOP_BLOCKED,
+      NOTIFICATION_TYPES.SHOP_UNBLOCKED,
+      NOTIFICATION_TYPES.SHOP_UPDATE_REQUIRED,
+      NOTIFICATION_TYPES.SHOP_STAFF_INVITED,
+      NOTIFICATION_TYPES.SHOP_STAFF_ACCEPTED,
+      NOTIFICATION_TYPES.SHOP_STAFF_REMOVED,
+      NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED,
+      NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED
+    ],
+    field: 'shopId',
+    targetType: NOTIFICATION_TARGET_TYPES.SHOP,
+    path: 'shops'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.KYC_SUBMITTED,
+      NOTIFICATION_TYPES.KYC_APPROVED,
+      NOTIFICATION_TYPES.KYC_REJECTED,
+      NOTIFICATION_TYPES.KYC_UPDATE_REQUIRED
+    ],
+    field: 'userId',
+    targetType: NOTIFICATION_TARGET_TYPES.KYC,
+    targetUrl: '/profile'
+  },
+  {
+    types: [NOTIFICATION_TYPES.PAYMENT_SUCCESS, NOTIFICATION_TYPES.PAYMENT_FAILED],
+    field: 'paymentId',
+    extraField: 'orderId',
+    targetType: NOTIFICATION_TARGET_TYPES.PAYMENT,
+    path: 'orders',
+    urlField: 'orderId'
+  },
+  {
+    types: [NOTIFICATION_TYPES.PAYOUT_RECEIVED],
+    field: 'walletId',
+    extraField: 'withdrawalId',
+    targetType: NOTIFICATION_TARGET_TYPES.WALLET,
+    targetUrl: '/wallet'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.SELLER_ROLE_GRANTED,
+      NOTIFICATION_TYPES.SELLER_ROLE_REVOKED,
+      NOTIFICATION_TYPES.USER_WARNED,
+      NOTIFICATION_TYPES.USER_BLOCKED,
+      NOTIFICATION_TYPES.USER_UNBLOCKED,
+      NOTIFICATION_TYPES.SECURITY_PASSWORD_CHANGED,
+      NOTIFICATION_TYPES.SECURITY_LOGIN_ALERT,
+      NOTIFICATION_TYPES.EMAIL_VERIFIED
+    ],
+    field: 'userId',
+    targetType: NOTIFICATION_TARGET_TYPES.USER,
+    targetUrl: '/profile'
+  },
+  {
+    types: [NOTIFICATION_TYPES.REPORT_CREATED, NOTIFICATION_TYPES.REPORT_RESOLVED],
+    field: 'reportId',
+    targetType: NOTIFICATION_TARGET_TYPES.REPORT,
+    path: 'reports'
+  },
+  {
+    types: [
+      NOTIFICATION_TYPES.REVIEW_CREATED,
+      NOTIFICATION_TYPES.REVIEW_REPLIED,
+      NOTIFICATION_TYPES.REVIEW_HIDDEN,
+      NOTIFICATION_TYPES.REVIEW_REPORTED
+    ],
+    field: 'reviewId',
+    targetType: NOTIFICATION_TARGET_TYPES.REVIEW,
+    path: 'reviews'
+  },
+  {
+    types: [NOTIFICATION_TYPES.VOUCHER_CREATED, NOTIFICATION_TYPES.VOUCHER_EXPIRING],
+    field: 'voucherId',
+    targetType: NOTIFICATION_TARGET_TYPES.VOUCHER,
+    path: 'vouchers'
+  },
+  {
+    types: [NOTIFICATION_TYPES.FLASH_SALE_STARTED, NOTIFICATION_TYPES.FLASH_SALE_ENDING_SOON],
+    field: 'flashSaleId',
+    targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
+    path: 'flash-sales'
+  },
+  {
+    types: [NOTIFICATION_TYPES.COMBO_RECOMMENDED],
+    field: 'comboId',
+    targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
+    path: 'combos'
+  },
+  {
+    types: [NOTIFICATION_TYPES.SYSTEM_MAINTENANCE, NOTIFICATION_TYPES.SYSTEM_POLICY_UPDATED, NOTIFICATION_TYPES.SYSTEM],
+    targetType: NOTIFICATION_TARGET_TYPES.NOTIFICATION,
+    targetUrl: '/notifications'
+  }
+]
+
+const navigationByType = new Map(navigationCases.flatMap((item) => item.types.map((type) => [type, item])))
 
 const createNotification = (recipient, overrides = {}) =>
   Notification.create({
@@ -19,7 +175,7 @@ const createNotification = (recipient, overrides = {}) =>
     message: 'Notification created by integration test',
     targetType: NOTIFICATION_TARGET_TYPES.SYSTEM,
     isRead: false,
-    ...overrides,
+    ...overrides
   })
 
 beforeEach(async () => {
@@ -32,9 +188,7 @@ describe('notification and chat integration', () => {
     const { user, token } = await loginMember()
     await createNotification(user._id)
 
-    const listResponse = await request(app)
-      .get(`${api}/notifications`)
-      .set('Authorization', `Bearer ${token}`)
+    const listResponse = await request(app).get(`${api}/notifications`).set('Authorization', `Bearer ${token}`)
 
     const countResponse = await request(app)
       .get(`${api}/notifications/unread-count`)
@@ -58,12 +212,10 @@ describe('notification and chat integration', () => {
       message: 'Product can be opened from notification',
       targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
       targetId: productId,
-      data: { productId },
+      data: { productId }
     })
 
-    const response = await request(app)
-      .get(`${api}/notifications`)
-      .set('Authorization', `Bearer ${token}`)
+    const response = await request(app).get(`${api}/notifications`).set('Authorization', `Bearer ${token}`)
 
     const [notification] = response.body.data.notifications
 
@@ -72,6 +224,61 @@ describe('notification and chat integration', () => {
     expect(notification.targetId).toBe(productId.toString())
     expect(notification.targetUrl).toBe(`/products/${productId}`)
     expect(notification.metadata.productId).toBe(productId.toString())
+  })
+
+  it('returns click-through navigation fields for every notification type', async () => {
+    const { user, token } = await loginMember()
+    const id = user._id
+    const types = Object.values(NOTIFICATION_TYPES)
+
+    expect(navigationByType.size).toBe(types.length)
+
+    await createManyNotifications(
+      types.map((type) => {
+        const navigation = navigationByType.get(type)
+        const data = {}
+
+        if (navigation.field) data[navigation.field] = id
+        if (navigation.extraField) data[navigation.extraField] = id
+
+        return {
+          recipient: user._id,
+          type,
+          title: `${type} title`,
+          message: `${type} message`,
+          data
+        }
+      })
+    )
+
+    const response = await request(app)
+      .get(`${api}/notifications`)
+      .query({ limit: 100 })
+      .set('Authorization', `Bearer ${token}`)
+
+    const notificationsByType = new Map(
+      response.body.data.notifications.map((notification) => [notification.type, notification])
+    )
+
+    expect(response.status).toBe(200)
+    expect(notificationsByType.size).toBe(types.length)
+
+    for (const type of types) {
+      const navigation = navigationByType.get(type)
+      const notification = notificationsByType.get(type)
+      const expectedTargetUrl = navigation.targetUrl || `/${navigation.path}/${id}`
+
+      expect(notification.targetType).toBe(navigation.targetType)
+      expect(notification.targetUrl).toBe(expectedTargetUrl)
+      expect(notification.actionUrl).toBe(expectedTargetUrl)
+
+      if (navigation.field) {
+        expect(notification.metadata[navigation.field]).toBe(id.toString())
+      }
+      if (navigation.extraField) {
+        expect(notification.metadata[navigation.extraField]).toBe(id.toString())
+      }
+    }
   })
 
   it('does not crash when a legacy notification has no targetUrl', async () => {
@@ -83,12 +290,10 @@ describe('notification and chat integration', () => {
       title: 'Legacy notification',
       message: 'Notification without navigation fields',
       targetType: NOTIFICATION_TARGET_TYPES.SYSTEM,
-      isRead: false,
+      isRead: false
     })
 
-    const response = await request(app)
-      .get(`${api}/notifications`)
-      .set('Authorization', `Bearer ${token}`)
+    const response = await request(app).get(`${api}/notifications`).set('Authorization', `Bearer ${token}`)
 
     expect(response.status).toBe(200)
     expect(response.body.data.notifications[0].targetUrl).toBeNull()
@@ -130,7 +335,7 @@ describe('notification and chat integration', () => {
   })
 
   it('creates a direct conversation and sends a text message', async () => {
-    const { user: targetUser } = await loginMember()
+    const { user: targetUser, token: targetToken } = await loginMember()
     const { token } = await loginMember()
 
     const conversationResponse = await request(app)
@@ -144,9 +349,21 @@ describe('notification and chat integration', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ content: 'Hello from integration test', messageType: 'TEXT' })
 
+    const notificationResponse = await request(app)
+      .get(`${api}/notifications`)
+      .set('Authorization', `Bearer ${targetToken}`)
+
+    const [notification] = notificationResponse.body.data.notifications
+
     expect(conversationResponse.status).toBe(201)
     expect(messageResponse.status).toBe(201)
     expect(messageResponse.body.data.message.content).toBe('Hello from integration test')
+    expect(notificationResponse.status).toBe(200)
+    expect(notification.type).toBe(NOTIFICATION_TYPES.CHAT_NEW_MESSAGE)
+    expect(notification.targetType).toBe(NOTIFICATION_TARGET_TYPES.CHAT)
+    expect(notification.targetId).toBe(conversationId)
+    expect(notification.targetUrl).toBe(`/chats/${conversationId}`)
+    expect(notification.actionUrl).toBe(`/chats/${conversationId}`)
   })
 
   it('creates a shop conversation when the endpoint exists', async () => {
@@ -183,7 +400,7 @@ describe('notification and chat integration', () => {
         content: 'Shop reply from integration test',
         messageType: 'TEXT',
         actingAs: 'SHOP',
-        shopId: shop._id.toString(),
+        shopId: shop._id.toString()
       })
 
     const workspaceResponse = await request(app)
@@ -219,7 +436,7 @@ describe('notification and chat integration', () => {
         content: 'Wrong shop reply',
         messageType: 'TEXT',
         actingAs: 'SHOP',
-        shopId: secondShop._id.toString(),
+        shopId: secondShop._id.toString()
       })
 
     expect(response.status).toBe(403)

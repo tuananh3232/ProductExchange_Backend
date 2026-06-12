@@ -6,6 +6,7 @@ import { PRODUCT_STATUS, SHOP_STATUS } from '../../src/constants/status.constant
 import { PRODUCT_OWNER_TYPES } from '../../src/models/product.model.js'
 import PERMISSIONS from '../../src/constants/permission.constant.js'
 import Shop from '../../src/models/shop.model.js'
+import User from '../../src/models/user.model.js'
 import { resetTestDatabase } from '../setup/test-db.js'
 import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createAndLogin, loginAdmin, loginMember, loginSeller, loginShopOwner } from '../setup/auth.js'
@@ -21,7 +22,7 @@ const productPayload = (overrides = {}) => ({
   listingType: 'sell',
   condition: 'new',
   location: { province: 'Test Province', district: 'Test District' },
-  ...overrides,
+  ...overrides
 })
 
 beforeEach(async () => {
@@ -30,8 +31,26 @@ beforeEach(async () => {
 })
 
 describe('product and shop integration', () => {
-  it('allows a shop owner to create a shop draft', async () => {
-    const { token } = await loginShopOwner()
+  it('does not allow a member without approved KYC to create a shop draft', async () => {
+    const { token } = await loginMember()
+
+    const response = await request(app)
+      .post(`${api}/shops`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: `Blocked Draft Shop ${Date.now()}`,
+        description: 'Integration draft shop'
+      })
+
+    expect(response.status).toBe(403)
+    expect(response.body.message).toBe('Bạn cần được duyệt KYC trước khi tạo shop')
+    expect(response.body.error).toBe('KYC_APPROVAL_REQUIRED')
+  })
+
+  it('allows an approved seller to create a shop draft without granting shop_owner role', async () => {
+    const { user, token } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Approved Seller', idNumber: '123456789012' }
+    })
 
     const response = await request(app)
       .post(`${api}/shops`)
@@ -41,37 +60,57 @@ describe('product and shop integration', () => {
         description: 'Integration draft shop',
         phone: '0900000000',
         email: 'draft-shop@example.com',
-        address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' },
+        address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' }
       })
+
+    const owner = await User.findById(user._id).select('roles')
 
     expect(response.status).toBe(201)
     expect(response.body.success).toBe(true)
+    expect(response.body.data.shop.status).toBe(SHOP_STATUS.DRAFT)
+    expect(response.body.data.shop.owner._id || response.body.data.shop.owner).toBe(user._id.toString())
+    expect(owner.roles).toContain(ROLES.SELLER)
+    expect(owner.roles).not.toContain(ROLES.SHOP_OWNER)
+  })
+
+  it('allows a KYC-approved user with a stale non-seller token to create a shop draft', async () => {
+    const { token } = await loginMember({
+      kyc: { status: 'approved', fullName: 'Approved Member', idNumber: '123456789014' }
+    })
+
+    const response = await request(app)
+      .post(`${api}/shops`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: `Approved KYC Draft Shop ${Date.now()}`,
+        description: 'Integration draft shop'
+      })
+
+    expect(response.status).toBe(201)
     expect(response.body.data.shop.status).toBe(SHOP_STATUS.DRAFT)
   })
 
   it('allows a shop owner to submit a complete shop for review', async () => {
     const { user, token } = await createAndLogin(ROLES.SHOP_OWNER, {
-      kyc: { status: 'pending', fullName: 'Shop Owner', idNumber: '123456789012' },
+      kyc: { status: 'pending', fullName: 'Shop Owner', idNumber: '123456789012' }
     })
     const shop = await createSampleShop({
       owner: user._id,
       status: SHOP_STATUS.DRAFT,
       phone: '0900000000',
       email: 'submit-shop@example.com',
-      address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' },
+      address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' }
     })
 
-    const response = await request(app)
-      .post(`${api}/shops/${shop._id}/submit`)
-      .set('Authorization', `Bearer ${token}`)
+    const response = await request(app).post(`${api}/shops/${shop._id}/submit`).set('Authorization', `Bearer ${token}`)
 
     expect(response.status).toBe(200)
     expect(response.body.data.shop.status).toBe(SHOP_STATUS.PENDING_REVIEW)
   })
 
   it('allows an admin to approve a pending shop when owner KYC is approved', async () => {
-    const { user: owner } = await createAndLogin(ROLES.SHOP_OWNER, {
-      kyc: { status: 'approved', fullName: 'Approved Owner', idNumber: '123456789013' },
+    const { user: owner } = await createAndLogin(ROLES.SELLER, {
+      kyc: { status: 'approved', fullName: 'Approved Owner', idNumber: '123456789013' }
     })
     const { token: adminToken } = await loginAdmin()
     const shop = await createSampleShop({
@@ -79,7 +118,7 @@ describe('product and shop integration', () => {
       status: SHOP_STATUS.PENDING_REVIEW,
       phone: '0900000000',
       email: 'approve-shop@example.com',
-      address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' },
+      address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' }
     })
 
     const response = await request(app)
@@ -88,6 +127,10 @@ describe('product and shop integration', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.shop.status).toBe(SHOP_STATUS.ACTIVE)
+
+    const approvedOwner = await User.findById(owner._id).select('roles')
+    expect(approvedOwner.roles).toContain(ROLES.SELLER)
+    expect(approvedOwner.roles).toContain(ROLES.SHOP_OWNER)
   })
 
   it('allows a shop owner to create a product for their active shop', async () => {
@@ -98,7 +141,13 @@ describe('product and shop integration', () => {
     const response = await request(app)
       .post(`${api}/products`)
       .set('Authorization', `Bearer ${token}`)
-      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shop._id.toString(), category: category._id.toString() }))
+      .send(
+        productPayload({
+          ownerType: PRODUCT_OWNER_TYPES.SHOP,
+          shop: shop._id.toString(),
+          category: category._id.toString()
+        })
+      )
 
     expect(response.status).toBe(201)
     expect(response.body.data.product.shop.toString()).toBe(shop._id.toString())
@@ -152,7 +201,7 @@ describe('product and shop integration', () => {
       ownerType: PRODUCT_OWNER_TYPES.SELLER,
       owner: owner._id,
       seller: owner._id,
-      shop: null,
+      shop: null
     })
 
     const response = await request(app)
@@ -171,14 +220,20 @@ describe('product and shop integration', () => {
     await Shop.findByIdAndUpdate(shop._id, {
       $push: {
         staff: staff._id,
-        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] },
-      },
+        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] }
+      }
     })
 
     const response = await request(app)
       .post(`${api}/products`)
       .set('Authorization', `Bearer ${staffToken}`)
-      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shop._id.toString(), category: category._id.toString() }))
+      .send(
+        productPayload({
+          ownerType: PRODUCT_OWNER_TYPES.SHOP,
+          shop: shop._id.toString(),
+          category: category._id.toString()
+        })
+      )
 
     expect(response.status).toBe(201)
     expect(response.body.data.product.shop.toString()).toBe(shop._id.toString())
@@ -192,14 +247,20 @@ describe('product and shop integration', () => {
     await Shop.findByIdAndUpdate(shop._id, {
       $push: {
         staff: staff._id,
-        staffPermissions: { staffUser: staff._id, permissions: [] },
-      },
+        staffPermissions: { staffUser: staff._id, permissions: [] }
+      }
     })
 
     const response = await request(app)
       .post(`${api}/products`)
       .set('Authorization', `Bearer ${staffToken}`)
-      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shop._id.toString(), category: category._id.toString() }))
+      .send(
+        productPayload({
+          ownerType: PRODUCT_OWNER_TYPES.SHOP,
+          shop: shop._id.toString(),
+          category: category._id.toString()
+        })
+      )
 
     expect(response.status).toBe(403)
   })
@@ -214,14 +275,20 @@ describe('product and shop integration', () => {
     await Shop.findByIdAndUpdate(shopA._id, {
       $push: {
         staff: staff._id,
-        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] },
-      },
+        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] }
+      }
     })
 
     const response = await request(app)
       .post(`${api}/products`)
       .set('Authorization', `Bearer ${staffToken}`)
-      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shopB._id.toString(), category: category._id.toString() }))
+      .send(
+        productPayload({
+          ownerType: PRODUCT_OWNER_TYPES.SHOP,
+          shop: shopB._id.toString(),
+          category: category._id.toString()
+        })
+      )
 
     expect(response.status).toBe(403)
   })
@@ -236,6 +303,6 @@ describe('product and shop integration', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ permissions: [PERMISSIONS.SELLER_PRODUCT_CREATE] })
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(422)
   })
 })

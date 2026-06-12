@@ -9,7 +9,7 @@ import {
   createShopSchema,
   updateStaffPermissionsSchema,
   transferOwnerSchema,
-  updateShopSchema,
+  updateShopSchema
 } from '../../validations/shop/shop.validation.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import shopStatsRoutes from './stats.route.js'
@@ -22,12 +22,7 @@ router.use('/:id/stats', shopStatsRoutes)
 router.get('/filter-options', optionsController.getShopFilterOptions)
 router.get('/', shopController.getShops)
 
-router.get(
-  '/mine',
-  authenticate,
-  requirePermissions(PERMISSIONS.SHOP_PROFILE_READ),
-  shopController.getMyShops
-)
+router.get('/mine', authenticate, requirePermissions(PERMISSIONS.SHOP_PROFILE_READ), shopController.getMyShops)
 
 router.get('/:id', shopController.getShopById)
 
@@ -45,13 +40,7 @@ router.get(
   productController.getShopProducts
 )
 
-router.post(
-  '/',
-  authenticate,
-  requirePermissions(PERMISSIONS.SHOP_PROFILE_UPDATE),
-  validate(createShopSchema),
-  shopController.createShop
-)
+router.post('/', authenticate, validate(createShopSchema), shopController.createShop)
 
 router.put(
   '/:id',
@@ -79,12 +68,7 @@ router.patch(
   shopController.transferOwner
 )
 
-router.get(
-  '/:id/staff',
-  authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_STAFF_READ),
-  shopController.getShopStaff
-)
+router.get('/:id/staff', authenticate, requireShopPermission(PERMISSIONS.SHOP_STAFF_READ), shopController.getShopStaff)
 
 router.get(
   '/:id/users/by-email',
