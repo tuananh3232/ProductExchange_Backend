@@ -1,9 +1,10 @@
 import { Router } from 'express'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
+import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
+import { ROLES } from '../../constants/role.constant.js'
 import * as statsController from '../../controllers/stats/stats.controller.js'
 
 const router = Router()
+const requireAdmin = requireRoles(ROLES.ADMIN)
 
 /**
  * @swagger
@@ -111,9 +112,9 @@ const router = Router()
  *         description: Lấy top sản phẩm thành công
  */
 
-router.get('/overview', authenticate, requirePermissions(PERMISSIONS.ADMIN_VIEW_STATS), statsController.adminOverview)
-router.get('/revenue', authenticate, requirePermissions(PERMISSIONS.ADMIN_VIEW_STATS), statsController.adminRevenue)
-router.get('/top-shops', authenticate, requirePermissions(PERMISSIONS.ADMIN_VIEW_STATS), statsController.adminTopShops)
-router.get('/top-products', authenticate, requirePermissions(PERMISSIONS.ADMIN_VIEW_STATS), statsController.adminTopProducts)
+router.get('/overview', authenticate, requireAdmin, statsController.adminOverview)
+router.get('/revenue', authenticate, requireAdmin, statsController.adminRevenue)
+router.get('/top-shops', authenticate, requireAdmin, statsController.adminTopShops)
+router.get('/top-products', authenticate, requireAdmin, statsController.adminTopProducts)
 
 export default router

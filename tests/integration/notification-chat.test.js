@@ -7,6 +7,7 @@ import { loginMember, loginShopOwner } from '../setup/auth.js'
 import { createSampleShop } from '../setup/factories.js'
 import Notification from '../../src/models/notification.model.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../src/constants/notification.constant.js'
+import { createNotification as createNotificationService } from '../../src/services/notification/notification.service.js'
 
 const api = env.apiPrefix
 
@@ -44,6 +45,54 @@ describe('notification and chat integration', () => {
     expect(listResponse.body.data.unreadCount).toBe(1)
     expect(countResponse.status).toBe(200)
     expect(countResponse.body.data.unreadCount).toBe(1)
+  })
+
+  it('returns normalized navigation fields for created notifications', async () => {
+    const { user, token } = await loginMember()
+    const productId = user._id
+
+    await createNotificationService({
+      recipient: user._id,
+      type: NOTIFICATION_TYPES.PRODUCT_APPROVED,
+      title: 'Product approved',
+      message: 'Product can be opened from notification',
+      targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
+      targetId: productId,
+      data: { productId },
+    })
+
+    const response = await request(app)
+      .get(`${api}/notifications`)
+      .set('Authorization', `Bearer ${token}`)
+
+    const [notification] = response.body.data.notifications
+
+    expect(response.status).toBe(200)
+    expect(notification.targetType).toBe(NOTIFICATION_TARGET_TYPES.PRODUCT)
+    expect(notification.targetId).toBe(productId.toString())
+    expect(notification.targetUrl).toBe(`/products/${productId}`)
+    expect(notification.metadata.productId).toBe(productId.toString())
+  })
+
+  it('does not crash when a legacy notification has no targetUrl', async () => {
+    const { user, token } = await loginMember()
+
+    await Notification.create({
+      recipient: user._id,
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Legacy notification',
+      message: 'Notification without navigation fields',
+      targetType: NOTIFICATION_TARGET_TYPES.SYSTEM,
+      isRead: false,
+    })
+
+    const response = await request(app)
+      .get(`${api}/notifications`)
+      .set('Authorization', `Bearer ${token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.notifications[0].targetUrl).toBeNull()
+    expect(response.body.data.notifications[0].metadata).toEqual({})
   })
 
   it('marks one notification as read', async () => {

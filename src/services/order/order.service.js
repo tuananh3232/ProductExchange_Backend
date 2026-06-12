@@ -50,6 +50,25 @@ const getManagedShopIds = async (userId) => {
   return shops.map((shop) => shop._id.toString())
 }
 
+const getPermittedShopIds = async (userId, permissionKey) => {
+  const shops = await Shop.find({
+    isActive: true,
+    $or: [
+      { owner: userId },
+      {
+        staffPermissions: {
+          $elemMatch: {
+            staffUser: userId,
+            permissions: permissionKey,
+          },
+        },
+      },
+    ],
+  }).select('_id')
+
+  return shops.map((shop) => shop._id.toString())
+}
+
 const isAdmin = (userContext) => (userContext?.roles || []).includes('admin')
 const isSeller = (userContext) => (userContext?.roles || []).includes(ROLES.SELLER)
 
@@ -68,6 +87,13 @@ const ensureOrderReadable = async (order, userContext) => {
   const managedShopIds = await getManagedShopIds(userContext._id)
   const orderShopId = order.shop?._id?.toString() || order.shop?.toString()
   if (orderShopId && managedShopIds.includes(orderShopId)) {
+    await assertShopPermission({
+      user: userContext,
+      shopId: orderShopId,
+      permissionKey: PERMISSIONS.SHOP_ORDER_READ,
+      message: 'Báº¡n khÃ´ng cÃ³ quyá»n xem Ä‘Æ¡n hÃ ng nÃ y',
+      errorCode: ERRORS.AUTH.FORBIDDEN,
+    })
     return
   }
 
@@ -202,7 +228,7 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
 
   const scope = query.scope || 'buyer'
   if (!isAdmin(userContext) && scope === 'shop') {
-    const managedShopIds = await getManagedShopIds(userContext._id)
+    const managedShopIds = await getPermittedShopIds(userContext._id, PERMISSIONS.SHOP_ORDER_READ)
     filter.shop = { $in: managedShopIds }
   } else if (!isAdmin(userContext) && scope === 'seller') {
     filter.seller = userContext._id
@@ -236,7 +262,7 @@ export const confirmOrder = async (orderId, userContext) => {
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
 
-  await ensureShopManageOrder(order, userContext, PERMISSIONS.ORDER_CONFIRM)
+  await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_CONFIRM)
   ensureTransitionAllowed(order.status, ORDER_STATUS.CONFIRMED)
 
   if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
@@ -269,7 +295,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   const isBuyer = order.buyer?._id?.toString() === userId || order.buyer?.toString() === userId
 
   if (!isBuyer) {
-    await ensureShopManageOrder(order, userContext, PERMISSIONS.ORDER_CANCEL)
+    await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_CANCEL)
   }
 
   ensureTransitionAllowed(order.status, ORDER_STATUS.CANCELLED)
@@ -321,7 +347,7 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
 
-  await ensureShopManageOrder(order, userContext, PERMISSIONS.ORDER_UPDATE_STATUS)
+  await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_UPDATE_STATUS)
   ensureTransitionAllowed(order.status, nextStatus)
 
   const updated = await orderRepo.updateById(orderId, {

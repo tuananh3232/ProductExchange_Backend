@@ -304,7 +304,7 @@ const buildShopOverview = async (shopId, userContext, query = {}) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
+    permissionKey: PERMISSIONS.SHOP_STATS_READ,
     message: 'Bạn không có quyền xem thống kê của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -378,7 +378,7 @@ const buildShopProducts = async (shopId, userContext, query = {}) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
+    permissionKey: PERMISSIONS.SHOP_STATS_READ,
     message: 'Bạn không có quyền xem thống kê của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -400,7 +400,7 @@ const buildShopOrders = async (shopId, userContext, query = {}) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
+    permissionKey: PERMISSIONS.SHOP_STATS_READ,
     message: 'Bạn không có quyền xem thống kê của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -418,7 +418,7 @@ const buildShopStaff = async (shopId, userContext) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_VIEW_STATS,
+    permissionKey: PERMISSIONS.SHOP_STATS_READ,
     message: 'Bạn không có quyền xem thống kê của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })

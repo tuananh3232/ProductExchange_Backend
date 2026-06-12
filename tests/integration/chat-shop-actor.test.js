@@ -126,12 +126,13 @@ describe('shop owner replies as SHOP actor', () => {
 // ─── Staff actor scenarios ────────────────────────────────────────────────────
 
 describe('staff actor scenarios', () => {
-  const createStaffWithPermission = async (shopId, permission) => {
+  const createStaffWithPermission = async (shopId, permissions) => {
     const { user: staffUser, token } = await createAndLogin(ROLES.STAFF)
+    const normalizedPermissions = Array.isArray(permissions) ? permissions : [permissions]
     await Shop.findByIdAndUpdate(shopId, {
       $push: {
         staff: staffUser._id,
-        staffPermissions: { staffUser: staffUser._id, permissions: [permission] },
+        staffPermissions: { staffUser: staffUser._id, permissions: normalizedPermissions },
       },
     })
     return { staffUser, token }
@@ -148,11 +149,14 @@ describe('staff actor scenarios', () => {
     return { staffUser, token }
   }
 
-  it('staff with shop:chat_manage can reply as SHOP actor', async () => {
+  it('staff with shop:chat:send can reply as SHOP actor', async () => {
     const { user: shopOwner } = await loginShopOwner()
     const { token: memberToken } = await loginMember()
     const shop = await createSampleShop({ owner: shopOwner._id })
-    const { token: staffToken } = await createStaffWithPermission(shop._id, PERMISSIONS.SHOP_CHAT_MANAGE)
+    const { token: staffToken } = await createStaffWithPermission(shop._id, [
+      PERMISSIONS.SHOP_CHAT_READ,
+      PERMISSIONS.SHOP_CHAT_SEND,
+    ])
 
     const convRes = await openShopConversation(memberToken, shop._id)
     const convId = convRes.body.data.conversation._id
@@ -168,7 +172,7 @@ describe('staff actor scenarios', () => {
     expect(msgRes.body.data.message.senderShopId).toBe(shop._id.toString())
   })
 
-  it('staff without shop:chat_manage is blocked from the conversation entirely', async () => {
+  it('staff without shop chat permission is blocked from the conversation entirely', async () => {
     const { user: shopOwner } = await loginShopOwner()
     const { token: memberToken } = await loginMember()
     const shop = await createSampleShop({ owner: shopOwner._id })
@@ -192,11 +196,11 @@ describe('staff actor scenarios', () => {
     expect(sendRes.status).toBe(403)
   })
 
-  it('staff with shop:chat_manage can access workspace conversations list', async () => {
+  it('staff with shop:chat:read can access workspace conversations list', async () => {
     const { user: shopOwner } = await loginShopOwner()
     const { token: memberToken } = await loginMember()
     const shop = await createSampleShop({ owner: shopOwner._id })
-    const { token: staffToken } = await createStaffWithPermission(shop._id, PERMISSIONS.SHOP_CHAT_MANAGE)
+    const { token: staffToken } = await createStaffWithPermission(shop._id, PERMISSIONS.SHOP_CHAT_READ)
 
     await openShopConversation(memberToken, shop._id)
 

@@ -1,9 +1,8 @@
 import { Router } from 'express'
 import * as authController from '../../controllers/auth/auth.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { authRateLimit } from '../../middlewares/rate-limit.middleware.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
 import {
 	registerSchema,
 	loginSchema,
@@ -250,6 +249,6 @@ router.post('/verify-email', validate(verifyEmailSchema), authController.verifyE
  *       200:
  *         description: Thành công
  */
-router.post('/logout', authenticate, requirePermissions(PERMISSIONS.AUTH_LOGOUT), authController.logout)
+router.post('/logout', authenticate, authController.logout)
 
 export default router

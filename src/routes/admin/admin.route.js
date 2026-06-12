@@ -5,11 +5,11 @@ import * as shopController from '../../controllers/shop/shop.controller.js'
 import * as walletController from '../../controllers/wallet/wallet.controller.js'
 import * as userWalletController from '../../controllers/user-wallet/user-wallet.controller.js'
 import * as productController from '../../controllers/product/product.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { banUserSchema, rejectKycSchema } from '../../validations/auth/auth.validation.js'
 import { rejectShopSchema, suspendShopSchema } from '../../validations/shop/shop.validation.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
+import { ROLES } from '../../constants/role.constant.js'
 import adminStatsRoutes from './stats.route.js'
 import Joi from 'joi'
 
@@ -46,6 +46,8 @@ const completeUserWithdrawalSchema = Joi.object({
 const router = Router()
 
 router.use('/stats', adminStatsRoutes)
+
+const requireAdmin = requireRoles(ROLES.ADMIN)
 
 /**
  * @swagger
@@ -94,14 +96,14 @@ router.use('/stats', adminStatsRoutes)
 router.get(
   '/users/filter-options',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   optionsController.getAdminUsersFilterOptions
 )
 
 router.get(
   '/users',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   authController.getAdminUsers
 )
 
@@ -143,7 +145,7 @@ router.get(
 router.get(
   '/products',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_PRODUCTS),
+  requireAdmin,
   productController.getAdminProducts
 )
 
@@ -176,7 +178,7 @@ router.get(
 router.patch(
   '/users/:userId/ban',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   validate(banUserSchema),
   authController.banUser
 )
@@ -202,7 +204,7 @@ router.patch(
 router.patch(
   '/users/:userId/unban',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   authController.unbanUser
 )
 
@@ -322,28 +324,28 @@ router.patch(
 router.get(
   '/shops',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   shopController.getAdminShops
 )
 
 router.get(
   '/shops/:id',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   shopController.getAdminShopById
 )
 
 router.patch(
   '/shops/:id/approve',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   shopController.approveShop
 )
 
 router.patch(
   '/shops/:id/reject',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   validate(rejectShopSchema),
   shopController.rejectShop
 )
@@ -351,7 +353,7 @@ router.patch(
 router.patch(
   '/shops/:id/suspend',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   validate(suspendShopSchema),
   shopController.suspendShop
 )
@@ -359,7 +361,7 @@ router.patch(
 router.patch(
   '/shops/:id/unsuspend',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_SHOPS),
+  requireAdmin,
   shopController.unsuspendShop
 )
 
@@ -446,28 +448,28 @@ router.patch(
 router.get(
   '/kyc',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   authController.getAdminKycs
 )
 
 router.get(
   '/users/:userId/kyc',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   authController.adminGetUserKyc
 )
 
 router.patch(
   '/users/:userId/kyc/approve',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   authController.adminApproveKyc
 )
 
 router.patch(
   '/users/:userId/kyc/reject',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_USERS),
+  requireAdmin,
   validate(rejectKycSchema),
   authController.adminRejectKyc
 )
@@ -581,21 +583,21 @@ router.patch(
 router.get(
   '/withdrawals',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   walletController.adminGetWithdrawals
 )
 
 router.patch(
   '/withdrawals/:id/approve',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   walletController.approveWithdrawal
 )
 
 router.patch(
   '/withdrawals/:id/reject',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   validate(rejectWithdrawalSchema),
   walletController.rejectWithdrawal
 )
@@ -603,7 +605,7 @@ router.patch(
 router.patch(
   '/withdrawals/:id/complete',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   validate(completeWithdrawalSchema),
   walletController.completeWithdrawal
 )
@@ -642,21 +644,21 @@ router.patch(
 router.get(
   '/user-withdrawals',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   userWalletController.adminGetUserWithdrawals
 )
 
 router.patch(
   '/user-withdrawals/:id/approve',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   userWalletController.approveUserWithdrawal
 )
 
 router.patch(
   '/user-withdrawals/:id/reject',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   validate(rejectUserWithdrawalSchema),
   userWalletController.rejectUserWithdrawal
 )
@@ -664,7 +666,7 @@ router.patch(
 router.patch(
   '/user-withdrawals/:id/complete',
   authenticate,
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS),
+  requireAdmin,
   validate(completeUserWithdrawalSchema),
   userWalletController.completeUserWithdrawal
 )

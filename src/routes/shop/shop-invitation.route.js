@@ -36,7 +36,7 @@ router.delete(
 router.post(
   '/:id/invitations',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_INVITE),
   validate(sendInvitationSchema),
   shopInvitationController.sendInvitation
 );
@@ -45,7 +45,7 @@ router.post(
 router.get(
   '/:id/invitations',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_READ),
   shopInvitationController.getShopInvitations
 );
 

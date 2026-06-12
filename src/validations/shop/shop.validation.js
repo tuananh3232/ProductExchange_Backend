@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import PERMISSIONS from '../../constants/permission.constant.js';
+import { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.constant.js';
 
 const addressSchema = Joi.object({
   province: Joi.string().max(100).allow(''),
@@ -41,15 +41,17 @@ export const transferOwnerSchema = Joi.object({
 
 export const updateStaffPermissionsSchema = Joi.object({
   permissions: Joi.array()
-    .items(Joi.string().valid(...Object.values(PERMISSIONS)))
-    .default([]),
+    .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
+    .default([])
+    .messages({ 'any.only': 'Quyen staff shop khong hop le' }),
 });
 
 export const sendInvitationSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
   permissions: Joi.array()
-    .items(Joi.string().valid(...Object.values(PERMISSIONS)))
-    .default([]),
+    .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
+    .default([])
+    .messages({ 'any.only': 'Quyen staff shop khong hop le' }),
 });
 
 export const invitationActionSchema = Joi.object({

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import * as walletController from '../../controllers/wallet/wallet.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import Joi from 'joi'
 import PERMISSIONS from '../../constants/permission.constant.js'
@@ -79,7 +79,7 @@ const completeWithdrawalSchema = Joi.object({
 router.get(
   '/shops/:shopId',
   authenticate,
-  requirePermissions(PERMISSIONS.WALLET_VIEW),
+  requireShopPermission(PERMISSIONS.SHOP_WALLET_READ, 'shopId'),
   walletController.getWallet
 )
 
@@ -114,7 +114,7 @@ router.get(
 router.get(
   '/shops/:shopId/transactions',
   authenticate,
-  requirePermissions(PERMISSIONS.WALLET_VIEW),
+  requireShopPermission(PERMISSIONS.SHOP_WALLET_TRANSACTION_READ, 'shopId'),
   walletController.getTransactions
 )
 
@@ -200,7 +200,7 @@ router.get(
 router.post(
   '/shops/:shopId/withdrawals',
   authenticate,
-  requirePermissions(PERMISSIONS.WALLET_REQUEST_WITHDRAWAL),
+  requireShopPermission(PERMISSIONS.SHOP_WITHDRAWAL_CREATE, 'shopId'),
   validate(requestWithdrawalSchema),
   walletController.requestWithdrawal
 )
@@ -208,7 +208,7 @@ router.post(
 router.get(
   '/shops/:shopId/withdrawals',
   authenticate,
-  requirePermissions(PERMISSIONS.WALLET_VIEW),
+  requireShopPermission(PERMISSIONS.SHOP_WITHDRAWAL_READ, 'shopId'),
   walletController.getWithdrawals
 )
 

@@ -9,7 +9,7 @@ import { paginate } from '../../utils/pagination.util.js'
 import { normalizeSlug } from '../../utils/slug.util.js'
 import { ROLES } from '../../constants/role.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
+import PERMISSIONS, { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.constant.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
@@ -48,6 +48,7 @@ const toBasicUserResponse = (user) => ({
   avatar: user.avatar || { url: '', publicId: '' },
 })
 
+// eslint-disable-next-line no-unused-vars
 const ensureShopAccess = (shop, userContext) => {
   const roleSet = new Set(userContext?.roles || [])
   if (roleSet.has(ROLES.ADMIN)) return
@@ -285,7 +286,13 @@ export const submitForReview = async (shopId, userContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
+    message: 'Bạn không có quyền xem quyền staff của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
 
   const owner = await User.findById(userContext._id).select('kyc')
   if (!owner?.kyc || owner.kyc.status === 'none') {
@@ -326,7 +333,7 @@ export const updateShop = async (shopId, userContext, payload) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_UPDATE,
+    permissionKey: PERMISSIONS.SHOP_PROFILE_UPDATE,
     message: 'Bạn không có quyền cập nhật shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -369,7 +376,13 @@ export const deleteShop = async (shopId, userContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
+    message: 'Bạn không có quyền xem quyền staff của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
 
   if (!DELETABLE_SHOP_STATUSES.includes(shop.status)) {
     throw new AppError(
@@ -391,7 +404,13 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
+    message: 'Bạn không có quyền xem quyền staff của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
   const newOwner = await assertActiveUserByEmail(newOwnerEmail)
   const newOwnerId = newOwner._id
   const requesterId = toIdString(userContext?._id)
@@ -449,7 +468,13 @@ export const addStaff = async (shopId, userContext, staffUserId) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
+    message: 'Bạn không có quyền thêm staff cho shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
   const staffUser = await assertUserExists(staffUserId)
   const staffId = staffUserId.toString()
   const requesterId = userContext?._id?.toString()
@@ -484,7 +509,13 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_REMOVE,
+    message: 'Bạn không có quyền xóa staff khỏi shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
   const updatedShop = await shopRepo.updateById(shopId, {
     $pull: {
       staff: staffUserId,
@@ -501,7 +532,13 @@ export const getShopStaff = async (shopId, userContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_READ,
+    message: 'Bạn không có quyền xem staff của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
 
   const permissionByStaffId = new Map(
     (shop.staffPermissions || []).map((entry) => [
@@ -545,7 +582,7 @@ export const getStaffPermissions = async (shopId, userContext, staffUserId) => {
     throw new AppError('Người dùng không thuộc staff của shop', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.INVALID_STAFF)
   }
 
-  const availablePermissions = await permissionRepo.findAll()
+  const availablePermissions = await permissionRepo.findByKeys(SHOP_STAFF_PERMISSIONS)
   const assigned = (shop.staffPermissions || []).find(
     (entry) => entry.staffUser?._id?.toString() === staffUserId.toString() || entry.staffUser?.toString() === staffUserId.toString()
   )
@@ -594,7 +631,13 @@ export const resubmitShop = async (shopId, userContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW,
+    message: 'Bạn không có quyền nộp lại shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
 
   const owner = await User.findById(userContext._id).select('kyc')
   if (!owner?.kyc || owner.kyc.status === 'none') {
@@ -714,7 +757,17 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_UPDATE,
+    message: 'Bạn không có quyền sửa quyền staff của shop này',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
+
+  if (userContext?._id?.toString() === staffUserId.toString()) {
+    throw new AppError('Không thể tự sửa quyền staff của chính mình', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
 
   const isStaff = (shop.staff || []).some(
     (staffId) => staffId?._id?.toString() === staffUserId.toString() || staffId?.toString() === staffUserId.toString()
@@ -725,6 +778,11 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
   }
 
   const uniqueKeys = [...new Set(permissionKeys)]
+  const invalidKeys = uniqueKeys.filter((key) => !SHOP_STAFF_PERMISSIONS.includes(key))
+  if (invalidKeys.length) {
+    throw new AppError('Danh sách quyền staff chứa quyền không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.PERMISSION_NOT_FOUND)
+  }
+
   const permissions = uniqueKeys.length ? await permissionRepo.findByKeys(uniqueKeys) : []
   if (permissions.length !== uniqueKeys.length) {
     throw new AppError('Danh sách quyền không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.PERMISSION_NOT_FOUND)
@@ -757,7 +815,13 @@ export const findUserByEmailForShop = async (shopId, userContext, email) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
   }
 
-  ensureShopOwnerAccess(shop, userContext)
+  await assertShopPermission({
+    user: userContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
+    message: 'Bạn không có quyền tìm người dùng để mời staff',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  })
   const user = await assertActiveUserByEmail(email)
   return toBasicUserResponse(user)
 }

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import * as productController from '../../controllers/product/product.controller.js'
 import * as productVisualController from '../../controllers/product/product-visual.controller.js'
 import * as optionsController from '../../controllers/options/options.controller.js'
-import { authenticate, requirePermissions, requireShopOwnerProductVisual } from '../../middlewares/auth.middleware.js'
+import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import {
@@ -17,7 +17,6 @@ import {
 } from '../../validations/product/product-visual.validation.js'
 import { uploadProductImages, uploadProductVisualImage, parseJsonFields } from '../../middlewares/upload.middleware.js'
 import { productQuerySchema } from '../../validations/common/query.validation.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
 
 const router = Router()
 
@@ -171,7 +170,6 @@ router.get('/', validate(productQuerySchema, 'query'), productController.getProd
 router.post(
   '/',
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_CREATE),
   uploadProductImages,
   parseJsonFields(['location']),
   validate(createProductSchema),
@@ -281,7 +279,6 @@ router.patch(
   '/:id',
   validateObjectId('id'),
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
   validate(updateProductSchema),
   productController.updateProduct
 )
@@ -289,7 +286,6 @@ router.patch(
   '/:id/status',
   validateObjectId('id'),
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
   validate(updateStatusSchema),
   productController.updateProductStatus
 )
@@ -297,7 +293,6 @@ router.post(
   '/:id/images',
   validateObjectId('id'),
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
   uploadProductImages,
   productController.addProductImages
 )
@@ -305,14 +300,12 @@ router.delete(
   '/:id/images/:publicId',
   validateObjectId('id'),
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_UPDATE),
   productController.removeProductImage
 )
 router.delete(
   '/:id',
   validateObjectId('id'),
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_DELETE),
   productController.deleteProduct
 )
 
@@ -529,8 +522,6 @@ router.post(
   '/:id/visual-assets/cutout/preview',
   authenticate,
   validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
   uploadProductVisualImage,
   validate(previewCutoutSchema),
   productVisualController.previewCutout
@@ -539,8 +530,6 @@ router.post(
   '/:id/visual-assets/cutout/confirm',
   authenticate,
   validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
   validate(confirmCutoutSchema),
   productVisualController.confirmCutout
 )
@@ -548,8 +537,6 @@ router.post(
   '/:id/visual-assets/source',
   authenticate,
   validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
   uploadProductVisualImage,
   productVisualController.uploadSource
 )
@@ -557,8 +544,6 @@ router.patch(
   '/:id/visual-profile',
   authenticate,
   validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
   validate(updateVisualProfileSchema),
   productVisualController.updateVisualProfile
 )
@@ -566,8 +551,6 @@ router.delete(
   '/:id/visual-assets/cutout',
   authenticate,
   validateObjectId('id'),
-  requirePermissions(PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE),
-  requireShopOwnerProductVisual,
   productVisualController.deleteCutout
 )
 

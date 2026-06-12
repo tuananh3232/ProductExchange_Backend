@@ -28,7 +28,7 @@ const router = Router()
  *       200:
  *         description: Thành công
  */
-router.get('/me', authenticate, requirePermissions(PERMISSIONS.USER_READ), userController.getMe)
+router.get('/me', authenticate, requirePermissions(PERMISSIONS.USER_SELF_READ), userController.getMe)
 router.get('/me/capabilities', authenticate, userController.getMyCapabilities)
 
 /**
@@ -64,7 +64,7 @@ router.get('/me/capabilities', authenticate, userController.getMyCapabilities)
 router.put(
   '/profile',
   authenticate,
-  requirePermissions(PERMISSIONS.USER_UPDATE),
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
   validate(updateProfileSchema),
   userController.updateProfile
 )
@@ -101,7 +101,7 @@ router.put(
 router.patch(
   '/avatar',
   authenticate,
-  requirePermissions(PERMISSIONS.USER_UPDATE),
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
   uploadAvatarImage,
   userController.updateAvatar
 )
@@ -136,7 +136,7 @@ router.patch(
 router.post(
   '/change-password',
   authenticate,
-  requirePermissions(PERMISSIONS.USER_UPDATE),
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
   validate(changePasswordSchema),
   userController.changePassword
 )
@@ -178,11 +178,11 @@ router.post(
 router.post(
   '/kyc',
   authenticate,
-  requirePermissions(PERMISSIONS.USER_UPDATE),
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
   uploadKycImages,
   userController.submitKyc
 )
 
-router.get('/kyc', authenticate, requirePermissions(PERMISSIONS.USER_READ), userController.getMyKyc)
+router.get('/kyc', authenticate, requirePermissions(PERMISSIONS.USER_SELF_READ), userController.getMyKyc)
 
 export default router

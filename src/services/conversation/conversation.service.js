@@ -24,7 +24,7 @@ const buildShopCustomerKey = (shopId, customerId) => `${shopId.toString()}:${cus
 
 const isAdmin = (userContext) => (userContext?.roles || []).includes(ROLES.ADMIN)
 
-const hasShopChatPermission = (shop, userId) => {
+const hasShopChatPermission = (shop, userId, permissionKey = PERMISSIONS.SHOP_CHAT_READ) => {
   const ownerId = toIdString(shop.owner)
   if (ownerId === userId) return true
 
@@ -33,7 +33,7 @@ const hasShopChatPermission = (shop, userId) => {
 
   return (shop.staffPermissions || []).some((entry) => {
     const staffId = toIdString(entry.staffUser)
-    return staffId === userId && Array.isArray(entry.permissions) && entry.permissions.includes(PERMISSIONS.SHOP_CHAT_MANAGE)
+    return staffId === userId && Array.isArray(entry.permissions) && entry.permissions.includes(permissionKey)
   })
 }
 
@@ -114,7 +114,7 @@ const ensureShopExists = async (shopId) => {
   return shop
 }
 
-const assertShopChatAccess = async (userContext, shopId) => {
+const assertShopChatAccess = async (userContext, shopId, permissionKey = PERMISSIONS.SHOP_CHAT_READ) => {
   if (!shopId) {
     throw new AppError('shopId is required', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
@@ -123,7 +123,7 @@ const assertShopChatAccess = async (userContext, shopId) => {
   if (isAdmin(userContext)) return shop
 
   const userId = toIdString(userContext?._id)
-  if (!hasShopChatPermission(shop, userId)) {
+  if (!hasShopChatPermission(shop, userId, permissionKey)) {
     throw new AppError('You do not have permission to chat as this shop', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
@@ -148,7 +148,7 @@ export const canAccessConversation = async (userContext, conversation) => {
     if (!shopId) return false
 
     const shop = await ensureShopExists(shopId)
-    return hasShopChatPermission(shop, userId)
+    return hasShopChatPermission(shop, userId, PERMISSIONS.SHOP_CHAT_READ)
   }
 
   return false
@@ -186,7 +186,7 @@ export const assertConversationActorAccess = async (
       throw new AppError('shopId does not match this conversation', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
     }
 
-    await assertShopChatAccess(userContext, conversationShopId)
+    await assertShopChatAccess(userContext, conversationShopId, PERMISSIONS.SHOP_CHAT_SEND)
     return {
       senderType: MESSAGE_ACTOR_TYPES.SHOP,
       senderUserId: userContext._id,
@@ -256,7 +256,7 @@ export const getConversations = async (userContext, pagination, query = {}) => {
   const scope = query.scope || 'main'
 
   if (scope === 'workspace') {
-    await assertShopChatAccess(userContext, query.shopId)
+    await assertShopChatAccess(userContext, query.shopId, PERMISSIONS.SHOP_CHAT_READ)
     filter.type = CONVERSATION_TYPES.SHOP
     filter.shopId = query.shopId
   } else {

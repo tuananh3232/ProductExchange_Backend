@@ -1,16 +1,17 @@
 import { Router } from 'express'
 import * as notificationController from '../../controllers/notification/notification.controller.js'
-import { authenticate } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 
 const router = Router()
 
 router.use(authenticate)
-router.get('/', notificationController.getMyNotifications)
-router.get('/unread-count', notificationController.getUnreadCount)
-router.patch('/read-all', notificationController.markAllNotificationsAsRead)
-router.patch('/:id/read', validateObjectId('id'), notificationController.markNotificationAsRead)
-router.delete('/:id', validateObjectId('id'), notificationController.deleteNotification)
+router.get('/', requirePermissions(PERMISSIONS.NOTIFICATION_SELF_READ), notificationController.getMyNotifications)
+router.get('/unread-count', requirePermissions(PERMISSIONS.NOTIFICATION_SELF_READ), notificationController.getUnreadCount)
+router.patch('/read-all', requirePermissions(PERMISSIONS.NOTIFICATION_SELF_UPDATE), notificationController.markAllNotificationsAsRead)
+router.patch('/:id/read', requirePermissions(PERMISSIONS.NOTIFICATION_SELF_UPDATE), validateObjectId('id'), notificationController.markNotificationAsRead)
+router.delete('/:id', requirePermissions(PERMISSIONS.NOTIFICATION_SELF_DELETE), validateObjectId('id'), notificationController.deleteNotification)
 
 export default router
 
@@ -31,8 +32,10 @@ export default router
  *         title: { type: string }
  *         message: { type: string }
  *         data: { type: object }
- *         targetType: { type: string, enum: [USER, SHOP, PRODUCT, ORDER, PAYMENT, CHAT, REVIEW, REPORT, VOUCHER, SYSTEM] }
+ *         targetType: { type: string, enum: [USER, SHOP, PRODUCT, ORDER, PAYMENT, WALLET, WITHDRAWAL, KYC, CHAT, REVIEW, REPORT, VOUCHER, NOTIFICATION, SYSTEM] }
  *         targetId: { type: string, nullable: true }
+ *         targetUrl: { type: string, nullable: true, example: /orders/64f000000000000000000001 }
+ *         metadata: { type: object }
  *         actionUrl: { type: string, nullable: true }
  *         priority: { type: string, enum: [LOW, NORMAL, HIGH, URGENT] }
  *         channels:

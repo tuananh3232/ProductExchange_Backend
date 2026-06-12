@@ -136,15 +136,15 @@ describe('canAccessConversation', () => {
       expect(await service.canAccessConversation(user(OWNER_ID), makeShopConv())).toBe(true)
     })
 
-    it('staff with shop:chat_manage can access', async () => {
+    it('staff with shop:chat:read can access', async () => {
       shopModel.findById.mockReturnValue(selectWith(makeShop({
         staff: [STAFF_ID],
-        staffPermissions: [{ staffUser: STAFF_ID, permissions: [PERMISSIONS.SHOP_CHAT_MANAGE] }],
+        staffPermissions: [{ staffUser: STAFF_ID, permissions: [PERMISSIONS.SHOP_CHAT_READ] }],
       })))
       expect(await service.canAccessConversation(user(STAFF_ID), makeShopConv())).toBe(true)
     })
 
-    it('staff without shop:chat_manage is denied', async () => {
+    it('staff without shop:chat:read is denied', async () => {
       shopModel.findById.mockReturnValue(selectWith(makeShop({
         staff: [STAFF_ID],
         staffPermissions: [{ staffUser: STAFF_ID, permissions: [] }],
@@ -226,10 +226,10 @@ describe('assertConversationActorAccess', () => {
       expect(actor.senderUserId).toBe(OWNER_ID)
     })
 
-    it('staff with shop:chat_manage actingAs=SHOP gets SHOP actor', async () => {
+    it('staff with shop:chat:send actingAs=SHOP gets SHOP actor', async () => {
       shopModel.findById.mockReturnValue(selectWith(makeShop({
         staff: [STAFF_ID],
-        staffPermissions: [{ staffUser: STAFF_ID, permissions: [PERMISSIONS.SHOP_CHAT_MANAGE] }],
+        staffPermissions: [{ staffUser: STAFF_ID, permissions: [PERMISSIONS.SHOP_CHAT_SEND] }],
       })))
       const actor = await service.assertConversationActorAccess(
         user(STAFF_ID), makeShopConv(), { actingAs: 'SHOP', shopId: SHOP_ID }
@@ -238,7 +238,7 @@ describe('assertConversationActorAccess', () => {
       expect(actor.senderShopId).toBe(SHOP_ID)
     })
 
-    it('staff without shop:chat_manage actingAs=SHOP throws 403', async () => {
+    it('staff without shop:chat:send actingAs=SHOP throws 403', async () => {
       shopModel.findById.mockReturnValue(selectWith(makeShop({
         staff: [STAFF_ID],
         staffPermissions: [{ staffUser: STAFF_ID, permissions: [] }],
@@ -484,7 +484,7 @@ describe('getConversations', () => {
     expect(conversations[0].context.shopId).toBe(SHOP_ID)
   })
 
-  it('scope=workspace throws 403 for user without shop:chat_manage', async () => {
+  it('scope=workspace throws 403 for user without shop:chat:read', async () => {
     shopModel.findById.mockReturnValue(selectWith(makeShop())) // owner=OWNER_ID only
 
     await expect(

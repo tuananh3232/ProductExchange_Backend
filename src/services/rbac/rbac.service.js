@@ -2,7 +2,8 @@ import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { ROLE_ENUM, ROLES } from '../../constants/role.constant.js'
+import { ROLE_ENUM } from '../../constants/role.constant.js'
+import { ACTIVE_PERMISSION_KEYS } from '../../constants/permission.constant.js'
 import * as permissionRepo from '../../repositories/permission/permission.repository.js'
 import * as roleRepo from '../../repositories/role/role.repository.js'
 import { ensureRbacSeedData } from './rbac-seed.service.js'
@@ -23,6 +24,11 @@ export const updateRolePermissions = async (roleCode, permissionKeys) => {
   }
 
   const uniquePermissionKeys = [...new Set(permissionKeys)]
+  const invalidMatrixKeys = uniquePermissionKeys.filter((key) => !ACTIVE_PERMISSION_KEYS.includes(key))
+  if (invalidMatrixKeys.length) {
+    throw new AppError('Danh sÃ¡ch permission khÃ´ng há»£p lá»‡ trong matrix má»›i', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.PERMISSION_NOT_FOUND)
+  }
+
   const permissions = await permissionRepo.findByKeys(uniquePermissionKeys)
 
   if (permissions.length !== uniquePermissionKeys.length) {

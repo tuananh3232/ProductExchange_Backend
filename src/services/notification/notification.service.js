@@ -5,6 +5,7 @@ import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { emitToUser } from '../../sockets/socket-hub.js'
+import { buildNotificationTarget } from './notification-target.helper.js'
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 
@@ -17,6 +18,21 @@ const serializeNotification = (notification) => {
     recipient: toIdString(plain.recipient),
     sender: toIdString(plain.sender),
     targetId: toIdString(plain.targetId),
+    targetUrl: plain.targetUrl || null,
+    metadata: plain.metadata || {},
+  }
+}
+
+const normalizeNotificationPayload = (payload = {}) => {
+  const target = buildNotificationTarget(payload)
+  return {
+    ...payload,
+    data: payload.data || target.metadata || {},
+    targetType: target.targetType,
+    targetId: target.targetId,
+    targetUrl: target.targetUrl,
+    metadata: target.metadata || {},
+    actionUrl: target.targetUrl,
   }
 }
 
@@ -34,7 +50,7 @@ const emitCreatedNotification = async (notification) => {
 }
 
 export const createNotification = async (payload) => {
-  const notification = await Notification.create(payload)
+  const notification = await Notification.create(normalizeNotificationPayload(payload))
   await emitCreatedNotification(notification)
   return notification
 }
@@ -42,7 +58,7 @@ export const createNotification = async (payload) => {
 export const createManyNotifications = async (list) => {
   if (!Array.isArray(list) || !list.length) return []
 
-  const notifications = await Notification.insertMany(list)
+  const notifications = await Notification.insertMany(list.map(normalizeNotificationPayload))
   await Promise.all(notifications.map((notification) => emitCreatedNotification(notification)))
   return notifications
 }
@@ -78,7 +94,11 @@ export const getMyNotifications = async (userId, query = {}) => {
     getUnreadCount(userId),
   ])
 
-  return { notifications, pagination: buildPaginationMeta(total, page, limit).pagination, unreadCount }
+  return {
+    notifications: notifications.map(serializeNotification),
+    pagination: buildPaginationMeta(total, page, limit).pagination,
+    unreadCount,
+  }
 }
 
 const getOwnedNotificationOrThrow = async (userId, notificationId) => {
@@ -90,13 +110,14 @@ const getOwnedNotificationOrThrow = async (userId, notificationId) => {
 }
 
 export const markNotificationAsRead = async (userId, notificationId) => {
-  const notification = await getOwnedNotificationOrThrow(userId, notificationId)
-  if (!notification.isRead) {
-    notification.isRead = true
-    notification.readAt = new Date()
-    await notification.save()
-  }
-  return notification
+  await getOwnedNotificationOrThrow(userId, notificationId)
+  const updatedNotification = await Notification.findOneAndUpdate(
+    { _id: notificationId, recipient: userId, isRead: false },
+    { isRead: true, readAt: new Date() },
+    { returnDocument: 'after' }
+  )
+  const notification = updatedNotification || (await getOwnedNotificationOrThrow(userId, notificationId))
+  return serializeNotification(notification)
 }
 
 export const markAllNotificationsAsRead = async (userId) => {
@@ -106,7 +127,7 @@ export const markAllNotificationsAsRead = async (userId) => {
 }
 
 export const deleteNotification = async (userId, notificationId) => {
-  const notification = await getOwnedNotificationOrThrow(userId, notificationId)
-  await notification.deleteOne()
+  await getOwnedNotificationOrThrow(userId, notificationId)
+  await Notification.deleteOne({ _id: notificationId, recipient: userId })
 }
 

@@ -6,6 +6,8 @@ import HTTP_STATUS from '../constants/http-status.constant.js'
 import * as roleRepo from '../repositories/role/role.repository.js'
 import { canAccessShopPermission } from '../utils/data-scope.util.js'
 import { reconcileOwnerShopQuota } from '../services/shop/shop.service.js'
+import { ROLES } from '../constants/role.constant.js'
+import PERMISSIONS from '../constants/permission.constant.js'
 
 /**
  * Middleware xac thuc JWT
@@ -55,6 +57,8 @@ export const authenticate = async (req, res, next) => {
 export const authorize = (...roles) => {
   return (req, res, next) => {
     const userRoles = req.user?.roles || []
+    if (userRoles.includes(ROLES.ADMIN)) return next()
+
     const isAllowed = roles.some((role) => userRoles.includes(role))
 
     if (!isAllowed) {
@@ -65,6 +69,8 @@ export const authorize = (...roles) => {
     next()
   }
 }
+
+export const requireRoles = authorize
 
 /**
  * Middleware phan quyen theo permission (RBAC database-driven)
@@ -77,6 +83,10 @@ export const requirePermissions = (...requiredPermissions) => {
       }
 
       const userRoles = req.user?.roles || []
+      if (userRoles.includes(ROLES.ADMIN)) {
+        req.user.permissions = ['*']
+        return next()
+      }
       if (!userRoles.length) {
         throw new AppError('Bạn không có quyền thực hiện hành động này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
       }
@@ -160,7 +170,7 @@ export const requireShopOwnerProductVisual = (req, res, next) => {
     const { roles = [], permissions = [] } = req.user || {}
     const isAdmin = roles.includes('admin')
     const isShopOwnerWithPermission =
-      roles.includes('shop_owner') && permissions.includes('product_visual_asset:manage')
+      roles.includes(ROLES.SHOP_OWNER) && permissions.includes(PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE)
 
     if (!isAdmin && !isShopOwnerWithPermission) {
       throw new AppError(

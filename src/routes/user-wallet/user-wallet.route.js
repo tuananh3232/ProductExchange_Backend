@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import * as userWalletController from '../../controllers/user-wallet/user-wallet.controller.js'
-import { authenticate } from '../../middlewares/auth.middleware.js'
+import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 import Joi from 'joi'
 
 const router = Router()
@@ -71,7 +72,7 @@ const requestWithdrawalSchema = Joi.object({
  *                       type: number
  *                       example: 500000
  */
-router.get('/me', authenticate, userWalletController.getMyWallet)
+router.get('/me', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_READ), userWalletController.getMyWallet)
 
 /**
  * @swagger
@@ -96,7 +97,7 @@ router.get('/me', authenticate, userWalletController.getMyWallet)
  *       200:
  *         description: Lấy lịch sử giao dịch thành công
  */
-router.get('/me/transactions', authenticate, userWalletController.getMyTransactions)
+router.get('/me/transactions', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_TRANSACTION_READ), userWalletController.getMyTransactions)
 
 /**
  * @swagger
@@ -163,7 +164,7 @@ router.get('/me/transactions', authenticate, userWalletController.getMyTransacti
  *                         type: string
  *                         format: date-time
  */
-router.get('/me/activity', authenticate, userWalletController.getMyActivity)
+router.get('/me/activity', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_TRANSACTION_READ), userWalletController.getMyActivity)
 
 /**
  * @swagger
@@ -188,7 +189,7 @@ router.get('/me/activity', authenticate, userWalletController.getMyActivity)
  *       200:
  *         description: Lấy lịch sử nạp tiền thành công
  */
-router.get('/me/topups', authenticate, userWalletController.getMyTopups)
+router.get('/me/topups', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_TRANSACTION_READ), userWalletController.getMyTopups)
 
 /**
  * @swagger
@@ -230,7 +231,7 @@ router.get('/me/topups', authenticate, userWalletController.getMyTopups)
  *       400:
  *         description: Số tiền không hợp lệ
  */
-router.post('/me/topup', authenticate, validate(createTopupSchema), userWalletController.createTopup)
+router.post('/me/topup', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_READ), validate(createTopupSchema), userWalletController.createTopup)
 
 /**
  * @swagger
@@ -257,7 +258,7 @@ router.post('/me/topup', authenticate, validate(createTopupSchema), userWalletCo
  *       400:
  *         description: Số dư không đủ hoặc đơn hàng không hợp lệ
  */
-router.post('/me/pay-order', authenticate, validate(payOrderSchema), userWalletController.payOrderWithWallet)
+router.post('/me/pay-order', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_READ), validate(payOrderSchema), userWalletController.payOrderWithWallet)
 
 /**
  * @swagger
@@ -287,7 +288,7 @@ router.post('/me/pay-order', authenticate, validate(payOrderSchema), userWalletC
  *       400:
  *         description: Số dư không đủ hoặc đơn hàng không hợp lệ
  */
-router.post('/me/pay-orders', authenticate, validate(payOrdersSchema), userWalletController.payOrdersWithWallet)
+router.post('/me/pay-orders', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_READ), validate(payOrdersSchema), userWalletController.payOrdersWithWallet)
 
 /**
  * @swagger
@@ -312,7 +313,7 @@ router.post('/me/pay-orders', authenticate, validate(payOrdersSchema), userWalle
  *       200:
  *         description: Xác nhận thành công, trả về trạng thái nạp tiền
  */
-router.post('/me/topup/verify', authenticate, validate(verifyTopupSchema), userWalletController.verifyTopup)
+router.post('/me/topup/verify', authenticate, requirePermissions(PERMISSIONS.WALLET_SELF_READ), validate(verifyTopupSchema), userWalletController.verifyTopup)
 
 /**
  * @swagger
@@ -379,7 +380,7 @@ router.post('/me/topup/verify', authenticate, validate(verifyTopupSchema), userW
  *       400:
  *         description: Số dư không đủ hoặc đang có yêu cầu chờ xử lý
  */
-router.post('/me/withdrawals', authenticate, validate(requestWithdrawalSchema), userWalletController.requestWithdrawal)
-router.get('/me/withdrawals', authenticate, userWalletController.getMyWithdrawals)
+router.post('/me/withdrawals', authenticate, requirePermissions(PERMISSIONS.WALLET_WITHDRAWAL_CREATE), validate(requestWithdrawalSchema), userWalletController.requestWithdrawal)
+router.get('/me/withdrawals', authenticate, requirePermissions(PERMISSIONS.WALLET_WITHDRAWAL_READ), userWalletController.getMyWithdrawals)
 
 export default router

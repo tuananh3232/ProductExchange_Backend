@@ -1,4 +1,4 @@
-import PERMISSIONS, { ROLE_PERMISSION_MAP, PERMISSION_METADATA } from '../../constants/permission.constant.js'
+import { ACTIVE_PERMISSION_KEYS, ROLE_PERMISSION_MAP, PERMISSION_METADATA } from '../../constants/permission.constant.js'
 import { ROLE_DESCRIPTIONS } from '../../constants/role.constant.js'
 import * as permissionRepo from '../../repositories/permission/permission.repository.js'
 import * as roleRepo from '../../repositories/role/role.repository.js'
@@ -10,7 +10,7 @@ const toTitle = (text) =>
     .join(' ')
 
 export const ensureRbacSeedData = async () => {
-  const permissionKeys = Object.values(PERMISSIONS)
+  const permissionKeys = ACTIVE_PERMISSION_KEYS
   const permissionPayload = permissionKeys.map((key) => ({
     key,
     module: PERMISSION_METADATA[key]?.module ?? key.split(':')[0],

@@ -7,6 +7,8 @@ import HTTP_STATUS from '../../constants/http-status.constant.js';
 import { buildPaginationMeta } from '../../utils/pagination.util.js';
 import { INVITATION_STATUS } from '../../constants/status.constant.js';
 import { ROLES } from '../../constants/role.constant.js';
+import PERMISSIONS, { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.constant.js';
+import { assertShopPermission } from '../../utils/data-scope.util.js';
 import { env } from '../../configs/env.config.js';
 import { sendStaffInvitationEmail } from '../../utils/mail.util.js';
 import { notifySafely } from '../notification/notification.service.js';
@@ -74,12 +76,21 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND);
   }
 
-  // Only shop owner can send invitations
   const userId = inviterContext?._id?.toString();
   const ownerId = shop.owner?._id?.toString() || shop.owner?.toString();
-  
-  if (userId !== ownerId && !new Set(inviterContext?.roles || []).has(ROLES.ADMIN)) {
-    throw new AppError('Chỉ chủ shop có thể gửi lời mời', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN);
+
+  await assertShopPermission({
+    user: inviterContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
+    message: 'Bạn không có quyền gửi lời mời staff',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  });
+
+  const uniquePermissions = [...new Set(permissions || [])];
+  const invalidPermissions = uniquePermissions.filter((permission) => !SHOP_STAFF_PERMISSIONS.includes(permission));
+  if (invalidPermissions.length) {
+    throw new AppError('Danh sách quyền staff chứa quyền không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.PERMISSION_NOT_FOUND);
   }
 
   const email = normalizeEmail(inviteeEmail);
@@ -140,7 +151,7 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     invitee: invitee._id,
     inviter: inviterContext._id,
     role: 'STAFF',
-    permissions: permissions.length > 0 ? permissions : [],
+    permissions: uniquePermissions,
     status: INVITATION_STATUS.PENDING,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
   });
@@ -326,13 +337,13 @@ export const getShopInvitations = async (shopId, ownerContext, status, { page, l
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND);
   }
 
-  // Only shop owner can view invitations
-  const userId = ownerContext?._id?.toString();
-  const ownerId = shop.owner?._id?.toString() || shop.owner?.toString();
-
-  if (userId !== ownerId && !new Set(ownerContext?.roles || []).has(ROLES.ADMIN)) {
-    throw new AppError('Chỉ chủ shop có thể xem lời mời', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN);
-  }
+  await assertShopPermission({
+    user: ownerContext,
+    shopId,
+    permissionKey: PERMISSIONS.SHOP_STAFF_READ,
+    message: 'Bạn không có quyền xem lời mời staff',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  });
 
   let [invitations, total] = [[], 0];
 
@@ -370,13 +381,13 @@ export const cancelInvitation = async (invitationId, ownerContext) => {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND);
   }
 
-  // Only shop owner can cancel invitations
-  const userId = ownerContext?._id?.toString();
-  const ownerId = shop.owner?._id?.toString() || shop.owner?.toString();
-
-  if (userId !== ownerId && !new Set(ownerContext?.roles || []).has(ROLES.ADMIN)) {
-    throw new AppError('Chỉ chủ shop có thể hủy lời mời', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN);
-  }
+  await assertShopPermission({
+    user: ownerContext,
+    shopId: shop._id,
+    permissionKey: PERMISSIONS.SHOP_STAFF_REMOVE,
+    message: 'Bạn không có quyền hủy lời mời staff',
+    errorCode: ERRORS.AUTH.FORBIDDEN,
+  });
 
   // Can only cancel pending invitations
   if (invitation.status !== INVITATION_STATUS.PENDING) {

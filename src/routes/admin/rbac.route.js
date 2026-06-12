@@ -1,29 +1,28 @@
 import { Router } from 'express'
 import * as rbacController from '../../controllers/rbac/rbac.controller.js'
-import { authenticate, requirePermissions } from '../../middlewares/auth.middleware.js'
+import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { assignRolesSchema, updateRolePermissionsSchema } from '../../validations/rbac/rbac.validation.js'
-import PERMISSIONS from '../../constants/permission.constant.js'
+import { ROLES } from '../../constants/role.constant.js'
 
 const router = Router()
 
 router.use(authenticate)
+router.use(requireRoles(ROLES.ADMIN))
 
-router.get('/permissions', requirePermissions(PERMISSIONS.ADMIN_MANAGE_PERMISSIONS), rbacController.getPermissions)
-router.get('/roles', requirePermissions(PERMISSIONS.ADMIN_MANAGE_ROLES), rbacController.getRoles)
+router.get('/permissions', rbacController.getPermissions)
+router.get('/roles', rbacController.getRoles)
 router.put(
   '/roles/:roleCode/permissions',
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_ROLES),
   validate(updateRolePermissionsSchema),
   rbacController.updateRolePermissions
 )
 router.patch(
   '/users/:userId/roles',
-  requirePermissions(PERMISSIONS.ADMIN_MANAGE_ROLES),
   validate(assignRolesSchema),
   rbacController.assignRolesToUser
 )
-router.post('/seed', requirePermissions(PERMISSIONS.ADMIN_MANAGE_ROLES), rbacController.seedRbac)
+router.post('/seed', rbacController.seedRbac)
 
 export default router
 

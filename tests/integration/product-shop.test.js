@@ -4,6 +4,8 @@ import { env } from '../../src/configs/env.config.js'
 import { ROLES } from '../../src/constants/role.constant.js'
 import { PRODUCT_STATUS, SHOP_STATUS } from '../../src/constants/status.constant.js'
 import { PRODUCT_OWNER_TYPES } from '../../src/models/product.model.js'
+import PERMISSIONS from '../../src/constants/permission.constant.js'
+import Shop from '../../src/models/shop.model.js'
 import { resetTestDatabase } from '../setup/test-db.js'
 import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createAndLogin, loginAdmin, loginMember, loginSeller, loginShopOwner } from '../setup/auth.js'
@@ -159,5 +161,81 @@ describe('product and shop integration', () => {
       .send({ title: 'Updated by other seller' })
 
     expect(response.status).toBe(403)
+  })
+
+  it('allows shop staff with shop:product:create to create a product for the assigned shop', async () => {
+    const { user: owner } = await loginShopOwner()
+    const { user: staff, token: staffToken } = await createAndLogin(ROLES.STAFF)
+    const category = await createSampleCategory()
+    const shop = await createSampleShop({ owner: owner._id, status: SHOP_STATUS.ACTIVE })
+    await Shop.findByIdAndUpdate(shop._id, {
+      $push: {
+        staff: staff._id,
+        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] },
+      },
+    })
+
+    const response = await request(app)
+      .post(`${api}/products`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shop._id.toString(), category: category._id.toString() }))
+
+    expect(response.status).toBe(201)
+    expect(response.body.data.product.shop.toString()).toBe(shop._id.toString())
+  })
+
+  it('blocks shop staff without shop:product:create from creating a shop product', async () => {
+    const { user: owner } = await loginShopOwner()
+    const { user: staff, token: staffToken } = await createAndLogin(ROLES.STAFF)
+    const category = await createSampleCategory()
+    const shop = await createSampleShop({ owner: owner._id, status: SHOP_STATUS.ACTIVE })
+    await Shop.findByIdAndUpdate(shop._id, {
+      $push: {
+        staff: staff._id,
+        staffPermissions: { staffUser: staff._id, permissions: [] },
+      },
+    })
+
+    const response = await request(app)
+      .post(`${api}/products`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shop._id.toString(), category: category._id.toString() }))
+
+    expect(response.status).toBe(403)
+  })
+
+  it('does not allow shop staff to reuse permissions from another shop', async () => {
+    const { user: ownerA } = await loginShopOwner()
+    const { user: ownerB } = await loginShopOwner()
+    const { user: staff, token: staffToken } = await createAndLogin(ROLES.STAFF)
+    const category = await createSampleCategory()
+    const shopA = await createSampleShop({ owner: ownerA._id, status: SHOP_STATUS.ACTIVE })
+    const shopB = await createSampleShop({ owner: ownerB._id, status: SHOP_STATUS.ACTIVE })
+    await Shop.findByIdAndUpdate(shopA._id, {
+      $push: {
+        staff: staff._id,
+        staffPermissions: { staffUser: staff._id, permissions: [PERMISSIONS.SHOP_PRODUCT_CREATE] },
+      },
+    })
+
+    const response = await request(app)
+      .post(`${api}/products`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SHOP, shop: shopB._id.toString(), category: category._id.toString() }))
+
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects assigning non-shop-staff permissions to shop staff', async () => {
+    const { user: owner, token: ownerToken } = await loginShopOwner()
+    const { user: staff } = await createAndLogin(ROLES.STAFF)
+    const shop = await createSampleShop({ owner: owner._id, status: SHOP_STATUS.ACTIVE, staff: [staff._id] })
+
+    const response = await request(app)
+      .put(`${api}/shops/${shop._id}/staff/${staff._id}/permissions`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ permissions: [PERMISSIONS.SELLER_PRODUCT_CREATE] })
+
+    expect(response.status).toBe(400)
   })
 })

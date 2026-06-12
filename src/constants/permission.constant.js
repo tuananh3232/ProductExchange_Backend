@@ -1,27 +1,95 @@
 /**
- * Định nghĩa các quyền(permissions) trong hệ thống
- * Sự dụng RBAC
+ * Permission matrix.
+ *
+ * New permissions use scope:resource:action. Admin routes are protected by the
+ * admin role and admin users bypass permission checks in middleware.
  */
 
 export const PERMISSIONS = {
-  // Auth
+  // Member / user self-service
+  USER_SELF_READ: 'user:self:read',
+  USER_SELF_UPDATE: 'user:self:update',
+
+  USER_CART_READ: 'user:cart:read',
+  USER_CART_UPDATE: 'user:cart:update',
+  USER_CART_CLEAR: 'user:cart:clear',
+  USER_CART_CHECKOUT: 'user:cart:checkout',
+
+  USER_ORDER_CREATE: 'user:order:create',
+  USER_ORDER_READ: 'user:order:read',
+  USER_ORDER_CANCEL: 'user:order:cancel',
+
+  NOTIFICATION_SELF_READ: 'notification:self:read',
+  NOTIFICATION_SELF_UPDATE: 'notification:self:update',
+  NOTIFICATION_SELF_DELETE: 'notification:self:delete',
+
+  // Personal seller
+  SELLER_PRODUCT_READ: 'seller:product:read',
+  SELLER_PRODUCT_CREATE: 'seller:product:create',
+  SELLER_PRODUCT_UPDATE: 'seller:product:update',
+  SELLER_PRODUCT_DELETE: 'seller:product:delete',
+  SELLER_PRODUCT_UPDATE_STATUS: 'seller:product:update_status',
+  SELLER_PRODUCT_IMAGE_UPDATE: 'seller:product:image_update',
+
+  SELLER_ORDER_READ: 'seller:order:read',
+  SELLER_ORDER_CONFIRM: 'seller:order:confirm',
+  SELLER_ORDER_CANCEL: 'seller:order:cancel',
+  SELLER_ORDER_UPDATE_STATUS: 'seller:order:update_status',
+
+  WALLET_SELF_READ: 'wallet:self:read',
+  WALLET_SELF_TRANSACTION_READ: 'wallet:self_transaction:read',
+  WALLET_WITHDRAWAL_CREATE: 'wallet:withdrawal:create',
+  WALLET_WITHDRAWAL_READ: 'wallet:withdrawal:read',
+
+  // Shop owner / shop-scoped staff
+  SHOP_PROFILE_READ: 'shop:profile:read',
+  SHOP_PROFILE_UPDATE: 'shop:profile:update',
+  SHOP_PROFILE_SUBMIT_REVIEW: 'shop:profile:submit_review',
+
+  SHOP_STATS_READ: 'shop:stats:read',
+  SHOP_OWNER_TRANSFER: 'shop:owner:transfer',
+
+  SHOP_PRODUCT_READ: 'shop:product:read',
+  SHOP_PRODUCT_CREATE: 'shop:product:create',
+  SHOP_PRODUCT_UPDATE: 'shop:product:update',
+  SHOP_PRODUCT_DELETE: 'shop:product:delete',
+  SHOP_PRODUCT_UPDATE_STATUS: 'shop:product:update_status',
+  SHOP_PRODUCT_IMAGE_UPDATE: 'shop:product:image_update',
+  SHOP_PRODUCT_VISUAL_ASSET_MANAGE: 'shop:product:visual_asset_manage',
+
+  SHOP_ORDER_READ: 'shop:order:read',
+  SHOP_ORDER_CONFIRM: 'shop:order:confirm',
+  SHOP_ORDER_CANCEL: 'shop:order:cancel',
+  SHOP_ORDER_UPDATE_STATUS: 'shop:order:update_status',
+
+  SHOP_STAFF_READ: 'shop:staff:read',
+  SHOP_STAFF_INVITE: 'shop:staff:invite',
+  SHOP_STAFF_REMOVE: 'shop:staff:remove',
+
+  SHOP_STAFF_PERMISSION_READ: 'shop:staff_permission:read',
+  SHOP_STAFF_PERMISSION_UPDATE: 'shop:staff_permission:update',
+
+  SHOP_CHAT_READ: 'shop:chat:read',
+  SHOP_CHAT_SEND: 'shop:chat:send',
+  SHOP_CHAT_MARK_READ: 'shop:chat:mark_read',
+
+  SHOP_WALLET_READ: 'shop:wallet:read',
+  SHOP_WALLET_TRANSACTION_READ: 'shop:wallet_transaction:read',
+  SHOP_WITHDRAWAL_CREATE: 'shop:withdrawal:create',
+  SHOP_WITHDRAWAL_READ: 'shop:withdrawal:read',
+
+  ROOM_VISUALIZER_USE: 'room_visualizer:use',
+
+  // Deprecated compatibility keys. Do not use in new route matrix.
   AUTH_REGISTER: 'auth:register',
   AUTH_LOGIN: 'auth:login',
   AUTH_LOGOUT: 'auth:logout',
-
-  // Product
   PRODUCT_CREATE: 'product:create',
   PRODUCT_READ: 'product:read',
   PRODUCT_UPDATE: 'product:update',
   PRODUCT_DELETE: 'product:delete',
-
-
-
-  // User
   USER_READ: 'user:read',
   USER_UPDATE: 'user:update',
-
-  // Shop
   SHOP_CREATE: 'shop:create',
   SHOP_READ: 'shop:read',
   SHOP_UPDATE: 'shop:update',
@@ -30,19 +98,13 @@ export const PERMISSIONS = {
   SHOP_MANAGE_STAFF: 'shop:manage_staff',
   SHOP_MANAGE_STAFF_PERMISSIONS: 'shop:manage_staff_permissions',
   SHOP_CHAT_MANAGE: 'shop:chat_manage',
-
-  // Order
   ORDER_CREATE: 'order:create',
   ORDER_READ: 'order:read',
   ORDER_CONFIRM: 'order:confirm',
   ORDER_CANCEL: 'order:cancel',
   ORDER_UPDATE_STATUS: 'order:update_status',
-
-  // Wallet
   WALLET_VIEW: 'wallet:view',
   WALLET_REQUEST_WITHDRAWAL: 'wallet:request_withdrawal',
-
-  // Admin
   ADMIN_MANAGE_USERS: 'admin:manage_users',
   ADMIN_MANAGE_PRODUCTS: 'admin:manage_products',
   ADMIN_MANAGE_SHOPS: 'admin:manage_shops',
@@ -50,131 +112,238 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',
   ADMIN_MANAGE_WITHDRAWALS: 'admin:manage_withdrawals',
-
-  // Room Visualizer
-  ROOM_VISUALIZER_USE: 'room_visualizer:use',
   PRODUCT_VISUAL_ASSET_MANAGE: 'product_visual_asset:manage',
-};
+}
 
-/**
- * Gán quyền cho từng role
- */
+export const DEPRECATED_PERMISSIONS = [
+  PERMISSIONS.AUTH_REGISTER,
+  PERMISSIONS.AUTH_LOGIN,
+  PERMISSIONS.AUTH_LOGOUT,
+  PERMISSIONS.PRODUCT_CREATE,
+  PERMISSIONS.PRODUCT_READ,
+  PERMISSIONS.PRODUCT_UPDATE,
+  PERMISSIONS.PRODUCT_DELETE,
+  PERMISSIONS.USER_READ,
+  PERMISSIONS.USER_UPDATE,
+  PERMISSIONS.SHOP_CREATE,
+  PERMISSIONS.SHOP_READ,
+  PERMISSIONS.SHOP_UPDATE,
+  PERMISSIONS.SHOP_VIEW_STATS,
+  PERMISSIONS.SHOP_MANAGE_OWNER,
+  PERMISSIONS.SHOP_MANAGE_STAFF,
+  PERMISSIONS.SHOP_MANAGE_STAFF_PERMISSIONS,
+  PERMISSIONS.SHOP_CHAT_MANAGE,
+  PERMISSIONS.ORDER_CREATE,
+  PERMISSIONS.ORDER_READ,
+  PERMISSIONS.ORDER_CONFIRM,
+  PERMISSIONS.ORDER_CANCEL,
+  PERMISSIONS.ORDER_UPDATE_STATUS,
+  PERMISSIONS.WALLET_VIEW,
+  PERMISSIONS.WALLET_REQUEST_WITHDRAWAL,
+  PERMISSIONS.ADMIN_MANAGE_USERS,
+  PERMISSIONS.ADMIN_MANAGE_PRODUCTS,
+  PERMISSIONS.ADMIN_MANAGE_SHOPS,
+  PERMISSIONS.ADMIN_MANAGE_ROLES,
+  PERMISSIONS.ADMIN_MANAGE_PERMISSIONS,
+  PERMISSIONS.ADMIN_VIEW_STATS,
+  PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS,
+  PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE,
+]
+
+export const SHOP_OWNER_PERMISSIONS = [
+  PERMISSIONS.SHOP_PROFILE_READ,
+  PERMISSIONS.SHOP_PROFILE_UPDATE,
+  PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW,
+  PERMISSIONS.SHOP_STATS_READ,
+  PERMISSIONS.SHOP_OWNER_TRANSFER,
+  PERMISSIONS.SHOP_PRODUCT_READ,
+  PERMISSIONS.SHOP_PRODUCT_CREATE,
+  PERMISSIONS.SHOP_PRODUCT_UPDATE,
+  PERMISSIONS.SHOP_PRODUCT_DELETE,
+  PERMISSIONS.SHOP_PRODUCT_UPDATE_STATUS,
+  PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE,
+  PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE,
+  PERMISSIONS.SHOP_ORDER_READ,
+  PERMISSIONS.SHOP_ORDER_CONFIRM,
+  PERMISSIONS.SHOP_ORDER_CANCEL,
+  PERMISSIONS.SHOP_ORDER_UPDATE_STATUS,
+  PERMISSIONS.SHOP_STAFF_READ,
+  PERMISSIONS.SHOP_STAFF_INVITE,
+  PERMISSIONS.SHOP_STAFF_REMOVE,
+  PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
+  PERMISSIONS.SHOP_STAFF_PERMISSION_UPDATE,
+  PERMISSIONS.SHOP_CHAT_READ,
+  PERMISSIONS.SHOP_CHAT_SEND,
+  PERMISSIONS.SHOP_CHAT_MARK_READ,
+  PERMISSIONS.SHOP_WALLET_READ,
+  PERMISSIONS.SHOP_WALLET_TRANSACTION_READ,
+  PERMISSIONS.SHOP_WITHDRAWAL_CREATE,
+  PERMISSIONS.SHOP_WITHDRAWAL_READ,
+]
+
+export const SHOP_STAFF_PERMISSIONS = [
+  PERMISSIONS.SHOP_PROFILE_READ,
+  PERMISSIONS.SHOP_PROFILE_UPDATE,
+  PERMISSIONS.SHOP_STATS_READ,
+  PERMISSIONS.SHOP_PRODUCT_READ,
+  PERMISSIONS.SHOP_PRODUCT_CREATE,
+  PERMISSIONS.SHOP_PRODUCT_UPDATE,
+  PERMISSIONS.SHOP_PRODUCT_DELETE,
+  PERMISSIONS.SHOP_PRODUCT_UPDATE_STATUS,
+  PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE,
+  PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE,
+  PERMISSIONS.SHOP_ORDER_READ,
+  PERMISSIONS.SHOP_ORDER_CONFIRM,
+  PERMISSIONS.SHOP_ORDER_CANCEL,
+  PERMISSIONS.SHOP_ORDER_UPDATE_STATUS,
+  PERMISSIONS.SHOP_STAFF_READ,
+  PERMISSIONS.SHOP_STAFF_INVITE,
+  PERMISSIONS.SHOP_STAFF_REMOVE,
+  PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
+  PERMISSIONS.SHOP_CHAT_READ,
+  PERMISSIONS.SHOP_CHAT_SEND,
+  PERMISSIONS.SHOP_CHAT_MARK_READ,
+  PERMISSIONS.SHOP_WALLET_READ,
+  PERMISSIONS.SHOP_WALLET_TRANSACTION_READ,
+  PERMISSIONS.SHOP_WITHDRAWAL_READ,
+]
+
+export const SHOP_STAFF_PERMISSION_PRESETS = {
+  PRODUCT_STAFF: [
+    PERMISSIONS.SHOP_PRODUCT_READ,
+    PERMISSIONS.SHOP_PRODUCT_CREATE,
+    PERMISSIONS.SHOP_PRODUCT_UPDATE,
+    PERMISSIONS.SHOP_PRODUCT_UPDATE_STATUS,
+    PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE,
+  ],
+  ORDER_STAFF: [
+    PERMISSIONS.SHOP_ORDER_READ,
+    PERMISSIONS.SHOP_ORDER_CONFIRM,
+    PERMISSIONS.SHOP_ORDER_UPDATE_STATUS,
+    PERMISSIONS.SHOP_CHAT_READ,
+    PERMISSIONS.SHOP_CHAT_SEND,
+  ],
+  CUSTOMER_SUPPORT_STAFF: [
+    PERMISSIONS.SHOP_CHAT_READ,
+    PERMISSIONS.SHOP_CHAT_SEND,
+    PERMISSIONS.SHOP_CHAT_MARK_READ,
+    PERMISSIONS.SHOP_ORDER_READ,
+  ],
+  FINANCE_STAFF: [
+    PERMISSIONS.SHOP_WALLET_READ,
+    PERMISSIONS.SHOP_WALLET_TRANSACTION_READ,
+    PERMISSIONS.SHOP_WITHDRAWAL_READ,
+  ],
+}
+
+const MEMBER_PERMISSIONS = [
+  PERMISSIONS.USER_SELF_READ,
+  PERMISSIONS.USER_SELF_UPDATE,
+  PERMISSIONS.USER_CART_READ,
+  PERMISSIONS.USER_CART_UPDATE,
+  PERMISSIONS.USER_CART_CLEAR,
+  PERMISSIONS.USER_CART_CHECKOUT,
+  PERMISSIONS.USER_ORDER_CREATE,
+  PERMISSIONS.USER_ORDER_READ,
+  PERMISSIONS.USER_ORDER_CANCEL,
+  PERMISSIONS.NOTIFICATION_SELF_READ,
+  PERMISSIONS.NOTIFICATION_SELF_UPDATE,
+  PERMISSIONS.NOTIFICATION_SELF_DELETE,
+  PERMISSIONS.WALLET_SELF_READ,
+  PERMISSIONS.WALLET_SELF_TRANSACTION_READ,
+  PERMISSIONS.WALLET_WITHDRAWAL_READ,
+]
+
+const SELLER_PERMISSIONS = [
+  ...MEMBER_PERMISSIONS,
+  PERMISSIONS.SELLER_PRODUCT_READ,
+  PERMISSIONS.SELLER_PRODUCT_CREATE,
+  PERMISSIONS.SELLER_PRODUCT_UPDATE,
+  PERMISSIONS.SELLER_PRODUCT_DELETE,
+  PERMISSIONS.SELLER_PRODUCT_UPDATE_STATUS,
+  PERMISSIONS.SELLER_PRODUCT_IMAGE_UPDATE,
+  PERMISSIONS.SELLER_ORDER_READ,
+  PERMISSIONS.SELLER_ORDER_CONFIRM,
+  PERMISSIONS.SELLER_ORDER_CANCEL,
+  PERMISSIONS.SELLER_ORDER_UPDATE_STATUS,
+  PERMISSIONS.WALLET_WITHDRAWAL_CREATE,
+]
+
 export const ROLE_PERMISSION_MAP = {
-  member: [
-    PERMISSIONS.AUTH_LOGIN,
-    PERMISSIONS.AUTH_LOGOUT,
-    PERMISSIONS.PRODUCT_READ,
-    PERMISSIONS.USER_READ,
-    PERMISSIONS.USER_UPDATE,
-    PERMISSIONS.SHOP_CREATE,
-    PERMISSIONS.SHOP_READ,
-    PERMISSIONS.ORDER_CREATE,
-    PERMISSIONS.ORDER_READ,
-    PERMISSIONS.ORDER_CANCEL,
-  ],
-  seller: [
-    PERMISSIONS.AUTH_LOGIN,
-    PERMISSIONS.AUTH_LOGOUT,
-    PERMISSIONS.PRODUCT_CREATE,
-    PERMISSIONS.PRODUCT_READ,
-    PERMISSIONS.PRODUCT_UPDATE,
-    PERMISSIONS.PRODUCT_DELETE,
-    PERMISSIONS.USER_READ,
-    PERMISSIONS.USER_UPDATE,
-    PERMISSIONS.SHOP_READ,
-    PERMISSIONS.ORDER_CREATE,
-    PERMISSIONS.ORDER_READ,
-    PERMISSIONS.ORDER_CONFIRM,
-    PERMISSIONS.ORDER_CANCEL,
-    PERMISSIONS.ORDER_UPDATE_STATUS,
-  ],
-  shop_owner: [
-    PERMISSIONS.USER_READ,
-    PERMISSIONS.USER_UPDATE,
-    PERMISSIONS.SHOP_CREATE,
-    PERMISSIONS.SHOP_READ,
-    PERMISSIONS.SHOP_UPDATE,
-    PERMISSIONS.SHOP_VIEW_STATS,
-    PERMISSIONS.SHOP_MANAGE_OWNER,
-    PERMISSIONS.SHOP_MANAGE_STAFF,
-    PERMISSIONS.SHOP_MANAGE_STAFF_PERMISSIONS,
-    PERMISSIONS.SHOP_CHAT_MANAGE,
-    PERMISSIONS.PRODUCT_CREATE,
-    PERMISSIONS.PRODUCT_READ,
-    PERMISSIONS.PRODUCT_UPDATE,
-    PERMISSIONS.PRODUCT_DELETE,
-    PERMISSIONS.ORDER_READ,
-    PERMISSIONS.ORDER_CONFIRM,
-    PERMISSIONS.ORDER_CANCEL,
-    PERMISSIONS.ORDER_UPDATE_STATUS,
-    PERMISSIONS.WALLET_VIEW,
-    PERMISSIONS.WALLET_REQUEST_WITHDRAWAL,
-    PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE,
-  ],
-  staff: [
-    PERMISSIONS.AUTH_LOGIN,
-    PERMISSIONS.AUTH_LOGOUT,
-    PERMISSIONS.USER_READ,
-    PERMISSIONS.USER_UPDATE,
-    PERMISSIONS.SHOP_READ,
-    PERMISSIONS.SHOP_UPDATE,
-    PERMISSIONS.PRODUCT_CREATE,
-    PERMISSIONS.PRODUCT_READ,
-    PERMISSIONS.PRODUCT_UPDATE,
-    PERMISSIONS.PRODUCT_DELETE,
-    PERMISSIONS.ORDER_READ,
-    PERMISSIONS.ORDER_CONFIRM,
-    PERMISSIONS.ORDER_UPDATE_STATUS,
-  ],
-  admin: [
-    Object.values(PERMISSIONS), // Admin có tất cả quyền
-  ].flat(),
+  member: MEMBER_PERMISSIONS,
+  seller: SELLER_PERMISSIONS,
+  shop_owner: [...MEMBER_PERMISSIONS, ...SHOP_OWNER_PERMISSIONS],
+  staff: MEMBER_PERMISSIONS,
+  admin: [],
 }
 
-/**
- * Metadata cho từng permission — dùng cho capability endpoint và FE hiển thị
- */
+const label = (module, text) => ({ module, label: text, visibleInMatrix: true })
+
 export const PERMISSION_METADATA = {
-  [PERMISSIONS.AUTH_REGISTER]:  { module: 'auth',           label: 'Đăng ký tài khoản' },
-  [PERMISSIONS.AUTH_LOGIN]:     { module: 'auth',           label: 'Đăng nhập' },
-  [PERMISSIONS.AUTH_LOGOUT]:    { module: 'auth',           label: 'Đăng xuất' },
-
-  [PERMISSIONS.PRODUCT_CREATE]: { module: 'product',        label: 'Tạo sản phẩm' },
-  [PERMISSIONS.PRODUCT_READ]:   { module: 'product',        label: 'Xem sản phẩm' },
-  [PERMISSIONS.PRODUCT_UPDATE]: { module: 'product',        label: 'Chỉnh sửa sản phẩm' },
-  [PERMISSIONS.PRODUCT_DELETE]: { module: 'product',        label: 'Xóa sản phẩm' },
-
-  [PERMISSIONS.USER_READ]:   { module: 'user', label: 'Xem hồ sơ cá nhân' },
-  [PERMISSIONS.USER_UPDATE]: { module: 'user', label: 'Cập nhật hồ sơ' },
-
-  [PERMISSIONS.SHOP_CREATE]:                    { module: 'shop', label: 'Tạo shop' },
-  [PERMISSIONS.SHOP_READ]:                      { module: 'shop', label: 'Xem shop' },
-  [PERMISSIONS.SHOP_UPDATE]:                    { module: 'shop', label: 'Chỉnh sửa thông tin shop' },
-  [PERMISSIONS.SHOP_VIEW_STATS]:                { module: 'shop', label: 'Xem thống kê shop' },
-  [PERMISSIONS.SHOP_MANAGE_OWNER]:              { module: 'shop', label: 'Quản lý chủ shop' },
-  [PERMISSIONS.SHOP_MANAGE_STAFF]:              { module: 'shop', label: 'Quản lý nhân viên' },
-  [PERMISSIONS.SHOP_MANAGE_STAFF_PERMISSIONS]:  { module: 'shop', label: 'Phân quyền nhân viên' },
-  [PERMISSIONS.SHOP_CHAT_MANAGE]:               { module: 'shop', label: 'Quản lý chat' },
-
-  [PERMISSIONS.ORDER_CREATE]:        { module: 'order', label: 'Tạo đơn hàng' },
-  [PERMISSIONS.ORDER_READ]:          { module: 'order', label: 'Xem đơn hàng' },
-  [PERMISSIONS.ORDER_CONFIRM]:       { module: 'order', label: 'Xác nhận đơn hàng' },
-  [PERMISSIONS.ORDER_CANCEL]:        { module: 'order', label: 'Hủy đơn hàng' },
-  [PERMISSIONS.ORDER_UPDATE_STATUS]: { module: 'order', label: 'Cập nhật trạng thái đơn' },
-
-  [PERMISSIONS.WALLET_VIEW]:               { module: 'wallet', label: 'Xem ví' },
-  [PERMISSIONS.WALLET_REQUEST_WITHDRAWAL]: { module: 'wallet', label: 'Yêu cầu rút tiền' },
-
-  [PERMISSIONS.ADMIN_MANAGE_USERS]:       { module: 'admin', label: 'Quản lý người dùng' },
-  [PERMISSIONS.ADMIN_MANAGE_PRODUCTS]:    { module: 'admin', label: 'Quản lý sản phẩm & danh mục' },
-  [PERMISSIONS.ADMIN_MANAGE_SHOPS]:       { module: 'admin', label: 'Quản lý shop' },
-  [PERMISSIONS.ADMIN_MANAGE_ROLES]:       { module: 'admin', label: 'Quản lý vai trò' },
-  [PERMISSIONS.ADMIN_MANAGE_PERMISSIONS]: { module: 'admin', label: 'Quản lý quyền hạn' },
-  [PERMISSIONS.ADMIN_VIEW_STATS]:         { module: 'admin', label: 'Xem thống kê hệ thống' },
-  [PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS]: { module: 'admin', label: 'Quản lý yêu cầu rút tiền' },
-
-  [PERMISSIONS.ROOM_VISUALIZER_USE]:        { module: 'room_visualizer', label: 'Sử dụng Room Visualizer' },
-  [PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE]: { module: 'room_visualizer', label: 'Quản lý visual asset sản phẩm' },
+  [PERMISSIONS.USER_SELF_READ]: label('user', 'View own profile'),
+  [PERMISSIONS.USER_SELF_UPDATE]: label('user', 'Update own profile'),
+  [PERMISSIONS.USER_CART_READ]: label('cart', 'View own cart'),
+  [PERMISSIONS.USER_CART_UPDATE]: label('cart', 'Update own cart'),
+  [PERMISSIONS.USER_CART_CLEAR]: label('cart', 'Clear own cart'),
+  [PERMISSIONS.USER_CART_CHECKOUT]: label('cart', 'Checkout cart'),
+  [PERMISSIONS.USER_ORDER_CREATE]: label('order', 'Create own order'),
+  [PERMISSIONS.USER_ORDER_READ]: label('order', 'View own orders'),
+  [PERMISSIONS.USER_ORDER_CANCEL]: label('order', 'Cancel own order'),
+  [PERMISSIONS.NOTIFICATION_SELF_READ]: label('notification', 'View own notifications'),
+  [PERMISSIONS.NOTIFICATION_SELF_UPDATE]: label('notification', 'Update own notifications'),
+  [PERMISSIONS.NOTIFICATION_SELF_DELETE]: label('notification', 'Delete own notifications'),
+  [PERMISSIONS.SELLER_PRODUCT_READ]: label('seller_product', 'View seller products'),
+  [PERMISSIONS.SELLER_PRODUCT_CREATE]: label('seller_product', 'Create seller product'),
+  [PERMISSIONS.SELLER_PRODUCT_UPDATE]: label('seller_product', 'Update seller product'),
+  [PERMISSIONS.SELLER_PRODUCT_DELETE]: label('seller_product', 'Delete seller product'),
+  [PERMISSIONS.SELLER_PRODUCT_UPDATE_STATUS]: label('seller_product', 'Update seller product status'),
+  [PERMISSIONS.SELLER_PRODUCT_IMAGE_UPDATE]: label('seller_product', 'Update seller product images'),
+  [PERMISSIONS.SELLER_ORDER_READ]: label('seller_order', 'View seller orders'),
+  [PERMISSIONS.SELLER_ORDER_CONFIRM]: label('seller_order', 'Confirm seller order'),
+  [PERMISSIONS.SELLER_ORDER_CANCEL]: label('seller_order', 'Cancel seller order'),
+  [PERMISSIONS.SELLER_ORDER_UPDATE_STATUS]: label('seller_order', 'Update seller order status'),
+  [PERMISSIONS.WALLET_SELF_READ]: label('wallet', 'View personal wallet'),
+  [PERMISSIONS.WALLET_SELF_TRANSACTION_READ]: label('wallet', 'View personal wallet transactions'),
+  [PERMISSIONS.WALLET_WITHDRAWAL_CREATE]: label('wallet', 'Create personal withdrawal'),
+  [PERMISSIONS.WALLET_WITHDRAWAL_READ]: label('wallet', 'View personal withdrawals'),
+  [PERMISSIONS.SHOP_PROFILE_READ]: label('shop', 'View shop profile'),
+  [PERMISSIONS.SHOP_PROFILE_UPDATE]: label('shop', 'Update shop profile'),
+  [PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW]: label('shop', 'Submit shop for review'),
+  [PERMISSIONS.SHOP_STATS_READ]: label('shop_stats', 'View shop stats'),
+  [PERMISSIONS.SHOP_OWNER_TRANSFER]: label('shop_owner', 'Transfer shop owner'),
+  [PERMISSIONS.SHOP_PRODUCT_READ]: label('shop_product', 'View shop products'),
+  [PERMISSIONS.SHOP_PRODUCT_CREATE]: label('shop_product', 'Create shop product'),
+  [PERMISSIONS.SHOP_PRODUCT_UPDATE]: label('shop_product', 'Update shop product'),
+  [PERMISSIONS.SHOP_PRODUCT_DELETE]: label('shop_product', 'Delete shop product'),
+  [PERMISSIONS.SHOP_PRODUCT_UPDATE_STATUS]: label('shop_product', 'Update shop product status'),
+  [PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE]: label('shop_product', 'Update shop product images'),
+  [PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE]: label('shop_product', 'Manage shop product visual assets'),
+  [PERMISSIONS.SHOP_ORDER_READ]: label('shop_order', 'View shop orders'),
+  [PERMISSIONS.SHOP_ORDER_CONFIRM]: label('shop_order', 'Confirm shop order'),
+  [PERMISSIONS.SHOP_ORDER_CANCEL]: label('shop_order', 'Cancel shop order'),
+  [PERMISSIONS.SHOP_ORDER_UPDATE_STATUS]: label('shop_order', 'Update shop order status'),
+  [PERMISSIONS.SHOP_STAFF_READ]: label('shop_staff', 'View shop staff'),
+  [PERMISSIONS.SHOP_STAFF_INVITE]: label('shop_staff', 'Invite shop staff'),
+  [PERMISSIONS.SHOP_STAFF_REMOVE]: label('shop_staff', 'Remove shop staff'),
+  [PERMISSIONS.SHOP_STAFF_PERMISSION_READ]: label('shop_staff', 'View staff permissions'),
+  [PERMISSIONS.SHOP_STAFF_PERMISSION_UPDATE]: label('shop_staff', 'Update staff permissions'),
+  [PERMISSIONS.SHOP_CHAT_READ]: label('shop_chat', 'View shop chat'),
+  [PERMISSIONS.SHOP_CHAT_SEND]: label('shop_chat', 'Send shop chat message'),
+  [PERMISSIONS.SHOP_CHAT_MARK_READ]: label('shop_chat', 'Mark shop chat read'),
+  [PERMISSIONS.SHOP_WALLET_READ]: label('shop_wallet', 'View shop wallet'),
+  [PERMISSIONS.SHOP_WALLET_TRANSACTION_READ]: label('shop_wallet', 'View shop wallet transactions'),
+  [PERMISSIONS.SHOP_WITHDRAWAL_CREATE]: label('shop_wallet', 'Create shop withdrawal'),
+  [PERMISSIONS.SHOP_WITHDRAWAL_READ]: label('shop_wallet', 'View shop withdrawals'),
+  [PERMISSIONS.ROOM_VISUALIZER_USE]: label('room_visualizer', 'Use room visualizer'),
 }
+
+export const ACTIVE_PERMISSION_KEYS = [
+  ...new Set([
+    ...MEMBER_PERMISSIONS,
+    ...SELLER_PERMISSIONS,
+    ...SHOP_OWNER_PERMISSIONS,
+    PERMISSIONS.ROOM_VISUALIZER_USE,
+  ]),
+]
 
 export default PERMISSIONS

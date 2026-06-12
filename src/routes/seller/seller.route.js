@@ -47,6 +47,6 @@ const router = Router()
  *       403:
  *         description: Cần quyền seller
  */
-router.get('/products', authenticate, requirePermissions(PERMISSIONS.PRODUCT_READ), validate(productQuerySchema, 'query'), productController.getSellerProducts)
+router.get('/products', authenticate, requirePermissions(PERMISSIONS.SELLER_PRODUCT_READ), validate(productQuerySchema, 'query'), productController.getSellerProducts)
 
 export default router

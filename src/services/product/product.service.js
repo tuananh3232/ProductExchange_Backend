@@ -120,7 +120,7 @@ const ensureShopWritable = async (shopId, userContext) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.PRODUCT_CREATE,
+    permissionKey: PERMISSIONS.SHOP_PRODUCT_CREATE,
     message: 'Bạn không có quyền thao tác sản phẩm của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -268,7 +268,7 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.PRODUCT_READ,
+    permissionKey: PERMISSIONS.SHOP_PRODUCT_READ,
     message: 'Bạn không có quyền xem sản phẩm của shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
@@ -330,7 +330,7 @@ export const updateProduct = async (productId, userContext, updateData) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
+  await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
 
   const nextUpdateData = await normalizeUpdateOwnership(product, updateData, userContext)
   if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
@@ -352,7 +352,7 @@ export const deleteProduct = async (productId, userContext) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_DELETE, 'Bạn không có quyền xóa sản phẩm này')
+  await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_DELETE, 'Bạn không có quyền xóa sản phẩm này')
 
   // Soft delete thay vì xóa thật
   await productRepo.updateById(productId, { isActive: false })
@@ -364,7 +364,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật trạng thái sản phẩm này')
+  await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_UPDATE_STATUS, 'Bạn không có quyền cập nhật trạng thái sản phẩm này')
 
   if (product.status === nextStatus) {
     return product
@@ -406,7 +406,7 @@ export const addProductImages = async (productId, userContext, files = []) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
+  await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
 
   if (!files.length) {
     throw new AppError('Vui lòng cung cấp ít nhất một ảnh sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.IMAGE_REQUIRED)
@@ -429,7 +429,7 @@ export const removeProductImage = async (productId, userContext, publicId) => {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  await assertProductAccess(product, userContext, PERMISSIONS.PRODUCT_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
+  await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_IMAGE_UPDATE, 'Bạn không có quyền cập nhật ảnh sản phẩm này')
 
   const existed = (product.images || []).some((image) => image.publicId === publicId)
   if (!existed) {

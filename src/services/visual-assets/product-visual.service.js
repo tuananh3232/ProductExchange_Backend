@@ -4,23 +4,31 @@ import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { removeBackground } from './background-removal.service.js'
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
+import { assertShopPermission } from '../../utils/data-scope.util.js'
 
-const _assertShopOwner = async (productId, requestingUser) => {
+const _assertShopVisualAssetAccess = async (productId, requestingUser) => {
   const product = await Product.findById(productId)
   if (!product) {
-    throw new AppError('Sản phẩm không tồn tại', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND')
+    throw new AppError('San pham khong ton tai', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND')
   }
 
-  if (requestingUser.roles?.includes('admin')) return product
-
   if (!product.shop) {
-    throw new AppError('Sản phẩm không thuộc shop nào', HTTP_STATUS.BAD_REQUEST, 'PRODUCT_NO_SHOP')
+    throw new AppError('San pham khong thuoc shop nao', HTTP_STATUS.BAD_REQUEST, 'PRODUCT_NO_SHOP')
   }
 
   const shop = await Shop.findById(product.shop)
-  if (!shop || shop.owner.toString() !== requestingUser._id.toString()) {
-    throw new AppError('Bạn không có quyền quản lý sản phẩm này', HTTP_STATUS.FORBIDDEN, 'SHOP_OWNER_REQUIRED')
+  if (!shop) {
+    throw new AppError('Khong tim thay shop', HTTP_STATUS.NOT_FOUND, 'SHOP_NOT_FOUND')
   }
+
+  await assertShopPermission({
+    user: requestingUser,
+    shopId: shop._id,
+    permissionKey: PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE,
+    message: 'Ban khong co quyen quan ly visual asset san pham nay',
+    errorCode: 'SHOP_PRODUCT_VISUAL_ASSET_FORBIDDEN',
+  })
 
   return product
 }
@@ -33,7 +41,7 @@ const _computeIsReady = (product) => {
 }
 
 export const uploadSourceImage = async (productId, buffer, requestingUser) => {
-  const product = await _assertShopOwner(productId, requestingUser)
+  const product = await _assertShopVisualAssetAccess(productId, requestingUser)
 
   if (product.visualAssets?.sourceImage?.publicId) {
     await deleteImage(product.visualAssets.sourceImage.publicId)
@@ -45,13 +53,11 @@ export const uploadSourceImage = async (productId, buffer, requestingUser) => {
   return product.save()
 }
 
-
 export const previewCutout = async (productId, buffer, { provider = 'remove_bg' } = {}, requestingUser) => {
-  const product = await _assertShopOwner(productId, requestingUser)
+  const product = await _assertShopVisualAssetAccess(productId, requestingUser)
 
   const bgResult = await removeBackground({ buffer, provider })
 
-  // Xóa preview cũ của product này nếu có (tránh orphaned assets)
   if (product.visualAssets?.cutoutPreview?.publicId) {
     await deleteImage(product.visualAssets.cutoutPreview.publicId)
   }
@@ -65,11 +71,11 @@ export const previewCutout = async (productId, buffer, { provider = 'remove_bg' 
 }
 
 export const confirmCutout = async (productId, { tempPublicId, view = 'front', widthCm, heightCm, depthCm } = {}, requestingUser) => {
-  const product = await _assertShopOwner(productId, requestingUser)
+  const product = await _assertShopVisualAssetAccess(productId, requestingUser)
 
   const preview = product.visualAssets?.cutoutPreview
   if (!preview?.publicId || preview.publicId !== tempPublicId) {
-    throw new AppError('tempPublicId không khớp với preview hiện tại của sản phẩm', HTTP_STATUS.BAD_REQUEST, 'INVALID_TEMP_PUBLIC_ID')
+    throw new AppError('tempPublicId khong khop voi preview hien tai cua san pham', HTTP_STATUS.BAD_REQUEST, 'INVALID_TEMP_PUBLIC_ID')
   }
 
   product.visualAssets.cutouts.push({
@@ -93,11 +99,11 @@ export const confirmCutout = async (productId, { tempPublicId, view = 'front', w
 }
 
 export const deleteCutout = async (productId, cutoutPublicId, requestingUser) => {
-  const product = await _assertShopOwner(productId, requestingUser)
+  const product = await _assertShopVisualAssetAccess(productId, requestingUser)
 
   const cutout = product.visualAssets.cutouts.find((c) => c.publicId === cutoutPublicId)
   if (!cutout) {
-    throw new AppError('Cutout không tồn tại', HTTP_STATUS.NOT_FOUND, 'CUTOUT_NOT_FOUND')
+    throw new AppError('Cutout khong ton tai', HTTP_STATUS.NOT_FOUND, 'CUTOUT_NOT_FOUND')
   }
 
   await deleteImage(cutoutPublicId)
@@ -109,7 +115,7 @@ export const deleteCutout = async (productId, cutoutPublicId, requestingUser) =>
 }
 
 export const updateVisualProfile = async (productId, { dimensions, visualProfile } = {}, requestingUser) => {
-  const product = await _assertShopOwner(productId, requestingUser)
+  const product = await _assertShopVisualAssetAccess(productId, requestingUser)
 
   if (dimensions) Object.assign(product.dimensions, dimensions)
   if (visualProfile) Object.assign(product.visualProfile, visualProfile)

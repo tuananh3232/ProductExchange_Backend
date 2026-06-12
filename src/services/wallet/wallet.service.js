@@ -70,7 +70,7 @@ export const creditFromOrder = async (order) => {
 }
 
 export const getWallet = async (shopId, userContext) => {
-  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.WALLET_VIEW })
+  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.SHOP_WALLET_READ })
 
   const wallet = await walletRepo.findByShop(shopId)
   if (!wallet) {
@@ -84,7 +84,7 @@ export const getWallet = async (shopId, userContext) => {
 }
 
 export const getTransactions = async (shopId, userContext, pagination) => {
-  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.WALLET_VIEW })
+  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.SHOP_WALLET_TRANSACTION_READ })
 
   const { page, limit, skip, sortBy, sortOrder } = pagination
   const filter = { shop: shopId }
@@ -140,7 +140,7 @@ export const requestWithdrawal = async (shopId, userContext, payload) => {
 }
 
 export const getWithdrawals = async (shopId, userContext, pagination, statusFilter) => {
-  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.WALLET_VIEW })
+  await assertShopPermission({ user: userContext, shopId, permissionKey: PERMISSIONS.SHOP_WITHDRAWAL_READ })
 
   const filter = { shop: shopId }
   if (statusFilter) filter.status = statusFilter

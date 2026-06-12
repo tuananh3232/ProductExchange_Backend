@@ -25,7 +25,7 @@ router.get('/', shopController.getShops)
 router.get(
   '/mine',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_READ),
+  requirePermissions(PERMISSIONS.SHOP_PROFILE_READ),
   shopController.getMyShops
 )
 
@@ -34,21 +34,21 @@ router.get('/:id', shopController.getShopById)
 router.get(
   '/:id/dashboard',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_READ),
+  requireShopPermission(PERMISSIONS.SHOP_PROFILE_READ),
   shopController.getShopDashboard
 )
 
 router.get(
   '/:id/products',
   authenticate,
-  requirePermissions(PERMISSIONS.PRODUCT_READ),
+  requireShopPermission(PERMISSIONS.SHOP_PRODUCT_READ),
   productController.getShopProducts
 )
 
 router.post(
   '/',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_CREATE),
+  requirePermissions(PERMISSIONS.SHOP_PROFILE_UPDATE),
   validate(createShopSchema),
   shopController.createShop
 )
@@ -57,7 +57,7 @@ router.put(
   '/:id',
   validateObjectId('id'),
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_UPDATE),
+  requireShopPermission(PERMISSIONS.SHOP_PROFILE_UPDATE),
   validate(updateShopSchema),
   shopController.updateShop
 )
@@ -66,6 +66,7 @@ router.delete(
   '/:id',
   validateObjectId('id'),
   authenticate,
+  requireShopPermission(PERMISSIONS.SHOP_PROFILE_UPDATE),
   shopController.deleteShop
 )
 
@@ -73,7 +74,7 @@ router.patch(
   '/:id/owner',
   validateObjectId('id'),
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_OWNER),
+  requireShopPermission(PERMISSIONS.SHOP_OWNER_TRANSFER),
   validate(transferOwnerSchema),
   shopController.transferOwner
 )
@@ -81,7 +82,7 @@ router.patch(
 router.get(
   '/:id/staff',
   authenticate,
-  requirePermissions(PERMISSIONS.SHOP_READ),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_READ),
   shopController.getShopStaff
 )
 
@@ -89,20 +90,21 @@ router.get(
   '/:id/users/by-email',
   authenticate,
   validateObjectId('id'),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_INVITE),
   shopController.getInviteeCandidates
 )
 
 router.get(
   '/:id/staff/:staffUserId/permissions',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF_PERMISSIONS),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_PERMISSION_READ),
   shopController.getStaffPermissions
 )
 
 router.put(
   '/:id/staff/:staffUserId/permissions',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF_PERMISSIONS),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_PERMISSION_UPDATE),
   validate(updateStaffPermissionsSchema),
   shopController.updateStaffPermissions
 )
@@ -110,21 +112,21 @@ router.put(
 router.delete(
   '/:id/staff/:staffUserId',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_MANAGE_STAFF),
+  requireShopPermission(PERMISSIONS.SHOP_STAFF_REMOVE),
   shopController.removeStaff
 )
 
 router.post(
   '/:id/submit',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_UPDATE),
+  requireShopPermission(PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW),
   shopController.submitForReview
 )
 
 router.post(
   '/:id/resubmit',
   authenticate,
-  requireShopPermission(PERMISSIONS.SHOP_UPDATE),
+  requireShopPermission(PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW),
   shopController.resubmitForReview
 )
 

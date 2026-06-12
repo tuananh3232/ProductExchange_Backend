@@ -20,6 +20,8 @@ const notificationSchema = new mongoose.Schema(
       default: NOTIFICATION_TARGET_TYPES.SYSTEM,
     },
     targetId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    targetUrl: { type: String, default: null },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     actionUrl: { type: String, default: null },
     priority: {
       type: String,
