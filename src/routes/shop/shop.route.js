@@ -2,7 +2,7 @@ import { Router } from 'express'
 import * as shopController from '../../controllers/shop/shop.controller.js'
 import * as productController from '../../controllers/product/product.controller.js'
 import * as optionsController from '../../controllers/options/options.controller.js'
-import { authenticate, requirePermissions, requireShopPermission } from '../../middlewares/auth.middleware.js'
+import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import {
@@ -22,7 +22,7 @@ router.use('/:id/stats', shopStatsRoutes)
 router.get('/filter-options', optionsController.getShopFilterOptions)
 router.get('/', shopController.getShops)
 
-router.get('/mine', authenticate, requirePermissions(PERMISSIONS.SHOP_PROFILE_READ), shopController.getMyShops)
+router.get('/mine', authenticate, shopController.getMyShops)
 
 router.get('/:id', shopController.getShopById)
 

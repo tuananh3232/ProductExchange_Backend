@@ -20,11 +20,22 @@ const userModel = {
   findOne: jest.fn(),
 }
 
+const shopModel = {
+  find: jest.fn(),
+  countDocuments: jest.fn(),
+}
+
+const dataScopeUtil = {
+  assertShopPermission: jest.fn(),
+}
+
 const notifySafely = jest.fn()
 
 jest.unstable_mockModule('../../src/repositories/shop/shop.repository.js', () => shopRepo)
 jest.unstable_mockModule('../../src/repositories/permission/permission.repository.js', () => permissionRepo)
 jest.unstable_mockModule('../../src/models/user.model.js', () => ({ default: userModel }))
+jest.unstable_mockModule('../../src/models/shop.model.js', () => ({ default: shopModel }))
+jest.unstable_mockModule('../../src/utils/data-scope.util.js', () => dataScopeUtil)
 jest.unstable_mockModule('../../src/services/notification/notification.service.js', () => ({ notifySafely }))
 
 const shopService = await import('../../src/services/shop/shop.service.js')
@@ -58,7 +69,15 @@ const createUserContext = (overrides = {}) => ({
 
 beforeEach(() => {
   jest.clearAllMocks()
-  userModel.findById.mockResolvedValue({ _id: ownerId, roles: [ROLES.SHOP_OWNER], save: jest.fn() })
+  userModel.findById.mockResolvedValue({
+    _id: ownerId,
+    roles: [ROLES.SELLER],
+    kyc: { status: 'approved' },
+    save: jest.fn(),
+  })
+  shopModel.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) })
+  shopModel.countDocuments.mockResolvedValue(0)
+  dataScopeUtil.assertShopPermission.mockResolvedValue()
 })
 
 describe('shop service unit', () => {
@@ -98,6 +117,9 @@ describe('shop service unit', () => {
 
     const result = await shopService.submitForReview(shopId, createUserContext())
 
+    expect(dataScopeUtil.assertShopPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ permissionKey: 'shop:profile:submit_review' })
+    )
     expect(shopRepo.updateById).toHaveBeenCalledWith(shopId, { status: SHOP_STATUS.PENDING_REVIEW })
     expect(result.status).toBe(SHOP_STATUS.PENDING_REVIEW)
   })

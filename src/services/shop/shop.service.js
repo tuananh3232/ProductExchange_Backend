@@ -306,8 +306,8 @@ export const submitForReview = async (shopId, userContext) => {
   await assertShopPermission({
     user: userContext,
     shopId,
-    permissionKey: PERMISSIONS.SHOP_STAFF_PERMISSION_READ,
-    message: 'Bạn không có quyền xem quyền staff của shop này',
+    permissionKey: PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW,
+    message: 'Bạn không có quyền nộp shop này',
     errorCode: ERRORS.AUTH.FORBIDDEN
   })
 

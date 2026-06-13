@@ -1,6 +1,8 @@
 import request from 'supertest'
+import fs from 'fs'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
+import ERRORS from '../../src/constants/error.constant.js'
 import { ROLES } from '../../src/constants/role.constant.js'
 import { PRODUCT_STATUS, SHOP_STATUS } from '../../src/constants/status.constant.js'
 import { PRODUCT_OWNER_TYPES } from '../../src/models/product.model.js'
@@ -73,6 +75,60 @@ describe('product and shop integration', () => {
     expect(owner.roles).not.toContain(ROLES.SHOP_OWNER)
   })
 
+  it('allows a KYC-approved seller to create a draft shop and list it from my shops', async () => {
+    const { user, token } = await createAndLogin(ROLES.MEMBER, {
+      roles: [ROLES.MEMBER, ROLES.SELLER],
+      kyc: { status: 'approved', fullName: 'Approved Seller', idNumber: '123456789015' }
+    })
+
+    const createResponse = await request(app)
+      .post(`${api}/shops`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: `Mine Draft Shop ${Date.now()}`,
+        description: 'Integration draft shop',
+        phone: '0900000001',
+        email: 'mine-draft-shop@example.com',
+        address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' }
+      })
+
+    expect(createResponse.status).toBe(201)
+    expect(createResponse.body.data.shop.status).toBe(SHOP_STATUS.DRAFT)
+
+    const mineResponse = await request(app).get(`${api}/shops/mine`).set('Authorization', `Bearer ${token}`)
+    const shopIds = mineResponse.body.data.shops.map((shop) => shop._id.toString())
+    const owner = await User.findById(user._id).select('roles')
+
+    expect(mineResponse.status).toBe(200)
+    expect(shopIds).toContain(createResponse.body.data.shop._id.toString())
+    expect(owner.roles).toContain(ROLES.SELLER)
+    expect(owner.roles).not.toContain(ROLES.SHOP_OWNER)
+  })
+
+  it('does not include another seller draft shop in my shops', async () => {
+    const { user: ownerA } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Owner A', idNumber: '123456789016' }
+    })
+    const { token: ownerBToken } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Owner B', idNumber: '123456789017' }
+    })
+    const shop = await createSampleShop({ owner: ownerA._id, status: SHOP_STATUS.DRAFT })
+
+    const response = await request(app).get(`${api}/shops/mine`).set('Authorization', `Bearer ${ownerBToken}`)
+    const shopIds = response.body.data.shops.map((item) => item._id.toString())
+
+    expect(response.status).toBe(200)
+    expect(shopIds).not.toContain(shop._id.toString())
+  })
+
+  it('does not expose draft shops through public shop detail', async () => {
+    const shop = await createSampleShop({ status: SHOP_STATUS.DRAFT })
+
+    const response = await request(app).get(`${api}/shops/${shop._id}`)
+
+    expect(response.status).toBe(404)
+  })
+
   it('allows a KYC-approved user with a stale non-seller token to create a shop draft', async () => {
     const { token } = await loginMember({
       kyc: { status: 'approved', fullName: 'Approved Member', idNumber: '123456789014' }
@@ -106,6 +162,56 @@ describe('product and shop integration', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.data.shop.status).toBe(SHOP_STATUS.PENDING_REVIEW)
+  })
+
+  it('does not allow submitting a shop with incomplete onboarding information', async () => {
+    const { user, token } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Submit Seller', idNumber: '123456789018' }
+    })
+    const shop = await createSampleShop({
+      owner: user._id,
+      status: SHOP_STATUS.DRAFT,
+      phone: '',
+      email: '',
+      address: { province: '', district: '', detail: '' }
+    })
+
+    const response = await request(app).post(`${api}/shops/${shop._id}/submit`).set('Authorization', `Bearer ${token}`)
+
+    expect(response.status).toBe(400)
+    expect(response.body.error).toBe(ERRORS.SHOP.INCOMPLETE_ONBOARDING)
+  })
+
+  it('allows a seller owner to submit a complete draft shop for review', async () => {
+    const { user, token } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Complete Submit Seller', idNumber: '123456789019' }
+    })
+    const shop = await createSampleShop({
+      owner: user._id,
+      status: SHOP_STATUS.DRAFT,
+      phone: '0900000002',
+      email: 'complete-submit-shop@example.com',
+      address: { province: 'Test Province', district: 'Test District', detail: 'Test Address' }
+    })
+
+    const response = await request(app).post(`${api}/shops/${shop._id}/submit`).set('Authorization', `Bearer ${token}`)
+    const owner = await User.findById(user._id).select('roles')
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.shop.status).toBe(SHOP_STATUS.PENDING_REVIEW)
+    expect(owner.roles).toContain(ROLES.SELLER)
+    expect(owner.roles).not.toContain(ROLES.SHOP_OWNER)
+  })
+
+  it('uses the shop profile submit-review permission in submitForReview', () => {
+    const serviceSource = fs.readFileSync('src/services/shop/shop.service.js', 'utf8')
+    const submitForReviewSource = serviceSource.slice(
+      serviceSource.indexOf('export const submitForReview'),
+      serviceSource.indexOf('export const updateShop')
+    )
+
+    expect(submitForReviewSource).toContain('PERMISSIONS.SHOP_PROFILE_SUBMIT_REVIEW')
+    expect(submitForReviewSource).not.toContain('PERMISSIONS.SHOP_STAFF_PERMISSION_READ')
   })
 
   it('allows an admin to approve a pending shop when owner KYC is approved', async () => {
