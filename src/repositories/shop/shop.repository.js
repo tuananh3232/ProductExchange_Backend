@@ -24,6 +24,13 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
     .limit(limit)
     .lean()
 
+export const findManyByStaffUserId = (userId) =>
+  Shop.find({ staff: userId, isActive: true })
+    .select('name slug status owner')
+    .populate('owner', 'name email')
+    .sort({ createdAt: -1 })
+    .lean()
+
 export const countMany = (filter = {}) => Shop.countDocuments(filter)
 
 export const updateById = (id, data) =>
@@ -43,3 +50,21 @@ export const removeStaff = (id, userId) =>
     .populate('owner', 'name email avatar')
     .populate('staff', 'name email avatar')
     .populate('staffPermissions.staffUser', 'name email avatar')
+
+export const removeStaffFromAllShops = (userId, excludeShopId = null) => {
+  const filter = {
+    isActive: true,
+    staff: userId,
+  }
+
+  if (excludeShopId) {
+    filter._id = { $ne: excludeShopId }
+  }
+
+  return Shop.updateMany(filter, {
+    $pull: {
+      staff: userId,
+      staffPermissions: { staffUser: userId },
+    },
+  })
+}

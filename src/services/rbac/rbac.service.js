@@ -1,8 +1,8 @@
-import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { ROLE_ENUM, ROLE_DESCRIPTIONS } from '../../constants/role.constant.js'
+import { ROLE_ENUM, ROLE_DESCRIPTIONS, ROLES } from '../../constants/role.constant.js'
+import { SHOP_STATUS } from '../../constants/status.constant.js'
 import {
   RBAC_ASSIGNABLE_ROLE_CODES,
   RBAC_MATRIX_CAPABILITIES,
@@ -14,12 +14,17 @@ import {
 } from '../../constants/rbac-matrix.constant.js'
 import * as permissionRepo from '../../repositories/permission/permission.repository.js'
 import * as roleRepo from '../../repositories/role/role.repository.js'
+import * as shopRepo from '../../repositories/shop/shop.repository.js'
+import * as userRepo from '../../repositories/user/user.repository.js'
 import { ensureRbacSeedData } from './rbac-seed.service.js'
 
 const protectedRoleCodeSet = new Set(RBAC_PROTECTED_ROLE_CODES)
 const matrixRoleCodeSet = new Set(RBAC_MATRIX_ROLE_CODES)
 const assignableRoleCodeSet = new Set(RBAC_ASSIGNABLE_ROLE_CODES)
 const matrixPermissionKeySet = new Set(RBAC_MATRIX_PERMISSION_KEYS)
+
+const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '')
+const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : '')
 
 const getRoleUiMeta = (roleCode) => ({
   label: RBAC_ROLE_UI[roleCode]?.label ?? roleCode,
@@ -33,6 +38,27 @@ const serializeRole = (role) => ({
   description: role.description ?? '',
   permissions: role.permissions ?? [],
   ui: getRoleUiMeta(role.code),
+})
+
+const serializeAssignableUser = (user) => ({
+  _id: toIdString(user._id),
+  name: user.name,
+  email: user.email,
+  isActive: user.isActive,
+})
+
+const serializeShopSummary = (shop) => ({
+  _id: toIdString(shop._id),
+  name: shop.name,
+  slug: shop.slug ?? '',
+  status: shop.status,
+  owner: shop.owner
+    ? {
+        _id: toIdString(shop.owner),
+        name: shop.owner.name,
+        email: shop.owner.email,
+      }
+    : null,
 })
 
 export const getPermissions = async () => {
@@ -145,40 +171,119 @@ export const updateRolePermissions = async (roleCode, permissionKeys) => {
   return role
 }
 
-export const assignRolesToUser = async (userId, roles, actor = null) => {
+export const getUserAssignmentPreview = async (email) => {
+  const normalizedEmail = normalizeEmail(email)
+  const user = await userRepo.findByEmail(normalizedEmail)
+
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  const currentRoles = [...new Set(user.roles || [])]
+  const staffShops = await shopRepo.findManyByStaffUserId(user._id)
+  const protectedRoles = currentRoles.filter((role) => protectedRoleCodeSet.has(role))
+
+  return {
+    user: serializeAssignableUser(user),
+    roles: currentRoles,
+    staffShops: staffShops.map(serializeShopSummary),
+    protectedRoles,
+    isProtectedUser: protectedRoles.length > 0,
+  }
+}
+
+export const assignRolesToUser = async (email, roles, actor = null, options = {}) => {
   const normalizedRoles = [...new Set(roles)]
   if (!normalizedRoles.length) {
-    throw new AppError('Người dùng phải có ít nhất một role', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.ROLE_REQUIRED)
+    throw new AppError('Người dùng phải có ít nhất một vai trò', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.ROLE_REQUIRED)
   }
 
   const invalidRoles = normalizedRoles.filter((role) => !ROLE_ENUM.includes(role))
   if (invalidRoles.length) {
-    throw new AppError('Danh sách role không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.ROLE_NOT_FOUND)
+    throw new AppError('Danh sách vai trò không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.RBAC.ROLE_NOT_FOUND)
   }
 
   const disallowedRoles = normalizedRoles.filter((role) => !assignableRoleCodeSet.has(role))
   if (disallowedRoles.length) {
     throw new AppError(
-      'Không thể gán role nằm ngoài ma trận phân quyền vận hành',
+      'Không thể gán vai trò nằm ngoài ma trận phân quyền vận hành',
       HTTP_STATUS.FORBIDDEN,
       ERRORS.GENERAL.FORBIDDEN
     )
   }
 
-  if (actor?._id?.toString() === userId?.toString()) {
+  const normalizedEmail = normalizeEmail(email)
+  if (actor?.email?.toLowerCase?.() === normalizedEmail) {
     throw new AppError(
-      'Không thể tự chỉnh role của chính tài khoản đang đăng nhập',
+      'Không thể tự chỉnh vai trò của chính tài khoản đang đăng nhập',
       HTTP_STATUS.FORBIDDEN,
       ERRORS.GENERAL.FORBIDDEN
     )
   }
 
-  const user = await User.findById(userId)
+  const user = await userRepo.findByEmail(normalizedEmail)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
-  user.roles = normalizedRoles
+  const currentRoles = new Set(user.roles || [])
+  const protectedRoles = [...currentRoles].filter((role) => protectedRoleCodeSet.has(role))
+  if (protectedRoles.length) {
+    throw new AppError(
+      'Không thể chỉnh sửa vai trò của tài khoản quản trị được bảo vệ',
+      HTTP_STATUS.FORBIDDEN,
+      ERRORS.GENERAL.FORBIDDEN
+    )
+  }
+
+  const nextRoleSet = new Set(normalizedRoles)
+  const shouldAssignStaff = nextRoleSet.has(ROLES.STAFF)
+  const normalizedStaffShopId = typeof options.staffShopId === 'string' ? options.staffShopId.trim() : ''
+
+  if (shouldAssignStaff && !nextRoleSet.has(ROLES.MEMBER)) {
+    throw new AppError(
+      'Vai trò staff phải đi kèm vai trò member để đúng nghiệp vụ',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.SHOP.INVALID_STAFF
+    )
+  }
+
+  if (shouldAssignStaff) {
+    if (!normalizedStaffShopId) {
+      throw new AppError(
+        'Khi gán vai trò staff, bạn cần chọn shop tương ứng',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.SHOP.INVALID_STAFF
+      )
+    }
+
+    const staffShop = await shopRepo.findByIdForAdmin(normalizedStaffShopId)
+    if (!staffShop || !staffShop.isActive || staffShop.status !== SHOP_STATUS.ACTIVE) {
+      throw new AppError('Shop được chọn không hợp lệ hoặc chưa hoạt động', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_FOUND)
+    }
+
+    if (toIdString(staffShop.owner) === toIdString(user._id)) {
+      throw new AppError(
+        'Không thể gán chủ shop vào vai trò staff của chính shop đó',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.SHOP.INVALID_STAFF
+      )
+    }
+
+    await shopRepo.removeStaffFromAllShops(user._id, normalizedStaffShopId)
+
+    const isAlreadyStaffInSelectedShop = (staffShop.staff || []).some(
+      (staffMember) => toIdString(staffMember) === toIdString(user._id)
+    )
+
+    if (!isAlreadyStaffInSelectedShop) {
+      await shopRepo.addStaff(normalizedStaffShopId, user._id)
+    }
+  } else {
+    await shopRepo.removeStaffFromAllShops(user._id)
+  }
+
+  user.roles = [...nextRoleSet]
   await user.save()
 
   return user.toPublicJSON()
