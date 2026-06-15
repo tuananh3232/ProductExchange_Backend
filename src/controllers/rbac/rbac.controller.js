@@ -13,13 +13,18 @@ export const getRoles = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.RBAC.ROLES_FETCHED, data: { roles } })
 })
 
+export const getRbacMatrix = asyncHandler(async (req, res) => {
+  const matrix = await rbacService.getRbacMatrix()
+  sendSuccess(res, { message: MESSAGES.RBAC.ROLES_FETCHED, data: { matrix } })
+})
+
 export const updateRolePermissions = asyncHandler(async (req, res) => {
   const role = await rbacService.updateRolePermissions(req.params.roleCode, req.body.permissionKeys)
   sendSuccess(res, { message: MESSAGES.RBAC.ROLE_UPDATED, data: { role } })
 })
 
 export const assignRolesToUser = asyncHandler(async (req, res) => {
-  const user = await rbacService.assignRolesToUser(req.params.userId, req.body.roles)
+  const user = await rbacService.assignRolesToUser(req.params.userId, req.body.roles, req.user)
   sendSuccess(res, { message: MESSAGES.RBAC.USER_ROLES_UPDATED, data: { user } })
 })
 

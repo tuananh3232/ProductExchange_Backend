@@ -10,6 +10,13 @@ export const findByCodesWithPermissions = async (codes = []) => {
   })
 }
 
+export const findByCodeWithPermissions = async (code) =>
+  Role.findOne({ code, isActive: true }).populate({
+    path: 'permissions',
+    match: { isActive: true },
+    select: 'key description module',
+  })
+
 export const findAllWithPermissions = async () =>
   Role.find({ isActive: true })
     .populate({ path: 'permissions', match: { isActive: true }, select: 'key description module' })

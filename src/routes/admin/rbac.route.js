@@ -10,6 +10,7 @@ const router = Router()
 router.use(authenticate)
 router.use(requireRoles(ROLES.ADMIN))
 
+router.get('/matrix', rbacController.getRbacMatrix)
 router.get('/permissions', rbacController.getPermissions)
 router.get('/roles', rbacController.getRoles)
 router.put(
