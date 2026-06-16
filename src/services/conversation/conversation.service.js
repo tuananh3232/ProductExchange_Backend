@@ -383,7 +383,7 @@ export const sendMessage = async (
     recipient,
     sender: userContext._id,
     type: notificationType,
-    title: 'Tin nhan moi',
+    title: 'Tin nhắn mới',
     message: hasContent ? content.trim().slice(0, 1000) : 'Bạn có tin nhắn mới',
     targetType: NOTIFICATION_TARGET_TYPES.CHAT,
     targetId: conversationId,

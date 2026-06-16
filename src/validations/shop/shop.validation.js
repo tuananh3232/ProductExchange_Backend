@@ -43,7 +43,7 @@ export const updateStaffPermissionsSchema = Joi.object({
   permissions: Joi.array()
     .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
     .default([])
-    .messages({ 'any.only': 'Quyen staff shop khong hop le' }),
+    .messages({ 'any.only': 'Quyền staff shop không hợp lệ' }),
 });
 
 export const sendInvitationSchema = Joi.object({
@@ -51,7 +51,7 @@ export const sendInvitationSchema = Joi.object({
   permissions: Joi.array()
     .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
     .default([])
-    .messages({ 'any.only': 'Quyen staff shop khong hop le' }),
+    .messages({ 'any.only': 'Quyền staff shop không hợp lệ' }),
 });
 
 export const invitationActionSchema = Joi.object({
