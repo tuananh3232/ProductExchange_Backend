@@ -10,23 +10,23 @@ import { assertShopPermission } from '../../utils/data-scope.util.js'
 const _assertShopVisualAssetAccess = async (productId, requestingUser) => {
   const product = await Product.findById(productId)
   if (!product) {
-    throw new AppError('San pham khong ton tai', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND')
+    throw new AppError('Sản phẩm không tồn tại', HTTP_STATUS.NOT_FOUND, 'PRODUCT_NOT_FOUND')
   }
 
   if (!product.shop) {
-    throw new AppError('San pham khong thuoc shop nao', HTTP_STATUS.BAD_REQUEST, 'PRODUCT_NO_SHOP')
+    throw new AppError('Sản phẩm không thuộc shop nào', HTTP_STATUS.BAD_REQUEST, 'PRODUCT_NO_SHOP')
   }
 
   const shop = await Shop.findById(product.shop)
   if (!shop) {
-    throw new AppError('Khong tim thay shop', HTTP_STATUS.NOT_FOUND, 'SHOP_NOT_FOUND')
+    throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, 'SHOP_NOT_FOUND')
   }
 
   await assertShopPermission({
     user: requestingUser,
     shopId: shop._id,
     permissionKey: PERMISSIONS.SHOP_PRODUCT_VISUAL_ASSET_MANAGE,
-    message: 'Ban khong co quyen quan ly visual asset san pham nay',
+    message: 'Bạn không có quyền quản lý visual asset sản phẩm này',
     errorCode: 'SHOP_PRODUCT_VISUAL_ASSET_FORBIDDEN',
   })
 
@@ -75,7 +75,7 @@ export const confirmCutout = async (productId, { tempPublicId, view = 'front', w
 
   const preview = product.visualAssets?.cutoutPreview
   if (!preview?.publicId || preview.publicId !== tempPublicId) {
-    throw new AppError('tempPublicId khong khop voi preview hien tai cua san pham', HTTP_STATUS.BAD_REQUEST, 'INVALID_TEMP_PUBLIC_ID')
+    throw new AppError('tempPublicId không khớp với preview hiện tại của sản phẩm', HTTP_STATUS.BAD_REQUEST, 'INVALID_TEMP_PUBLIC_ID')
   }
 
   product.visualAssets.cutouts.push({
@@ -103,7 +103,7 @@ export const deleteCutout = async (productId, cutoutPublicId, requestingUser) =>
 
   const cutout = product.visualAssets.cutouts.find((c) => c.publicId === cutoutPublicId)
   if (!cutout) {
-    throw new AppError('Cutout khong ton tai', HTTP_STATUS.NOT_FOUND, 'CUTOUT_NOT_FOUND')
+    throw new AppError('Cutout không tồn tại', HTTP_STATUS.NOT_FOUND, 'CUTOUT_NOT_FOUND')
   }
 
   await deleteImage(cutoutPublicId)

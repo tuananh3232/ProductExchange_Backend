@@ -32,7 +32,7 @@ const notifyOrderUser = (recipient, type, order, message, sender = null) => {
     recipient,
     sender,
     type,
-    title: 'Cap nhat don hang',
+    title: 'Cập nhật đơn hàng',
     message,
     targetType: NOTIFICATION_TARGET_TYPES.ORDER,
     targetId: order._id,
@@ -91,7 +91,7 @@ const ensureOrderReadable = async (order, userContext) => {
       user: userContext,
       shopId: orderShopId,
       permissionKey: PERMISSIONS.SHOP_ORDER_READ,
-      message: 'Báº¡n khÃ´ng cÃ³ quyá»n xem Ä‘Æ¡n hÃ ng nÃ y',
+      message: 'Bạn không có quyền xem đơn hàng này',
       errorCode: ERRORS.AUTH.FORBIDDEN,
     })
     return
@@ -209,7 +209,7 @@ export const createOrder = async (buyerId, payload) => {
   await Product.findByIdAndUpdate(product._id, { status: 'pending' })
 
   const populatedOrder = await orderRepo.findById(order._id)
-  await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Ban co don hang moi', buyerId)
+  await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Bạn có đơn hàng mới', buyerId)
   return populatedOrder
 }
 
@@ -334,9 +334,9 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
 
   const recipient = isBuyer ? getOrderSellerRecipient(order) : order.buyer?._id || order.buyer
   const type = isBuyer ? NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER : NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER
-  await notifyOrderUser(recipient, type, updated, 'Don hang da bi huy', userContext._id)
+  await notifyOrderUser(recipient, type, updated, 'Đơn hàng đã bị hủy', userContext._id)
   if (updated.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
-    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED, updated, 'Yeu cau hoan tien dang cho xu ly')
+    await notifyOrderUser(order.buyer?._id || order.buyer, NOTIFICATION_TYPES.ORDER_REFUND_REQUESTED, updated, 'Yêu cầu hoàn tiền đang chờ xử lý')
   }
   return updated
 }
@@ -380,7 +380,7 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
     [ORDER_STATUS.CANCELLED]: NOTIFICATION_TYPES.ORDER_CANCELLED_BY_SELLER,
   }
   if (typeByStatus[nextStatus]) {
-    await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trang thai don hang da cap nhat: ${nextStatus}`, userContext._id)
+    await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trạng thái đơn hàng đã được cập nhật: ${nextStatus}`, userContext._id)
   }
 
   return updated

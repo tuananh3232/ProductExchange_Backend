@@ -161,11 +161,11 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     recipient: invitee._id,
     sender: inviterContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_INVITED,
-    title: 'Loi moi tham gia shop',
-    message: `Ban duoc moi tham gia shop ${shop.name}`,
+    title: 'Lời mời tham gia shop',
+    message: `Bạn được mời tham gia shop ${shop.name}`,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
-    actionUrl: `/shops/${shop._id}/invitations`,
+    actionUrl: '',
     data: { shopId: shop._id, invitationId: invitation._id },
   });
 
@@ -250,11 +250,11 @@ export const acceptInvitation = async (invitationId, userContext) => {
     recipient: shop.owner?._id || shop.owner,
     sender: userContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_ACCEPTED,
-    title: 'Staff da chap nhan loi moi',
-    message: 'Loi moi tham gia shop da duoc chap nhan',
+    title: 'Nhân viên đã chấp nhận lời mời',
+    message: 'Lời mời tham gia shop đã được chấp nhận',
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
-    actionUrl: `/shops/${shop._id}/staff`,
+    actionUrl: '/profile',
     data: { shopId: shop._id, invitationId: invitation._id, staffUserId: userContext._id },
   });
 
