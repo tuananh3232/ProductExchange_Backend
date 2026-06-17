@@ -27,6 +27,8 @@ export const toUserResponse = (user = {}) => {
     status: isActive ? 'active' : 'inactive',
     isActive,
     isVerified: Boolean(user.isVerified),
+    kyc: user.kyc || { status: 'none' },
+    vip: user.vip || { plan: null, expiresAt: null },
     createdAt: user.createdAt || null,
     updatedAt: user.updatedAt || null,
   }
