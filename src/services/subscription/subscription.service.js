@@ -5,6 +5,9 @@ import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { env } from '../../configs/env.config.js'
 import { reconcileOwnerShopQuota } from '../shop/shop.service.js'
+import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
+import { USER_WALLET_TRANSACTION_TYPE } from '../../constants/status.constant.js'
+import ERRORS from '../../constants/error.constant.js'
 
 export const PLANS = {
   monthly: { price: 69000, days: 30, label: 'thang' },
@@ -35,17 +38,93 @@ const _activateVip = async (userId, plan) => {
   await reconcileOwnerShopQuota(userId, { userDoc: updatedUser })
 }
 
-export const createSubscriptionCheckout = async (plan, userContext) => {
+export const createSubscriptionCheckout = async (plan, userContext, paymentMethod = 'payos') => {
   if (!PLANS[plan]) {
     throw new AppError('Gói VIP không hợp lệ', HTTP_STATUS.BAD_REQUEST, 'INVALID_SUBSCRIPTION_PLAN')
   }
 
-  const existingPending = await SubscriptionOrder.findOne({ user: userContext._id, status: 'pending' })
-  if (existingPending?.checkoutUrl) {
-    return { paymentUrl: existingPending.checkoutUrl, plan: existingPending.plan }
+  const { price, label } = PLANS[plan]
+
+  if (paymentMethod === 'wallet') {
+    const userId = userContext._id
+    const wallet = await userWalletRepo.findByUser(userId)
+    const balanceBefore = wallet?.balance || 0
+
+    if (balanceBefore < price) {
+      throw new AppError(
+        'Số dư ví không đủ để đăng ký gói VIP',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.USER_WALLET.INSUFFICIENT_BALANCE
+      )
+    }
+
+    // Trừ số dư atomically
+    const updatedWallet = await userWalletRepo.deductForOrder(userId, price)
+    if (!updatedWallet) {
+      throw new AppError(
+        'Số dư ví không đủ để đăng ký gói VIP',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.USER_WALLET.INSUFFICIENT_BALANCE
+      )
+    }
+
+    const orderCode = Date.now() % 1000000000
+    const transactionRef = `SUB_WALLET_${orderCode}`
+
+    // Tạo subscription order ở trạng thái completed
+    const subOrder = await SubscriptionOrder.create({
+      user: userId,
+      plan,
+      amount: price,
+      orderCode,
+      transactionRef,
+      status: 'completed',
+      checkoutUrl: null,
+      paidAt: new Date(),
+    })
+
+    // Ghi nhận giao dịch ví cá nhân
+    await userWalletRepo.createTransaction({
+      wallet: updatedWallet._id,
+      user: userId,
+      type: USER_WALLET_TRANSACTION_TYPE.PAYMENT,
+      amount: price,
+      balanceBefore,
+      balanceAfter: updatedWallet.balance,
+      description: `Thanh toán đăng ký gói VIP ${plan === 'monthly' ? 'Monthly' : 'Yearly'}`,
+      metadata: { subscriptionOrderId: subOrder._id, plan },
+    })
+
+    // Kích hoạt VIP
+    await _activateVip(userId, plan)
+
+    return { success: true, activated: true, plan }
   }
 
-  const { price, label } = PLANS[plan]
+  const existingPending = await SubscriptionOrder.findOne({ user: userContext._id, status: 'pending' })
+  if (existingPending?.checkoutUrl) {
+    try {
+      const payos = getPayosClient()
+      const paymentInfo = await payos.paymentRequests.get(existingPending.orderCode)
+      if (paymentInfo.status === 'PENDING') {
+        return { paymentUrl: existingPending.checkoutUrl, plan: existingPending.plan }
+      }
+
+      // Sync the non-pending status to DB
+      const nextStatus = paymentInfo.status === 'PAID' ? 'completed' : 'cancelled'
+      existingPending.status = nextStatus
+      if (nextStatus === 'completed') {
+        existingPending.paidAt = new Date()
+        await _activateVip(existingPending.user, existingPending.plan)
+      }
+      await existingPending.save()
+    } catch (error) {
+      // If payment request retrieval fails (e.g. doesn't exist on PayOS anymore), mark as cancelled in DB
+      existingPending.status = 'cancelled'
+      await existingPending.save()
+    }
+  }
+
   const payos = getPayosClient()
   const orderCode = Date.now() % 1000000000
   const transactionRef = `SUB_${orderCode}`
