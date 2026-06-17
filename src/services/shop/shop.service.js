@@ -33,7 +33,7 @@ const notifyShopUser = (recipient, type, shop, message, sender = null, data = {}
     recipient,
     sender,
     type,
-    title: 'Cap nhat shop',
+    title: 'Cập nhật shop',
     message,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
@@ -138,7 +138,7 @@ const buildQuotaExceededMessage = (user) => {
     return 'Mỗi tài khoản chỉ được tạo 1 shop. Nâng cấp VIP cá nhân để mở thêm tối đa 3 shop'
   }
 
-  return `Tai khoan VIP chi duoc tao toi da ${SHOP_LIMITS.vip} shop`
+  return `Tài khoản VIP chỉ được tạo tối đa ${SHOP_LIMITS.vip} shop`
 }
 
 const assertCanCreateShopDraft = (owner) => {
@@ -184,7 +184,7 @@ export const reconcileOwnerShopQuota = async (ownerId, { userDoc = null, notify 
             shop.owner?._id || shop.owner,
             NOTIFICATION_TYPES.SHOP_UNBLOCKED,
             updatedShop,
-            'Shop cua ban da duoc mo lai sau khi gia han VIP',
+            'Shop của bạn đã được mở lại sau khi gia hạn VIP',
             null,
             { reason: SHOP_SUSPENSION_REASONS.VIP_EXPIRED }
           )
@@ -408,7 +408,7 @@ export const deleteShop = async (shopId, userContext) => {
 
   if (!DELETABLE_SHOP_STATUSES.includes(shop.status)) {
     throw new AppError(
-      'Chi co the xoa shop dang o trang thai rejected',
+      'Chỉ có thể xóa shop đang ở trạng thái bị từ chối',
       HTTP_STATUS.BAD_REQUEST,
       ERRORS.SHOP.NOT_REJECTED
     )
@@ -472,14 +472,14 @@ export const transferOwner = async (shopId, userContext, newOwnerEmail) => {
     newOwnerId,
     NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED,
     updatedShop,
-    'Ban da tro thanh chu so huu shop',
+    'Bạn đã trở thành chủ sở hữu shop',
     userContext._id
   )
   await notifyShopUser(
     currentOwnerId,
     NOTIFICATION_TYPES.SHOP_OWNERSHIP_TRANSFERRED,
     updatedShop,
-    'Quyen so huu shop da duoc chuyen giao',
+    'Quyền sở hữu shop đã được chuyển giao',
     userContext._id
   )
   await reconcileOwnerShopQuota(newOwnerId, { userDoc: newOwner })
@@ -568,7 +568,7 @@ export const removeStaff = async (shopId, userContext, staffUserId) => {
     staffUserId,
     NOTIFICATION_TYPES.SHOP_STAFF_REMOVED,
     updatedShop,
-    'Ban da duoc go khoi staff cua shop',
+    'Bạn đã được gỡ khỏi staff của shop',
     userContext._id
   )
   return updatedShop
@@ -742,7 +742,7 @@ export const unsuspendShop = async (shopId) => {
     shop.owner?._id || shop.owner,
     NOTIFICATION_TYPES.SHOP_UNBLOCKED,
     updatedShop,
-    'Shop cua ban da duoc mo khoa'
+    'Shop của bạn đã được mở khóa'
   )
   return updatedShop
 }
@@ -777,7 +777,7 @@ export const approveShop = async (shopId) => {
     shop.owner?._id || shop.owner,
     NOTIFICATION_TYPES.SHOP_APPROVED,
     updatedShop,
-    'Shop cua ban da duoc phe duyet'
+    'Shop của bạn đã được phê duyệt'
   )
   return updatedShop
 }
@@ -795,7 +795,7 @@ export const rejectShop = async (shopId, rejectionReason) => {
     shop.owner?._id || shop.owner,
     NOTIFICATION_TYPES.SHOP_REJECTED,
     updatedShop,
-    'Shop cua ban bi tu choi',
+    'Shop của bạn bị từ chối',
     null,
     { rejectionReason }
   )
@@ -889,7 +889,7 @@ export const updateStaffPermissions = async (shopId, userContext, staffUserId, p
     staffUserId,
     NOTIFICATION_TYPES.SHOP_STAFF_ROLE_UPDATED,
     updatedShop,
-    'Quyen staff cua ban da duoc cap nhat',
+    'Quyền staff của bạn đã được cập nhật',
     userContext._id,
     { permissions: uniqueKeys }
   )

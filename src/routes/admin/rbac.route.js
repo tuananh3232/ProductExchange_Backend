@@ -2,7 +2,11 @@ import { Router } from 'express'
 import * as rbacController from '../../controllers/rbac/rbac.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { assignRolesSchema, updateRolePermissionsSchema } from '../../validations/rbac/rbac.validation.js'
+import {
+  assignRolesSchema,
+  previewUserAssignmentSchema,
+  updateRolePermissionsSchema,
+} from '../../validations/rbac/rbac.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
 
 const router = Router()
@@ -10,15 +14,21 @@ const router = Router()
 router.use(authenticate)
 router.use(requireRoles(ROLES.ADMIN))
 
+router.get('/matrix', rbacController.getRbacMatrix)
 router.get('/permissions', rbacController.getPermissions)
 router.get('/roles', rbacController.getRoles)
+router.get(
+  '/users/assignment-preview',
+  validate(previewUserAssignmentSchema, 'query'),
+  rbacController.getUserAssignmentPreview
+)
 router.put(
   '/roles/:roleCode/permissions',
   validate(updateRolePermissionsSchema),
   rbacController.updateRolePermissions
 )
 router.patch(
-  '/users/:userId/roles',
+  '/users/roles',
   validate(assignRolesSchema),
   rbacController.assignRolesToUser
 )
@@ -74,24 +84,20 @@ export default router
  *       200:
  *         description: Cập nhật quyền thành công
  *
- * /admin/rbac/users/{userId}/roles:
+ * /admin/rbac/users/roles:
  *   patch:
  *     summary: Gán vai trò cho người dùng
  *     tags: [RBAC]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [roleCodes]
+ *             required: [email, roleCodes]
  *             properties:
+ *               email:
+ *                 type: string
  *               roleCodes:
  *                 type: array
  *                 items:

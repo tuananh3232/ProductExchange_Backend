@@ -40,6 +40,15 @@ export const canAccessShopPermission = async (user, shopId, permissionKey) => {
   const ownerId = shop.owner && shop.owner._id ? shop.owner._id.toString() : shop.owner ? shop.owner.toString() : null
   if (ownerId === userId) return true
 
+  // Check if user is a staff member of the shop
+  const isStaff = (shop.staff || []).some((id) => id && id.toString() === userId)
+  if (!isStaff) return false
+
+  // All shop staff members are permitted to read the shop profile by default
+  if (permissionKey === 'shop:profile:read') {
+    return true
+  }
+
   // If staffPermissions explicitly define permissions for staff, honor them
   const explicit = (shop.staffPermissions || []).some((entry) => {
     const staffId = entry.staffUser && entry.staffUser._id ? entry.staffUser._id.toString() : entry.staffUser ? entry.staffUser.toString() : null
