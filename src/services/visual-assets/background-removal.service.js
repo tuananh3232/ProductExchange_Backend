@@ -45,12 +45,45 @@ const _removeWithRemoveBg = async (buffer) => {
   })
 
   if (!response.ok) {
-    const errText = await response.text()
-    throw new AppError(
-      `remove.bg lỗi: ${errText}`,
-      HTTP_STATUS.BAD_GATEWAY,
-      'BG_REMOVAL_FAILED'
-    )
+    let friendlyMessage = 'Không thể tách nền ảnh này. Vui lòng kiểm tra lại chất lượng ảnh.'
+    let errorCode = 'BG_REMOVAL_FAILED'
+    let statusCode = HTTP_STATUS.BAD_GATEWAY
+
+    try {
+      const errText = await response.text()
+      const errJson = JSON.parse(errText)
+      const primaryError = errJson.errors?.[0]
+
+      if (primaryError) {
+        const removeBgCode = primaryError.code
+
+        const errorMapping = {
+          roi_region_empty: 'Ảnh tải lên không chứa chủ thể (vật thể) rõ ràng hoặc bị trống. Vui lòng chọn ảnh khác.',
+          image_missing_or_invalid: 'Định dạng ảnh tải lên không hợp lệ hoặc không được hỗ trợ.',
+          insufficient_credits: 'Dịch vụ tách nền tự động đang tạm thời hết lượt sử dụng. Vui lòng thử lại sau.',
+          api_key_invalid: 'Lỗi cấu hình hệ thống tách nền (API Key không hợp lệ).',
+          rate_limit_exceeded: 'Hệ thống đang bận do có quá nhiều yêu cầu. Vui lòng thử lại sau vài giây.'
+        }
+
+        if (errorMapping[removeBgCode]) {
+          friendlyMessage = errorMapping[removeBgCode]
+        } else if (primaryError.title) {
+          friendlyMessage = `Lỗi từ dịch vụ tách nền: ${primaryError.title}`
+        }
+
+        errorCode = removeBgCode ? `BG_REMOVAL_${removeBgCode.toUpperCase()}` : 'BG_REMOVAL_FAILED'
+
+        if (removeBgCode === 'roi_region_empty' || removeBgCode === 'image_missing_or_invalid') {
+          statusCode = HTTP_STATUS.BAD_REQUEST
+        } else if (removeBgCode === 'insufficient_credits' || removeBgCode === 'api_key_invalid') {
+          statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE
+        }
+      }
+    } catch {
+      // Bỏ qua nếu response không phải là JSON
+    }
+
+    throw new AppError(friendlyMessage, statusCode, errorCode)
   }
 
   const resultBuffer = Buffer.from(await response.arrayBuffer())

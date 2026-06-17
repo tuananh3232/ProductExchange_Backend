@@ -4,7 +4,7 @@ import { env } from '../configs/env.config.js';
 export const errorHandler = (err, req, res, next) => {
   // Lỗi operational (do AppError) — trả về thông báo cụ thể
   if (err.isOperational) {
-    return res.status(err.statusCode).json({
+    return res.status(err.statusCode || 500).json({
       success: false,
       message: err.message,              // Tiếng Việt
       error: err.errorCode || err.message, // Tiếng Anh / mã lỗi
@@ -49,13 +49,13 @@ export const errorHandler = (err, req, res, next) => {
 
   // Log lỗi không xác định (môi trường development)
   if (env.nodeEnv === 'development') {
-    console.error('💥 Unhandled Error:', err);
+    console.error('💥 Unhandled Error:', err)
     return res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ nội bộ',
+      message: err.message || 'Lỗi máy chủ nội bộ',
       error: err.message,
-      stack: err.stack,
-    });
+      stack: err.stack
+    })
   }
 
   // Production — không lộ stack trace
