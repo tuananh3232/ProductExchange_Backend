@@ -364,7 +364,29 @@ export const createWalletTopup = async (amount, userContext) => {
   // Trả lại phiên nạp tiền đang pending nếu có (tránh tạo trùng)
   const existingPending = await userWalletRepo.findPendingTopupByUser(userId)
   if (existingPending?.checkoutUrl) {
-    return { topup: existingPending, paymentUrl: existingPending.checkoutUrl }
+    try {
+      const payos = getPayosClient()
+      const paymentInfo = await payos.paymentRequests.get(existingPending.orderCode)
+      if (paymentInfo.status === 'PENDING') {
+        return { topup: existingPending, paymentUrl: existingPending.checkoutUrl }
+      }
+
+      // Sync the non-pending status to DB
+      const nextStatus = paymentInfo.status === 'PAID' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.CANCELLED
+      const updatedTopup = await userWalletRepo.updateTopup(existingPending._id, {
+        status: nextStatus,
+        completedAt: nextStatus === TOPUP_STATUS.COMPLETED ? new Date() : null,
+      })
+
+      if (nextStatus === TOPUP_STATUS.COMPLETED) {
+        await userWalletService.creditWalletFromTopup(updatedTopup)
+      }
+    } catch (error) {
+      // If payment request retrieval fails, mark as cancelled in DB
+      await userWalletRepo.updateTopup(existingPending._id, {
+        status: TOPUP_STATUS.CANCELLED,
+      })
+    }
   }
 
   // PayOS orderCode phải là số nguyên dương, tối đa 9 chữ số

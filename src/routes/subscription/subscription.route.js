@@ -8,6 +8,7 @@ const router = Router()
 
 const checkoutSchema = Joi.object({
   plan: Joi.string().valid('monthly', 'yearly').required(),
+  paymentMethod: Joi.string().valid('payos', 'wallet').optional(),
 })
 
 /**
