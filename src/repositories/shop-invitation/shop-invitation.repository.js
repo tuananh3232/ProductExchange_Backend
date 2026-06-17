@@ -7,8 +7,8 @@ export const create = async (data) => {
 export const findById = async (id) => {
   return ShopInvitation.findById(id)
     .populate('shop', 'name slug')
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const findMany = async (filter = {}, options = {}) => {
@@ -20,8 +20,8 @@ export const findMany = async (filter = {}, options = {}) => {
     .skip(skip)
     .limit(limit)
     .populate('shop', 'name slug')
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const countMany = async (filter = {}) => {
@@ -31,22 +31,22 @@ export const countMany = async (filter = {}) => {
 export const findByIdAndUpdate = async (id, update) => {
   return ShopInvitation.findByIdAndUpdate(id, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const findOneAndUpdate = async (filter, update) => {
   return ShopInvitation.findOneAndUpdate(filter, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const findOne = async (filter) => {
   return ShopInvitation.findOne(filter)
     .populate('shop', 'name slug')
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const deleteById = async (id) => {
@@ -70,7 +70,7 @@ export const findPendingByInvitee = async (inviteeId, options = {}) => {
     .skip(skip)
     .limit(limit)
     .populate('shop', 'name slug')
-    .populate('inviter', 'email fullName');
+    .populate('inviter', 'email name');
 };
 
 export const countPendingByInvitee = async (inviteeId) => {
@@ -92,8 +92,8 @@ export const findByShopAndStatus = async (shopId, status, options = {}) => {
     .sort(sortObj)
     .skip(skip)
     .limit(limit)
-    .populate('invitee', 'email fullName')
-    .populate('inviter', 'email fullName');
+    .populate('invitee', 'email name')
+    .populate('inviter', 'email name');
 };
 
 export const countByShopAndStatus = async (shopId, status) => {
