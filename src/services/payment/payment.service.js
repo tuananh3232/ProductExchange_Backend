@@ -12,6 +12,8 @@ import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repo
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import { buildPaginationMeta } from '../../utils/pagination.util.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
@@ -100,6 +102,147 @@ const notifyPaymentResult = (payment, status) => {
     actionUrl: isBatch ? '/orders' : `/orders/${payment.order}`,
     data: { orderId: primaryOrderId, paymentId: payment._id },
   })
+}
+
+const sanitizeAdminPayment = (payment, { includeCallback = false } = {}) => {
+  const value = typeof payment?.toObject === 'function' ? payment.toObject() : { ...payment }
+  if (!includeCallback) {
+    delete value.rawCallbackData
+  } else {
+    value.callbackHistory = value.rawCallbackData ? [value.rawCallbackData] : []
+    delete value.rawCallbackData
+  }
+  return value
+}
+
+export const getAdminPayments = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+  const filter = {}
+  if (query.paymentCode) {
+    const value = String(query.paymentCode).trim()
+    filter.transactionRef = { $regex: value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+  }
+  if (query.orderId) {
+    filter.$or = [{ order: query.orderId }, { orders: query.orderId }]
+  }
+  if (query.userId) filter.buyer = query.userId
+  if (query.provider) filter.provider = query.provider
+  if (query.paymentMethod) filter.method = query.paymentMethod
+  if (query.status) filter.status = query.status
+  if (query.createdFrom || query.createdTo) {
+    filter.createdAt = {}
+    if (query.createdFrom) filter.createdAt.$gte = new Date(query.createdFrom)
+    if (query.createdTo) filter.createdAt.$lte = new Date(query.createdTo)
+  }
+  if (query.minAmount !== undefined || query.maxAmount !== undefined) {
+    filter.amount = {}
+    if (query.minAmount !== undefined) filter.amount.$gte = Number(query.minAmount)
+    if (query.maxAmount !== undefined) filter.amount.$lte = Number(query.maxAmount)
+  }
+
+  const [payments, total] = await Promise.all([
+    paymentRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    paymentRepo.countMany(filter),
+  ])
+
+  return {
+    payments: payments.map((payment) => sanitizeAdminPayment(payment)),
+    meta: buildPaginationMeta(total, page, limit),
+  }
+}
+
+export const getAdminPaymentById = async (paymentId) => {
+  const payment = await paymentRepo.findById(paymentId)
+  if (!payment) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  const sanitized = sanitizeAdminPayment(payment, { includeCallback: true })
+  return {
+    payment: sanitized,
+    orderSummary: sanitized.order || sanitized.orders || null,
+    userSummary: sanitized.buyer || null,
+    amount: sanitized.amount,
+    provider: sanitized.provider,
+    status: sanitized.status,
+    transactionReference: sanitized.transactionRef,
+    failureReason: sanitized.failureReason || sanitized.responseCode || '',
+    reconciliationState: sanitized.reconciliationState || 'none',
+    callbackHistory: sanitized.callbackHistory || [],
+  }
+}
+
+export const updateAdminPaymentStatus = async (paymentId, userContext, { status, evidence, adminNote = '' }) => {
+  const payment = await paymentRepo.findById(paymentId)
+  if (!payment) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  if (status === PAYMENT_STATUS.PAID) {
+    throw new AppError('Quản trị viên không được tự ý đánh dấu giao dịch là đã thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+
+  const updated = await paymentRepo.updateById(paymentId, {
+    status,
+    failureReason: status === PAYMENT_STATUS.FAILED ? evidence : payment.failureReason || '',
+    adminNote,
+    reconciledBy: userContext._id,
+    reconciledAt: new Date(),
+    reconciliationState: status === PAYMENT_STATUS.REFUND_PENDING ? 'refund_pending' : 'manual_review',
+  })
+
+  if (payment.order) {
+    await Order.findByIdAndUpdate(payment.order, { paymentStatus: status })
+  }
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PAYMENT_STATUS_CHANGED',
+    targetType: 'payment',
+    targetId: payment._id,
+    previousStatus: payment.status,
+    newStatus: status,
+    reason: evidence,
+    adminNote,
+  })
+
+  return sanitizeAdminPayment(updated, { includeCallback: true })
+}
+
+export const reconcileAdminPayment = async (paymentId, userContext, { evidence = {}, adminNote = '' } = {}) => {
+  const payment = await paymentRepo.findById(paymentId)
+  if (!payment) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  if (payment.reconciliationState === 'matched' && payment.reconciledAt) {
+    return sanitizeAdminPayment(payment, { includeCallback: true })
+  }
+
+  const order = payment.order ? await Order.findById(payment.order) : null
+  const state = order && order.paymentRef === payment.transactionRef && order.paymentStatus === payment.status
+    ? 'matched'
+    : 'manual_review'
+
+  const updated = await paymentRepo.updateById(paymentId, {
+    reconciliationState: state,
+    reconciledBy: userContext._id,
+    reconciledAt: new Date(),
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PAYMENT_RECONCILED',
+    targetType: 'payment',
+    targetId: payment._id,
+    previousStatus: payment.reconciliationState || 'none',
+    newStatus: state,
+    reason: evidence?.note || evidence?.providerStatus || '',
+    adminNote,
+    metadata: { evidence },
+  })
+
+  return sanitizeAdminPayment(updated, { includeCallback: true })
 }
 
 export const createVnpayPayment = async (orderId, userContext, req) => {

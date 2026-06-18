@@ -24,7 +24,7 @@ export const getUserAssignmentPreview = asyncHandler(async (req, res) => {
 })
 
 export const updateRolePermissions = asyncHandler(async (req, res) => {
-  const role = await rbacService.updateRolePermissions(req.params.roleCode, req.body.permissionKeys)
+  const role = await rbacService.updateRolePermissions(req.params.roleCode, req.body.permissionKeys, req.user)
   sendSuccess(res, { message: MESSAGES.RBAC.ROLE_UPDATED, data: { role } })
 })
 

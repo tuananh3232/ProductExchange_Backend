@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createUserWithToken } from '../setup/auth.js'
 import { createSampleOrder } from '../setup/factories.js'
 import { PAYMENT_STATUS, ORDER_STATUS } from '../../src/constants/status.constant.js'
@@ -14,7 +13,6 @@ const api = env.apiPrefix
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 // ─────────────────────────────────────────────

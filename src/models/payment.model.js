@@ -65,6 +65,30 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    reconciledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reconciledAt: {
+      type: Date,
+      default: null,
+    },
+    reconciliationState: {
+      type: String,
+      enum: ['none', 'matched', 'manual_review', 'refund_pending'],
+      default: 'none',
+    },
+    failureReason: {
+      type: String,
+      default: '',
+      maxlength: 500,
+    },
+    adminNote: {
+      type: String,
+      default: '',
+      maxlength: 1000,
+    },
   },
   {
     timestamps: true,

@@ -12,6 +12,7 @@ import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
 import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -309,6 +310,14 @@ export const getProductById = async (id) => {
   return product
 }
 
+export const getAdminProductById = async (id) => {
+  const product = await productRepo.findById(id)
+  if (!product) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+  return product
+}
+
 export const createProduct = async (userContext, productData, files = []) => {
   const ownership = await resolveCreateOwnership(productData, userContext)
   const safeProductData = { ...productData }
@@ -397,6 +406,113 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
       data: { productId: product._id },
     })
   }
+  return updatedProduct
+}
+
+export const updateAdminProductStatus = async (productId, userContext, { status, reason = '', adminNote = '' }) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  if (status === 'inactive') {
+    return hideAdminProduct(productId, userContext, { reason, adminNote })
+  }
+
+  if (status === 'active') {
+    return restoreAdminProduct(productId, userContext, { reason, adminNote })
+  }
+
+  if (product.status !== status) {
+    const allowedStatuses = PRODUCT_STATUS_TRANSITIONS[product.status] || []
+    if (!allowedStatuses.includes(status)) {
+      throw new AppError(
+        'KhÃ´ng thá»ƒ chuyá»ƒn tráº¡ng thÃ¡i sáº£n pháº©m theo vÃ²ng Ä‘á»i hiá»‡n táº¡i',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.PRODUCT.INVALID_STATUS_TRANSITION
+      )
+    }
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    status,
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_STATUS_CHANGED',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.status,
+    newStatus: status,
+    reason,
+    adminNote,
+  })
+
+  return updatedProduct
+}
+
+export const hideAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    isActive: false,
+    hiddenBy: userContext._id,
+    hiddenAt: new Date(),
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_HIDDEN',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.isActive ? 'active' : 'inactive',
+    newStatus: 'inactive',
+    reason,
+    adminNote,
+  })
+
+  return updatedProduct
+}
+
+export const restoreAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    isActive: true,
+    restoredBy: userContext._id,
+    restoredAt: new Date(),
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_RESTORED',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.isActive ? 'active' : 'inactive',
+    newStatus: 'active',
+    reason,
+    adminNote,
+  })
+
   return updatedProduct
 }
 

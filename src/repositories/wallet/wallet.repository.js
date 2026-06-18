@@ -35,7 +35,7 @@ export const deductForWithdrawal = (shopId, amount) =>
     { returnDocument: 'after' }
   )
 
-export const completeWithdrawal = (shopId, amount) =>
+export const completeWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -44,10 +44,10 @@ export const completeWithdrawal = (shopId, amount) =>
         totalWithdrawn: amount,
       },
     },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
-export const revertWithdrawal = (shopId, amount) =>
+export const revertWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -56,10 +56,11 @@ export const revertWithdrawal = (shopId, amount) =>
         pendingBalance: -amount,
       },
     },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
-export const createTransaction = (data) => WalletTransaction.create(data)
+export const createTransaction = (data, options = {}) =>
+  WalletTransaction.create([data], options).then((docs) => docs[0])
 
 export const findTransactionByOrder = (orderId) =>
   WalletTransaction.findOne({ order: orderId })

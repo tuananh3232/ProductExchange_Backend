@@ -103,26 +103,7 @@ export const createSubscriptionCheckout = async (plan, userContext, paymentMetho
 
   const existingPending = await SubscriptionOrder.findOne({ user: userContext._id, status: 'pending' })
   if (existingPending?.checkoutUrl) {
-    try {
-      const payos = getPayosClient()
-      const paymentInfo = await payos.paymentRequests.get(existingPending.orderCode)
-      if (paymentInfo.status === 'PENDING') {
-        return { paymentUrl: existingPending.checkoutUrl, plan: existingPending.plan }
-      }
-
-      // Sync the non-pending status to DB
-      const nextStatus = paymentInfo.status === 'PAID' ? 'completed' : 'cancelled'
-      existingPending.status = nextStatus
-      if (nextStatus === 'completed') {
-        existingPending.paidAt = new Date()
-        await _activateVip(existingPending.user, existingPending.plan)
-      }
-      await existingPending.save()
-    } catch (error) {
-      // If payment request retrieval fails (e.g. doesn't exist on PayOS anymore), mark as cancelled in DB
-      existingPending.status = 'cancelled'
-      await existingPending.save()
-    }
+    return { paymentUrl: existingPending.checkoutUrl, plan: existingPending.plan }
   }
 
   const payos = getPayosClient()
@@ -137,6 +118,14 @@ export const createSubscriptionCheckout = async (plan, userContext, paymentMetho
     returnUrl: env.payment.payos.subReturnUrl,
     cancelUrl: env.payment.payos.subCancelUrl,
   })
+
+  if (!paymentLink?.checkoutUrl) {
+    throw new AppError(
+      'PayOS khong tra ve duong dan thanh toan hop le',
+      HTTP_STATUS.BAD_GATEWAY,
+      'INVALID_PAYMENT_LINK'
+    )
+  }
 
   await SubscriptionOrder.create({
     user: userContext._id,

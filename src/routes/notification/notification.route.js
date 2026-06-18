@@ -19,7 +19,7 @@ export default router
  * @swagger
  * tags:
  *   - name: Notifications
- *     description: Authenticated user notifications
+ *     description: API thông báo của người dùng đã đăng nhập
  * components:
  *   schemas:
  *     Notification:
@@ -46,7 +46,7 @@ export default router
  *         createdAt: { type: string, format: date-time }
  * /notifications:
  *   get:
- *     summary: Get my notifications
+ *     summary: Lấy danh sách thông báo của tôi
  *     tags: [Notifications]
  *     parameters:
  *       - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -55,35 +55,35 @@ export default router
  *       - { in: query, name: type, schema: { type: string } }
  *       - { in: query, name: targetType, schema: { type: string } }
  *     responses:
- *       200: { description: Notifications with pagination and unread count }
+ *       200: { description: Danh sách thông báo kèm phân trang và số lượng chưa đọc }
  * /notifications/unread-count:
  *   get:
- *     summary: Get my unread notification count
+ *     summary: Lấy số lượng thông báo chưa đọc của tôi
  *     tags: [Notifications]
  *     responses:
- *       200: { description: Unread count }
+ *       200: { description: Số lượng thông báo chưa đọc }
  * /notifications/{id}/read:
  *   patch:
- *     summary: Mark one of my notifications as read
+ *     summary: Đánh dấu một thông báo của tôi là đã đọc
  *     tags: [Notifications]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
  *     responses:
- *       200: { description: Notification marked as read }
- *       404: { description: Notification does not belong to current user or does not exist }
+ *       200: { description: Đã đánh dấu thông báo là đã đọc }
+ *       404: { description: Thông báo không thuộc về người dùng hiện tại hoặc không tồn tại }
  * /notifications/read-all:
  *   patch:
- *     summary: Mark all my notifications as read
+ *     summary: Đánh dấu tất cả thông báo của tôi là đã đọc
  *     tags: [Notifications]
  *     responses:
- *       200: { description: Notifications marked as read }
+ *       200: { description: Đã đánh dấu tất cả thông báo là đã đọc }
  * /notifications/{id}:
  *   delete:
- *     summary: Delete one of my notifications
+ *     summary: Xóa một thông báo của tôi
  *     tags: [Notifications]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
  *     responses:
- *       200: { description: Notification deleted }
- *       404: { description: Notification does not belong to current user or does not exist }
+ *       200: { description: Đã xóa thông báo }
+ *       404: { description: Thông báo không thuộc về người dùng hiện tại hoặc không tồn tại }
  */

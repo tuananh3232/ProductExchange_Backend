@@ -10,7 +10,6 @@ import PERMISSIONS from '../../src/constants/permission.constant.js'
 import Shop from '../../src/models/shop.model.js'
 import User from '../../src/models/user.model.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createAndLogin, loginAdmin, loginMember, loginSeller, loginShopOwner } from '../setup/auth.js'
 import { createSampleCategory, createSampleProduct, createSampleShop } from '../setup/factories.js'
 
@@ -29,7 +28,6 @@ const productPayload = (overrides = {}) => ({
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('product and shop integration', () => {

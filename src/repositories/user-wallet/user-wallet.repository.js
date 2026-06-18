@@ -6,8 +6,8 @@ import { TOPUP_STATUS, WITHDRAWAL_STATUS } from '../../constants/status.constant
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 
-export const findByUser = (userId) =>
-  UserWallet.findOne({ user: userId })
+export const findByUser = (userId, options = {}) =>
+  UserWallet.findOne({ user: userId }, null, options)
 
 export const findOrCreateByUser = (userId) =>
   UserWallet.findOneAndUpdate(
@@ -46,24 +46,25 @@ export const deductForWithdrawal = (userId, amount) =>
   )
 
 // hoàn tiền khi withdrawal bị reject
-export const revertWithdrawal = (userId, amount) =>
+export const revertWithdrawal = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     { $inc: { balance: amount, pendingBalance: -amount } },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
 // finalize khi withdrawal hoàn tất
-export const completeWithdrawal = (userId, amount) =>
+export const completeWithdrawal = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     { $inc: { pendingBalance: -amount, totalWithdrawn: amount } },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
-export const createTransaction = (data) => UserWalletTransaction.create(data)
+export const createTransaction = (data, options = {}) =>
+  UserWalletTransaction.create([data], options).then((docs) => docs[0])
 
 export const findTransactions = ({ filter, skip, limit, sortBy = 'createdAt', sortOrder = 'desc' }) =>
   UserWalletTransaction.find(filter)
@@ -135,8 +136,8 @@ export const findWithdrawals = ({ filter, skip, limit, sortBy = 'createdAt', sor
 
 export const countWithdrawals = (filter) => UserWalletWithdrawal.countDocuments(filter)
 
-export const updateWithdrawalById = (id, data) =>
-  UserWalletWithdrawal.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
+export const updateWithdrawalById = (id, data, options = {}) =>
+  UserWalletWithdrawal.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true, ...options })
     .populate('user', 'name email')
     .populate('approvedBy', 'name email')
     .populate('completedBy', 'name email')

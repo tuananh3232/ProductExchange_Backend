@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createSampleProduct } from '../setup/factories.js'
 
 const api = env.apiPrefix
@@ -21,7 +20,6 @@ const createComboProduct = (overrides = {}) =>
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('POST /combos/generate', () => {

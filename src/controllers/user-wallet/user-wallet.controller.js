@@ -97,6 +97,14 @@ export const adminGetUserWithdrawals = asyncHandler(async (req, res) => {
   })
 })
 
+export const adminGetUserWithdrawalById = asyncHandler(async (req, res) => {
+  const withdrawal = await userWalletService.adminGetUserWithdrawalById(req.params.withdrawalId || req.params.id)
+  sendSuccess(res, {
+    message: MESSAGES.USER_WALLET.WITHDRAWALS_FETCHED,
+    data: { withdrawal },
+  })
+})
+
 export const approveUserWithdrawal = asyncHandler(async (req, res) => {
   const result = await userWalletService.approveUserWithdrawal(req.params.id, req.user)
   sendSuccess(res, { message: MESSAGES.USER_WALLET.WITHDRAWAL_APPROVED, data: result })

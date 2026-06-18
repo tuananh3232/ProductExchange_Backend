@@ -13,10 +13,16 @@ import { apiRateLimit } from './middlewares/rate-limit.middleware.js'
 import router from './routes/index.js'
 import { ensureRbacSeedData } from './services/rbac/rbac-seed.service.js'
 import { initChatSocket } from './sockets/chat.socket.js'
+import { getSocketServer } from './sockets/socket-hub.js'
 
 const app = express()
-const httpServer = createServer(app)
-initChatSocket(httpServer)
+let httpServer = null
+const isTestRuntime = env.nodeEnv === 'test' || Boolean(process.env.JEST_WORKER_ID)
+
+if (!isTestRuntime) {
+  httpServer = createServer(app)
+  initChatSocket(httpServer)
+}
 
 // Middlewares
 // Tắt CSP để Swagger UI load được CSS/JS
@@ -55,7 +61,7 @@ app.use(errorHandler)
 // Start server
 const PORT = env.port || 3000
 
-if (env.nodeEnv !== 'test' && !process.env.JEST_WORKER_ID) {
+if (!isTestRuntime) {
   connectDB().then(async () => {
     try {
       await ensureRbacSeedData()
@@ -69,6 +75,19 @@ if (env.nodeEnv !== 'test' && !process.env.JEST_WORKER_ID) {
       console.log(`📚 Swagger UI:   http://localhost:${PORT}/api-docs`)
     })
   })
+}
+
+export const closeAppResources = async () => {
+  const socketServer = getSocketServer()
+
+  if (socketServer) {
+    await new Promise((resolve) => socketServer.close(resolve))
+  }
+
+  if (httpServer) {
+    await new Promise((resolve) => httpServer.close(resolve))
+    httpServer = null
+  }
 }
 
 export default app

@@ -16,11 +16,11 @@ const router = Router()
  * @swagger
  * tags:
  *   - name: Cart
- *     description: Shopping cart APIs
+ *     description: API quản lý giỏ hàng
  *
  * /cart/add-combo:
  *   post:
- *     summary: Add customized combo items to cart
+ *     summary: Thêm các sản phẩm combo đã tùy chỉnh vào giỏ hàng
  *     tags: [Cart]
  *     security:
  *       - bearerAuth: []
@@ -43,13 +43,13 @@ const router = Router()
  *                     quantity: { type: integer, minimum: 1 }
  *     responses:
  *       200:
- *         description: Combo items added to cart
+ *         description: Đã thêm các sản phẩm combo vào giỏ hàng
  *       400:
- *         description: One or more products are unavailable
+ *         description: Một hoặc nhiều sản phẩm hiện không khả dụng
  *       401:
- *         description: Authentication required
+ *         description: Cần đăng nhập để thực hiện thao tác này
  *       422:
- *         description: Validation error
+ *         description: Dữ liệu gửi lên không hợp lệ
  */
 router.get('/', authenticate, requirePermissions(PERMISSIONS.USER_CART_READ), cartController.getCart)
 router.post('/checkout', authenticate, requirePermissions(PERMISSIONS.USER_CART_CHECKOUT), validate(checkoutCartSchema), cartController.checkoutCart)

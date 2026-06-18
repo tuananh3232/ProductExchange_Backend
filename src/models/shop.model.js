@@ -86,6 +86,22 @@ const shopSchema = new mongoose.Schema(
       default: '',
       maxlength: [500, 'Rejection reason must not exceed 500 characters'],
     },
+    reviewMeta: {
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      reviewedAt: { type: Date, default: null },
+      adminNote: { type: String, default: '', maxlength: 1000 },
+    },
+    approvalMeta: {
+      approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      approvedAt: { type: Date, default: null },
+      adminNote: { type: String, default: '', maxlength: 1000 },
+    },
+    rejectionMeta: {
+      rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      rejectedAt: { type: Date, default: null },
+      reason: { type: String, default: '', maxlength: 500 },
+      adminNote: { type: String, default: '', maxlength: 1000 },
+    },
     suspensionMeta: {
       reason: {
         type: String,
@@ -98,6 +114,30 @@ const shopSchema = new mongoose.Schema(
         default: null,
       },
       suspendedAt: {
+        type: Date,
+        default: null,
+      },
+      suspendedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      reasonText: {
+        type: String,
+        default: '',
+        maxlength: 500,
+      },
+      adminNote: {
+        type: String,
+        default: '',
+        maxlength: 1000,
+      },
+      unsuspendedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      unsuspendedAt: {
         type: Date,
         default: null,
       },

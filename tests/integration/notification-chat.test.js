@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { loginMember, loginShopOwner } from '../setup/auth.js'
 import { createSampleShop } from '../setup/factories.js'
 import Notification from '../../src/models/notification.model.js'
@@ -180,7 +179,6 @@ const createNotification = (recipient, overrides = {}) =>
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('notification and chat integration', () => {

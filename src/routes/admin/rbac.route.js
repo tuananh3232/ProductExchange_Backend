@@ -4,9 +4,11 @@ import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js
 import { validate } from '../../middlewares/validate.middleware.js'
 import {
   assignRolesSchema,
+  roleCodeParamSchema,
   previewUserAssignmentSchema,
   updateRolePermissionsSchema,
 } from '../../validations/rbac/rbac.validation.js'
+import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
 
 const router = Router()
@@ -19,17 +21,18 @@ router.get('/permissions', rbacController.getPermissions)
 router.get('/roles', rbacController.getRoles)
 router.get(
   '/users/assignment-preview',
-  validate(previewUserAssignmentSchema, 'query'),
+  validate(previewUserAssignmentSchema, 'query', HTTP_STATUS.BAD_REQUEST),
   rbacController.getUserAssignmentPreview
 )
 router.put(
   '/roles/:roleCode/permissions',
-  validate(updateRolePermissionsSchema),
+  validate(roleCodeParamSchema, 'params', HTTP_STATUS.BAD_REQUEST),
+  validate(updateRolePermissionsSchema, 'body', HTTP_STATUS.BAD_REQUEST),
   rbacController.updateRolePermissions
 )
 router.patch(
   '/users/roles',
-  validate(assignRolesSchema),
+  validate(assignRolesSchema, 'body', HTTP_STATUS.BAD_REQUEST),
   rbacController.assignRolesToUser
 )
 router.post('/seed', rbacController.seedRbac)
@@ -39,13 +42,13 @@ export default router
 /**
  * @swagger
  * tags:
- *   name: RBAC
+ *   name: Admin RBAC
  *   description: API quản lý vai trò và quyền
  *
  * /admin/rbac/permissions:
  *   get:
  *     summary: Lấy danh sách quyền
- *     tags: [RBAC]
+ *     tags: [Admin RBAC]
  *     responses:
  *       200:
  *         description: Lấy danh sách quyền thành công
@@ -53,7 +56,7 @@ export default router
  * /admin/rbac/roles:
  *   get:
  *     summary: Lấy danh sách vai trò
- *     tags: [RBAC]
+ *     tags: [Admin RBAC]
  *     responses:
  *       200:
  *         description: Lấy danh sách vai trò thành công
@@ -61,7 +64,7 @@ export default router
  * /admin/rbac/roles/{roleCode}/permissions:
  *   put:
  *     summary: Cập nhật quyền cho vai trò
- *     tags: [RBAC]
+ *     tags: [Admin RBAC]
  *     parameters:
  *       - in: path
  *         name: roleCode
@@ -87,7 +90,7 @@ export default router
  * /admin/rbac/users/roles:
  *   patch:
  *     summary: Gán vai trò cho người dùng
- *     tags: [RBAC]
+ *     tags: [Admin RBAC]
  *     requestBody:
  *       required: true
  *       content:
@@ -109,7 +112,7 @@ export default router
  * /admin/rbac/seed:
  *   post:
  *     summary: Khởi tạo dữ liệu RBAC
- *     tags: [RBAC]
+ *     tags: [Admin RBAC]
  *     responses:
  *       200:
  *         description: Khởi tạo RBAC thành công

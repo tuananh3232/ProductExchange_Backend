@@ -47,5 +47,5 @@ export const getMyKyc = asyncHandler(async (req, res) => {
 
 export const getMyCapabilities = asyncHandler(async (req, res) => {
   const capabilities = await capabilityService.getUserCapabilities(req.user.roles)
-  sendSuccess(res, { message: 'Capabilities fetched successfully', data: capabilities })
+  sendSuccess(res, { message: 'Lấy danh sách quyền khả dụng thành công', data: capabilities })
 })

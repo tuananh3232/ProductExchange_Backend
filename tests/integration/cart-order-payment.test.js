@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { loginMember } from '../setup/auth.js'
 import { createSampleProduct } from '../setup/factories.js'
 import Cart from '../../src/models/cart.model.js'
@@ -19,7 +18,6 @@ const shippingAddress = {
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('cart, order, and payment integration', () => {

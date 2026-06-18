@@ -3,6 +3,9 @@ import * as orderController from '../../controllers/order/order.controller.js'
 import * as optionsController from '../../controllers/options/options.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import { validateObjectId } from '../../middlewares/object-id.middleware.js'
+import { orderQuerySchema } from '../../validations/admin/admin.validation.js'
+import HTTP_STATUS from '../../constants/http-status.constant.js'
 import {
   cancelOrderSchema,
   createOrderSchema,
@@ -14,12 +17,13 @@ router.use(authenticate)
 
 router.get('/filter-options', optionsController.getOrderFilterOptions)
 router.post('/', validate(createOrderSchema), orderController.createOrder)
-router.get('/', orderController.getOrders)
-router.get('/:id', orderController.getOrderById)
-router.patch('/:id/confirm', orderController.confirmOrder)
-router.patch('/:id/cancel', validate(cancelOrderSchema), orderController.cancelOrder)
+router.get('/', validate(orderQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST), orderController.getOrders)
+router.get('/:id', validateObjectId('id'), orderController.getOrderById)
+router.patch('/:id/confirm', validateObjectId('id'), orderController.confirmOrder)
+router.patch('/:id/cancel', validateObjectId('id'), validate(cancelOrderSchema), orderController.cancelOrder)
 router.patch(
   '/:id/status',
+  validateObjectId('id'),
   validate(updateOrderStatusSchema),
   orderController.updateOrderStatus
 )

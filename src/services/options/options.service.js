@@ -115,6 +115,11 @@ export const getPaymentOptions = () => ({
   statuses: toOptions(PAYMENT_STATUS_ENUM),
 })
 
+export const getCategoryFilterOptions = () => ({
+  statuses: toOptions(['active', 'inactive', 'disabled']),
+  sortOptions: toOptions(['newest', 'oldest', 'name']),
+})
+
 // periods: giá trị thực từ stats.service.js — normalizePeriod chỉ nhận 'day' | 'month'
 const ANALYTICS_LABELS = { day: 'Day', month: 'Month' }
 const STATS_PERIODS = ['day', 'month']

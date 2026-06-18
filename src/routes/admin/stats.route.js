@@ -2,6 +2,9 @@ import { Router } from 'express'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
 import { ROLES } from '../../constants/role.constant.js'
 import * as statsController from '../../controllers/stats/stats.controller.js'
+import { validate } from '../../middlewares/validate.middleware.js'
+import { adminStatsQuerySchema } from '../../validations/admin/admin.validation.js'
+import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 const router = Router()
 const requireAdmin = requireRoles(ROLES.ADMIN)
@@ -9,13 +12,13 @@ const requireAdmin = requireRoles(ROLES.ADMIN)
 /**
  * @swagger
  * tags:
- *   - name: Admin - Statistics
+ *   - name: Admin Statistics
  *     description: API thống kê toàn hệ thống dành cho admin
  *
  * /admin/stats/overview:
  *   get:
  *     summary: Thống kê tổng quan toàn hệ thống
- *     tags: [Admin - Statistics]
+ *     tags: [Admin Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -36,7 +39,7 @@ const requireAdmin = requireRoles(ROLES.ADMIN)
  * /admin/stats/revenue:
  *   get:
  *     summary: Thống kê doanh thu toàn hệ thống
- *     tags: [Admin - Statistics]
+ *     tags: [Admin Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -62,7 +65,7 @@ const requireAdmin = requireRoles(ROLES.ADMIN)
  * /admin/stats/top-shops:
  *   get:
  *     summary: Top shop theo doanh thu
- *     tags: [Admin - Statistics]
+ *     tags: [Admin Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -88,7 +91,7 @@ const requireAdmin = requireRoles(ROLES.ADMIN)
  * /admin/stats/top-products:
  *   get:
  *     summary: Top sản phẩm theo doanh thu
- *     tags: [Admin - Statistics]
+ *     tags: [Admin Statistics]
  *     parameters:
  *       - in: query
  *         name: startDate
@@ -112,9 +115,11 @@ const requireAdmin = requireRoles(ROLES.ADMIN)
  *         description: Lấy top sản phẩm thành công
  */
 
-router.get('/overview', authenticate, requireAdmin, statsController.adminOverview)
-router.get('/revenue', authenticate, requireAdmin, statsController.adminRevenue)
-router.get('/top-shops', authenticate, requireAdmin, statsController.adminTopShops)
-router.get('/top-products', authenticate, requireAdmin, statsController.adminTopProducts)
+const validateStatsQuery = validate(adminStatsQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST)
+
+router.get('/overview', authenticate, requireAdmin, validateStatsQuery, statsController.adminOverview)
+router.get('/revenue', authenticate, requireAdmin, validateStatsQuery, statsController.adminRevenue)
+router.get('/top-shops', authenticate, requireAdmin, validateStatsQuery, statsController.adminTopShops)
+router.get('/top-products', authenticate, requireAdmin, validateStatsQuery, statsController.adminTopProducts)
 
 export default router

@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { loginAdmin, loginMember, loginShopOwner } from '../setup/auth.js'
 import { createSampleShop } from '../setup/factories.js'
 import Wallet from '../../src/models/wallet.model.js'
@@ -20,7 +19,6 @@ const bankInfo = {
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('wallet integration', () => {

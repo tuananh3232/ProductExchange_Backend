@@ -5,6 +5,10 @@ export const updateRolePermissionsSchema = Joi.object({
   permissionKeys: Joi.array().items(Joi.string().trim().required()).min(1).required(),
 })
 
+export const roleCodeParamSchema = Joi.object({
+  roleCode: Joi.string().valid(...ROLE_ENUM).required(),
+})
+
 export const previewUserAssignmentSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
 })
@@ -12,5 +16,5 @@ export const previewUserAssignmentSchema = Joi.object({
 export const assignRolesSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
   roles: Joi.array().items(Joi.string().valid(...ROLE_ENUM)).min(1).required(),
-  staffShopId: Joi.string().trim().optional().allow('', null),
+  staffShopId: Joi.string().trim().pattern(/^[a-f\d]{24}$/i).optional().allow('', null),
 })

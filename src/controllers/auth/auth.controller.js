@@ -63,12 +63,12 @@ export const logout = asyncHandler(async (req, res) => {
 })
 
 export const banUser = asyncHandler(async (req, res) => {
-  const user = await authService.banUser(req.params.userId)
+  const user = await authService.banUser(req.params.userId, req.body.reason, req.user)
   sendSuccess(res, { message: MESSAGES.USER.BANNED, data: { user } })
 })
 
 export const unbanUser = asyncHandler(async (req, res) => {
-  const user = await authService.unbanUser(req.params.userId)
+  const user = await authService.unbanUser(req.params.userId, req.user)
   sendSuccess(res, { message: MESSAGES.USER.UNBANNED, data: { user } })
 })
 
@@ -76,6 +76,16 @@ export const getAdminUsers = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
   const { users, meta } = await authService.getAdminUsers(req.query, pagination)
   sendSuccess(res, { message: MESSAGES.ADMIN.USERS_FETCHED, data: { users }, meta })
+})
+
+export const getAdminUserById = asyncHandler(async (req, res) => {
+  const result = await authService.getAdminUserById(req.params.userId)
+  sendSuccess(res, { message: MESSAGES.ADMIN.USERS_FETCHED, data: result })
+})
+
+export const updateAdminUserStatus = asyncHandler(async (req, res) => {
+  const user = await authService.updateAdminUserStatus(req.params.userId, req.body, req.user)
+  sendSuccess(res, { message: MESSAGES.USER.UPDATED || 'Cập nhật trạng thái người dùng thành công', data: { user } })
 })
 
 export const forgotPassword = asyncHandler(async (req, res) => {
@@ -118,12 +128,12 @@ export const getAdminKycs = asyncHandler(async (req, res) => {
 })
 
 export const adminApproveKyc = asyncHandler(async (req, res) => {
-  const user = await authService.adminApproveKyc(req.params.userId)
+  const user = await authService.adminApproveKyc(req.params.userId, req.user)
   sendSuccess(res, { message: MESSAGES.KYC.APPROVED, data: { user } })
 })
 
 export const adminRejectKyc = asyncHandler(async (req, res) => {
-  const user = await authService.adminRejectKyc(req.params.userId, req.body.rejectionReason)
+  const user = await authService.adminRejectKyc(req.params.userId, req.body.rejectionReason, req.user)
   sendSuccess(res, { message: MESSAGES.KYC.REJECTED, data: { user } })
 })
 

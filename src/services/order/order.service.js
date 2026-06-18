@@ -14,6 +14,8 @@ import * as userWalletService from '../user-wallet/user-wallet.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
+import * as paymentRepo from '../../repositories/payment/payment.repository.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -227,12 +229,13 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
   const filter = { isActive: true }
 
   const scope = query.scope || 'buyer'
-  if (!isAdmin(userContext) && scope === 'shop') {
-    const managedShopIds = await getPermittedShopIds(userContext._id, PERMISSIONS.SHOP_ORDER_READ)
-    filter.shop = { $in: managedShopIds }
-  } else if (!isAdmin(userContext) && scope === 'seller') {
+  const adminRequest = isAdmin(userContext)
+  if (!adminRequest && scope === 'shop') {
+    const permittedShopIds = await getPermittedShopIds(userContext._id, PERMISSIONS.SHOP_ORDER_READ)
+    filter.shop = { $in: permittedShopIds }
+  } else if (!adminRequest && scope === 'seller') {
     filter.seller = userContext._id
-  } else if (!isAdmin(userContext) && scope === 'buyer') {
+  } else if (!adminRequest) {
     filter.buyer = userContext._id
   }
 
@@ -240,11 +243,11 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
     filter.status = query.status
   }
 
-  if (query.shopId) {
+  if (adminRequest && query.shopId) {
     filter.shop = query.shopId
   }
 
-  if (query.sellerId) {
+  if (adminRequest && query.sellerId) {
     filter.seller = query.sellerId
   }
 
@@ -254,6 +257,84 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
   ])
 
   return { orders, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const getAdminOrders = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+  const filter = { isActive: true }
+
+  if (query.orderCode) {
+    const value = String(query.orderCode).trim()
+    filter.$or = [
+      { paymentRef: { $regex: value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+      { note: { $regex: value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+    ]
+    if (/^[a-f\d]{24}$/i.test(value)) {
+      filter.$or.push({ _id: value })
+    }
+  }
+  if (query.buyerId) filter.buyer = query.buyerId
+  if (query.shopId) filter.shop = query.shopId
+  if (query.sellerId) filter.seller = query.sellerId
+  if (query.status) filter.status = query.status
+  if (query.paymentStatus) filter.paymentStatus = query.paymentStatus
+  if (query.paymentMethod) filter.paymentMethod = query.paymentMethod
+  if (query.createdFrom || query.createdTo) {
+    filter.createdAt = {}
+    if (query.createdFrom) filter.createdAt.$gte = new Date(query.createdFrom)
+    if (query.createdTo) filter.createdAt.$lte = new Date(query.createdTo)
+  }
+  if (query.minTotal !== undefined || query.maxTotal !== undefined) {
+    filter.totalAmount = {}
+    if (query.minTotal !== undefined) filter.totalAmount.$gte = Number(query.minTotal)
+    if (query.maxTotal !== undefined) filter.totalAmount.$lte = Number(query.maxTotal)
+  }
+
+  const [orders, total] = await Promise.all([
+    orderRepo.findMany({ filter, skip, limit, sortBy, sortOrder }),
+    orderRepo.countMany(filter),
+  ])
+
+  return { orders, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const getAdminOrderById = async (orderId) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+  const payment = await paymentRepo.findByOrder(order._id)
+  return {
+    order,
+    buyer: order.buyer,
+    shop: order.shop,
+    seller: order.seller,
+    items: [{ product: order.product, quantity: order.quantity, unitPrice: order.unitPrice }],
+    amount: {
+      unitPrice: order.unitPrice,
+      quantity: order.quantity,
+      totalAmount: order.totalAmount,
+      discount: 0,
+      shipping: 0,
+    },
+    paymentSummary: payment
+      ? {
+          _id: payment._id,
+          amount: payment.amount,
+          provider: payment.provider,
+          method: payment.method,
+          status: payment.status,
+          transactionRef: payment.transactionRef,
+          responseCode: payment.responseCode,
+          paidAt: payment.paidAt,
+        }
+      : null,
+    statusHistory: order.history || [],
+    cancellationInformation: order.status === ORDER_STATUS.CANCELLED ? order.history?.filter((item) => item.status === ORDER_STATUS.CANCELLED) || [] : [],
+    refundInformation: {
+      paymentStatus: order.paymentStatus,
+      refundPending: order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING,
+    },
+  }
 }
 
 export const confirmOrder = async (orderId, userContext) => {
@@ -382,6 +463,82 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   if (typeByStatus[nextStatus]) {
     await notifyOrderUser(updated.buyer?._id || updated.buyer, typeByStatus[nextStatus], updated, `Trạng thái đơn hàng đã được cập nhật: ${nextStatus}`, userContext._id)
   }
+
+  return updated
+}
+
+export const updateAdminOrderStatus = async (orderId, userContext, { status, reason = '', adminNote = '' }) => {
+  const before = await orderRepo.findById(orderId)
+  const updated = await updateOrderStatus(orderId, userContext, status, adminNote || reason)
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'ORDER_STATUS_CHANGED',
+    targetType: 'order',
+    targetId: updated._id,
+    previousStatus: before?.status || '',
+    newStatus: status,
+    reason,
+    adminNote,
+  })
+  return updated
+}
+
+export const cancelAdminOrder = async (orderId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const before = await orderRepo.findById(orderId)
+  const updated = await cancelOrder(orderId, userContext, adminNote || reason)
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'ORDER_CANCELLED',
+    targetType: 'order',
+    targetId: updated._id,
+    previousStatus: before?.status || '',
+    newStatus: updated.status,
+    reason,
+    adminNote,
+  })
+  return updated
+}
+
+export const refundAdminOrder = async (orderId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID && order.paymentStatus !== PAYMENT_STATUS.REFUND_PENDING) {
+    throw new AppError('ÄÆ¡n hÃ ng khÃ´ng cÃ³ thanh toÃ¡n cáº§n hoÃ n', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  if (order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
+    return order
+  }
+
+  let updated = null
+  if (order.paymentMethod === 'wallet') {
+    await userWalletService.refundWalletForOrder(order)
+    updated = await orderRepo.updateById(orderId, { paymentStatus: PAYMENT_STATUS.UNPAID })
+  } else {
+    updated = await orderRepo.updateById(orderId, { paymentStatus: PAYMENT_STATUS.REFUND_PENDING })
+    const payment = await paymentRepo.findByOrder(order._id)
+    if (payment) {
+      await paymentRepo.updateById(payment._id, {
+        status: PAYMENT_STATUS.REFUND_PENDING,
+        reconciledBy: userContext._id,
+        reconciledAt: new Date(),
+      })
+    }
+  }
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'ORDER_REFUND_REQUESTED',
+    targetType: 'order',
+    targetId: order._id,
+    previousStatus: order.paymentStatus,
+    newStatus: updated.paymentStatus,
+    reason,
+    adminNote,
+  })
 
   return updated
 }

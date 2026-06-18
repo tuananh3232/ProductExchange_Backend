@@ -17,6 +17,8 @@ import * as roleRepo from '../../repositories/role/role.repository.js'
 import * as shopRepo from '../../repositories/shop/shop.repository.js'
 import * as userRepo from '../../repositories/user/user.repository.js'
 import { ensureRbacSeedData } from './rbac-seed.service.js'
+import { env } from '../../configs/env.config.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const protectedRoleCodeSet = new Set(RBAC_PROTECTED_ROLE_CODES)
 const matrixRoleCodeSet = new Set(RBAC_MATRIX_ROLE_CODES)
@@ -132,7 +134,7 @@ export const getRbacMatrix = async () => {
   }
 }
 
-export const updateRolePermissions = async (roleCode, permissionKeys) => {
+export const updateRolePermissions = async (roleCode, permissionKeys, actor = null) => {
   if (!ROLE_ENUM.includes(roleCode)) {
     throw new AppError('Role không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
@@ -161,11 +163,25 @@ export const updateRolePermissions = async (roleCode, permissionKeys) => {
   }
 
   const currentRole = await roleRepo.findByCodeWithPermissions(roleCode)
+  const previousPermissionKeys = (currentRole?.permissions || []).map((permission) => permission.key)
   const role = await roleRepo.upsertRoleByCode({
     code: roleCode,
     name: currentRole?.name ?? roleCode,
     description: currentRole?.description ?? '',
     permissionIds: permissions.map((permission) => permission._id),
+  })
+
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'ROLE_PERMISSIONS_CHANGED',
+    targetType: 'role',
+    targetId: role._id,
+    previousStatus: roleCode,
+    newStatus: roleCode,
+    metadata: {
+      previousPermissionKeys,
+      newPermissionKeys: uniquePermissionKeys,
+    },
   })
 
   return role
@@ -227,6 +243,7 @@ export const assignRolesToUser = async (email, roles, actor = null, options = {}
   }
 
   const currentRoles = new Set(user.roles || [])
+  const previousRoles = [...currentRoles]
   const protectedRoles = [...currentRoles].filter((role) => protectedRoleCodeSet.has(role))
   if (protectedRoles.length) {
     throw new AppError(
@@ -286,9 +303,33 @@ export const assignRolesToUser = async (email, roles, actor = null, options = {}
   user.roles = [...nextRoleSet]
   await user.save()
 
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'USER_ROLE_CHANGED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus: previousRoles.join(','),
+    newStatus: user.roles.join(','),
+    metadata: {
+      email: user.email,
+      previousRoles,
+      newRoles: user.roles,
+      staffShopId: normalizedStaffShopId || null,
+    },
+  })
+
   return user.toPublicJSON()
 }
 
 export const seedRbac = async () => {
+  if (env.nodeEnv === 'production') {
+    throw new AppError('RBAC seed endpoint is disabled in production', HTTP_STATUS.FORBIDDEN, ERRORS.GENERAL.FORBIDDEN)
+  }
+
+  if (process.env.ALLOW_RBAC_RESET !== 'true') {
+    throw new AppError('RBAC seed endpoint requires ALLOW_RBAC_RESET=true', HTTP_STATUS.FORBIDDEN, ERRORS.GENERAL.FORBIDDEN)
+  }
+
+  console.warn('RBAC seed endpoint invoked through admin HTTP API')
   await ensureRbacSeedData()
 }

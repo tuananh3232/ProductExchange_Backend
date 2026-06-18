@@ -87,6 +87,19 @@ const userSchema = new mongoose.Schema(
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },
     },
+    banReason: { type: String, default: '' },
+    bannedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    bannedAt: { type: Date, default: null },
+    unbannedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    unbannedAt: { type: Date, default: null },
     kyc: {
       fullName: { type: String, default: '' },
       idNumber: { type: String, default: '' },
@@ -106,6 +119,22 @@ const userSchema = new mongoose.Schema(
       rejectionReason: { type: String, default: '' },
       submittedAt: { type: Date, default: null },
       reviewedAt: { type: Date, default: null },
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      reviewHistory: {
+        type: [
+          {
+            status: { type: String, enum: ['approved', 'rejected'], required: true },
+            reason: { type: String, default: '', maxlength: 500 },
+            reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+            reviewedAt: { type: Date, default: Date.now },
+          },
+        ],
+        default: [],
+      },
     },
     vip: {
       plan: { type: String, default: null },

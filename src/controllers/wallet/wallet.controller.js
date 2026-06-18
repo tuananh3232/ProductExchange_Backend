@@ -37,6 +37,11 @@ export const adminGetWithdrawals = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: 'Lấy danh sách lệnh rút tiền thành công', data: result.withdrawals, meta: result.meta })
 })
 
+export const adminGetWithdrawalById = asyncHandler(async (req, res) => {
+  const withdrawal = await walletService.adminGetWithdrawalById(req.params.withdrawalId || req.params.id)
+  sendSuccess(res, { message: 'Lấy chi tiết lệnh rút tiền thành công', data: { withdrawal } })
+})
+
 export const approveWithdrawal = asyncHandler(async (req, res) => {
   const result = await walletService.approveWithdrawal(req.params.id, req.user)
   sendSuccess(res, { message: 'Duyệt lệnh rút tiền thành công', data: result })
