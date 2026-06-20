@@ -1,12 +1,19 @@
 import Joi from 'joi'
 import { ROLE_ENUM } from '../../constants/role.constant.js'
 import {
+  FEE_POLICY_STATUS_ENUM,
   ORDER_STATUS_ENUM,
   PAYMENT_STATUS_ENUM,
   PRODUCT_STATUS_ENUM,
   SHOP_STATUS_ENUM,
   WITHDRAWAL_STATUS_ENUM,
 } from '../../constants/status.constant.js'
+import {
+  FEE_BASE_AMOUNT_TYPE_ENUM,
+  FEE_OWNER_TYPE_ENUM,
+  FEE_ROUNDING_ENUM,
+  FEE_TRANSACTION_TYPE_ENUM,
+} from '../../constants/fee.constant.js'
 
 const objectId = Joi.string().trim().pattern(/^[a-f\d]{24}$/i)
 const page = Joi.number().integer().min(1).default(1)
@@ -117,6 +124,14 @@ export const adminCategoriesQuerySchema = Joi.object({
   ...dateRange,
 })
 
+export const adminFeePoliciesQuerySchema = Joi.object({
+  ...pagination(['createdAt', 'updatedAt', 'effectiveFrom', 'transactionType', 'status', 'percent']),
+  status: Joi.string().valid(...FEE_POLICY_STATUS_ENUM),
+  transactionType: Joi.string().valid(...FEE_TRANSACTION_TYPE_ENUM),
+  ownerType: Joi.string().valid(...FEE_OWNER_TYPE_ENUM),
+  categoryId: objectId,
+})
+
 export const adminUserStatusSchema = Joi.object({
   isActive: Joi.boolean().required(),
   reason: Joi.string().trim().min(1).max(500).required(),
@@ -175,6 +190,39 @@ export const adminCategoryStatusSchema = Joi.object({
   isActive: Joi.boolean().required(),
   reason: Joi.string().trim().max(500).allow('').optional(),
   adminNote: Joi.string().trim().max(1000).allow('').optional(),
+})
+
+export const adminFeePolicyCreateSchema = Joi.object({
+  transactionType: Joi.string().valid(...FEE_TRANSACTION_TYPE_ENUM).required(),
+  ownerType: Joi.string().valid(...FEE_OWNER_TYPE_ENUM).required(),
+  categoryId: objectId.allow(null),
+  minAmount: Joi.number().min(0).allow(null),
+  maxAmount: Joi.number().min(0).allow(null),
+  percent: Joi.number().min(0).max(100).required(),
+  minFee: Joi.number().min(0).default(0),
+  maxFee: Joi.number().min(0).allow(null),
+  fixedFee: Joi.number().min(0).default(0),
+  baseAmountType: Joi.string().valid(...FEE_BASE_AMOUNT_TYPE_ENUM).required(),
+  rounding: Joi.string().valid(...FEE_ROUNDING_ENUM).required(),
+  status: Joi.string().valid(...FEE_POLICY_STATUS_ENUM).required(),
+  effectiveFrom: Joi.date().iso().required(),
+  effectiveTo: Joi.date().iso().greater(Joi.ref('effectiveFrom')).allow(null),
+}).custom((value, helpers) => {
+  if (value.maxAmount !== null && value.minAmount !== null && value.maxAmount <= value.minAmount) {
+    return helpers.error('any.invalid')
+  }
+
+  return value
+})
+
+export const adminFeePolicyUpdateSchema = adminFeePolicyCreateSchema
+
+export const adminFeePolicyPreviewSchema = Joi.object({
+  transactionType: Joi.string().valid(...FEE_TRANSACTION_TYPE_ENUM).required(),
+  ownerType: Joi.string().valid(...FEE_OWNER_TYPE_ENUM).required(),
+  categoryId: objectId.allow(null),
+  baseAmount: Joi.number().min(0).required(),
+  transactionCreatedAt: Joi.date().iso().optional(),
 })
 
 export const adminStatsQuerySchema = Joi.object({

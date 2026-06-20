@@ -54,6 +54,61 @@ export const PAYMENT_STATUS = {
 
 export const PAYMENT_STATUS_ENUM = Object.values(PAYMENT_STATUS);
 
+export const FEE_POLICY_STATUS = {
+  DRAFT: 'draft',
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  ARCHIVED: 'archived',
+}
+
+export const FEE_POLICY_STATUS_ENUM = Object.values(FEE_POLICY_STATUS)
+
+export const SETTLEMENT_STATUS = {
+  PENDING: 'pending',
+  HELD: 'held',
+  SETTLED: 'settled',
+  REFUNDED: 'refunded',
+  DISPUTED: 'disputed',
+}
+
+export const SETTLEMENT_STATUS_ENUM = Object.values(SETTLEMENT_STATUS)
+
+export const EXCHANGE_STATUS = {
+  DRAFT: 'draft',
+  PENDING_ACCEPTANCE: 'pending_acceptance',
+  ACCEPTED: 'accepted',
+  PAID: 'paid',
+  SHIPPED: 'shipped',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  DISPUTED: 'disputed',
+}
+
+export const EXCHANGE_STATUS_ENUM = Object.values(EXCHANGE_STATUS)
+
+export const RENTAL_BOOKING_STATUS = {
+  DRAFT: 'draft',
+  PENDING_PAYMENT: 'pending_payment',
+  BOOKED: 'booked',
+  ACTIVE: 'active',
+  RETURN_PENDING: 'return_pending',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  DISPUTED: 'disputed',
+}
+
+export const RENTAL_BOOKING_STATUS_ENUM = Object.values(RENTAL_BOOKING_STATUS)
+
+export const RENTAL_CLAIM_STATUS = {
+  OPEN: 'open',
+  REVIEWING: 'reviewing',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  RESOLVED: 'resolved',
+}
+
+export const RENTAL_CLAIM_STATUS_ENUM = Object.values(RENTAL_CLAIM_STATUS)
+
 // Trạng thái lời mời tham gia shop
 export const INVITATION_STATUS = {
   PENDING: 'pending',
@@ -129,6 +184,16 @@ export default {
   ORDER_STATUS_ENUM,
   PAYMENT_STATUS,
   PAYMENT_STATUS_ENUM,
+  FEE_POLICY_STATUS,
+  FEE_POLICY_STATUS_ENUM,
+  SETTLEMENT_STATUS,
+  SETTLEMENT_STATUS_ENUM,
+  EXCHANGE_STATUS,
+  EXCHANGE_STATUS_ENUM,
+  RENTAL_BOOKING_STATUS,
+  RENTAL_BOOKING_STATUS_ENUM,
+  RENTAL_CLAIM_STATUS,
+  RENTAL_CLAIM_STATUS_ENUM,
   INVITATION_STATUS,
   INVITATION_STATUS_ENUM,
   SHOP_MEMBER_STATUS,

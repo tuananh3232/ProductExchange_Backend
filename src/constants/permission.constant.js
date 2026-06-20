@@ -35,6 +35,12 @@ export const PERMISSIONS = {
   SELLER_ORDER_CONFIRM: 'seller:order:confirm',
   SELLER_ORDER_CANCEL: 'seller:order:cancel',
   SELLER_ORDER_UPDATE_STATUS: 'seller:order:update_status',
+  SELLER_EXCHANGE_READ: 'seller:exchange:read',
+  SELLER_EXCHANGE_CREATE: 'seller:exchange:create',
+  SELLER_EXCHANGE_UPDATE: 'seller:exchange:update',
+  SELLER_RENTAL_READ: 'seller:rental:read',
+  SELLER_RENTAL_CREATE: 'seller:rental:create',
+  SELLER_RENTAL_UPDATE: 'seller:rental:update',
 
   WALLET_SELF_READ: 'wallet:self:read',
   WALLET_SELF_TRANSACTION_READ: 'wallet:self_transaction:read',
@@ -61,6 +67,9 @@ export const PERMISSIONS = {
   SHOP_ORDER_CONFIRM: 'shop:order:confirm',
   SHOP_ORDER_CANCEL: 'shop:order:cancel',
   SHOP_ORDER_UPDATE_STATUS: 'shop:order:update_status',
+  SHOP_RENTAL_READ: 'shop:rental:read',
+  SHOP_RENTAL_CREATE: 'shop:rental:create',
+  SHOP_RENTAL_UPDATE: 'shop:rental:update',
 
   SHOP_STAFF_READ: 'shop:staff:read',
   SHOP_STAFF_INVITE: 'shop:staff:invite',
@@ -112,6 +121,12 @@ export const PERMISSIONS = {
   ADMIN_MANAGE_PERMISSIONS: 'admin:manage_permissions',
   ADMIN_VIEW_STATS: 'admin:view_stats',
   ADMIN_MANAGE_WITHDRAWALS: 'admin:manage_withdrawals',
+  ADMIN_FEE_POLICY_READ: 'admin:fee-policy:read',
+  ADMIN_FEE_POLICY_WRITE: 'admin:fee-policy:write',
+  ADMIN_PLATFORM_LEDGER_READ: 'admin:platform-ledger:read',
+  ADMIN_PLATFORM_LEDGER_EXPORT: 'admin:platform-ledger:export',
+  ADMIN_DISPUTE_SETTLEMENT_READ: 'admin:dispute-settlement:read',
+  ADMIN_DISPUTE_SETTLEMENT_WRITE: 'admin:dispute-settlement:write',
   PRODUCT_VISUAL_ASSET_MANAGE: 'product_visual_asset:manage',
 }
 
@@ -147,6 +162,12 @@ export const DEPRECATED_PERMISSIONS = [
   PERMISSIONS.ADMIN_MANAGE_PERMISSIONS,
   PERMISSIONS.ADMIN_VIEW_STATS,
   PERMISSIONS.ADMIN_MANAGE_WITHDRAWALS,
+  PERMISSIONS.ADMIN_FEE_POLICY_READ,
+  PERMISSIONS.ADMIN_FEE_POLICY_WRITE,
+  PERMISSIONS.ADMIN_PLATFORM_LEDGER_READ,
+  PERMISSIONS.ADMIN_PLATFORM_LEDGER_EXPORT,
+  PERMISSIONS.ADMIN_DISPUTE_SETTLEMENT_READ,
+  PERMISSIONS.ADMIN_DISPUTE_SETTLEMENT_WRITE,
   PERMISSIONS.PRODUCT_VISUAL_ASSET_MANAGE,
 ]
 
@@ -267,6 +288,12 @@ const SELLER_PERMISSIONS = [
   PERMISSIONS.SELLER_ORDER_CONFIRM,
   PERMISSIONS.SELLER_ORDER_CANCEL,
   PERMISSIONS.SELLER_ORDER_UPDATE_STATUS,
+  PERMISSIONS.SELLER_EXCHANGE_READ,
+  PERMISSIONS.SELLER_EXCHANGE_CREATE,
+  PERMISSIONS.SELLER_EXCHANGE_UPDATE,
+  PERMISSIONS.SELLER_RENTAL_READ,
+  PERMISSIONS.SELLER_RENTAL_CREATE,
+  PERMISSIONS.SELLER_RENTAL_UPDATE,
 ]
 
 export const ROLE_PERMISSION_MAP = {
@@ -302,6 +329,12 @@ export const PERMISSION_METADATA = {
   [PERMISSIONS.SELLER_ORDER_CONFIRM]: label('seller_order', 'Confirm seller order'),
   [PERMISSIONS.SELLER_ORDER_CANCEL]: label('seller_order', 'Cancel seller order'),
   [PERMISSIONS.SELLER_ORDER_UPDATE_STATUS]: label('seller_order', 'Update seller order status'),
+  [PERMISSIONS.SELLER_EXCHANGE_READ]: label('seller_exchange', 'View seller exchanges'),
+  [PERMISSIONS.SELLER_EXCHANGE_CREATE]: label('seller_exchange', 'Create seller exchange offers'),
+  [PERMISSIONS.SELLER_EXCHANGE_UPDATE]: label('seller_exchange', 'Update seller exchange offers'),
+  [PERMISSIONS.SELLER_RENTAL_READ]: label('seller_rental', 'View seller rentals'),
+  [PERMISSIONS.SELLER_RENTAL_CREATE]: label('seller_rental', 'Create seller rentals'),
+  [PERMISSIONS.SELLER_RENTAL_UPDATE]: label('seller_rental', 'Update seller rentals'),
   [PERMISSIONS.WALLET_SELF_READ]: label('wallet', 'View personal wallet'),
   [PERMISSIONS.WALLET_SELF_TRANSACTION_READ]: label('wallet', 'View personal wallet transactions'),
   [PERMISSIONS.WALLET_WITHDRAWAL_CREATE]: label('wallet', 'Create personal withdrawal'),
@@ -322,6 +355,9 @@ export const PERMISSION_METADATA = {
   [PERMISSIONS.SHOP_ORDER_CONFIRM]: label('shop_order', 'Confirm shop order'),
   [PERMISSIONS.SHOP_ORDER_CANCEL]: label('shop_order', 'Cancel shop order'),
   [PERMISSIONS.SHOP_ORDER_UPDATE_STATUS]: label('shop_order', 'Update shop order status'),
+  [PERMISSIONS.SHOP_RENTAL_READ]: label('shop_rental', 'View shop rentals'),
+  [PERMISSIONS.SHOP_RENTAL_CREATE]: label('shop_rental', 'Create shop rentals'),
+  [PERMISSIONS.SHOP_RENTAL_UPDATE]: label('shop_rental', 'Update shop rentals'),
   [PERMISSIONS.SHOP_STAFF_READ]: label('shop_staff', 'View shop staff'),
   [PERMISSIONS.SHOP_STAFF_INVITE]: label('shop_staff', 'Invite shop staff'),
   [PERMISSIONS.SHOP_STAFF_REMOVE]: label('shop_staff', 'Remove shop staff'),
@@ -335,6 +371,12 @@ export const PERMISSION_METADATA = {
   [PERMISSIONS.SHOP_WITHDRAWAL_CREATE]: label('shop_wallet', 'Create shop withdrawal'),
   [PERMISSIONS.SHOP_WITHDRAWAL_READ]: label('shop_wallet', 'View shop withdrawals'),
   [PERMISSIONS.ROOM_VISUALIZER_USE]: label('room_visualizer', 'Use room visualizer'),
+  [PERMISSIONS.ADMIN_FEE_POLICY_READ]: label('admin_fee_policy', 'View fee policies'),
+  [PERMISSIONS.ADMIN_FEE_POLICY_WRITE]: label('admin_fee_policy', 'Manage fee policies'),
+  [PERMISSIONS.ADMIN_PLATFORM_LEDGER_READ]: label('admin_platform_ledger', 'View platform ledger'),
+  [PERMISSIONS.ADMIN_PLATFORM_LEDGER_EXPORT]: label('admin_platform_ledger', 'Export platform ledger'),
+  [PERMISSIONS.ADMIN_DISPUTE_SETTLEMENT_READ]: label('admin_dispute', 'View dispute and settlement queue'),
+  [PERMISSIONS.ADMIN_DISPUTE_SETTLEMENT_WRITE]: label('admin_dispute', 'Resolve dispute and settlement actions'),
 }
 
 export const ACTIVE_PERMISSION_KEYS = [

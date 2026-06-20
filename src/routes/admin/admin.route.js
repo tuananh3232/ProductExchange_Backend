@@ -9,6 +9,7 @@ import * as orderController from '../../controllers/order/order.controller.js'
 import * as paymentController from '../../controllers/payment/payment.controller.js'
 import * as categoryController from '../../controllers/category/category.controller.js'
 import * as adminAuditController from '../../controllers/admin/admin-audit.controller.js'
+import * as adminFeePolicyController from '../../controllers/admin/admin-fee-policy.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
@@ -20,6 +21,10 @@ import {
   adminKycQuerySchema,
   adminCategoriesQuerySchema,
   adminCategoryCreateSchema,
+  adminFeePoliciesQuerySchema,
+  adminFeePolicyCreateSchema,
+  adminFeePolicyPreviewSchema,
+  adminFeePolicyUpdateSchema,
   adminCategoryStatusSchema,
   adminCategoryUpdateSchema,
   adminOrderActionSchema,
@@ -1061,6 +1066,62 @@ router.get(
   requireAdmin,
   validateObjectId('withdrawalId'),
   userWalletController.adminGetUserWithdrawalById
+)
+
+router.get(
+  '/fee-policies',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePoliciesQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminFeePolicyController.getFeePolicies
+)
+
+router.post(
+  '/fee-policies',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePolicyCreateSchema),
+  adminFeePolicyController.createFeePolicy
+)
+
+router.post(
+  '/fee-policies/preview',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePolicyPreviewSchema),
+  adminFeePolicyController.previewFee
+)
+
+router.post(
+  '/fee-policies/seed',
+  authenticate,
+  requireAdmin,
+  adminFeePolicyController.seedDefaultSaleFeePolicies
+)
+
+router.get(
+  '/fee-policies/:feePolicyId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  adminFeePolicyController.getFeePolicyById
+)
+
+router.patch(
+  '/fee-policies/:feePolicyId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  validate(adminFeePolicyUpdateSchema),
+  adminFeePolicyController.updateFeePolicy
+)
+
+router.post(
+  '/fee-policies/:feePolicyId/disable',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  adminFeePolicyController.disableFeePolicy
 )
 
 router.get(
