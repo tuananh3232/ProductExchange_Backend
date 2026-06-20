@@ -149,6 +149,9 @@ export const USER_WALLET_TRANSACTION_TYPE = {
   PAYMENT: 'payment',
   REFUND: 'refund',
   WITHDRAWAL: 'withdrawal',
+  EXCHANGE_PAYMENT: 'exchange_payment',
+  EXCHANGE_SETTLEMENT: 'exchange_settlement',
+  EXCHANGE_REFUND: 'exchange_refund',
 }
 
 export const USER_WALLET_TRANSACTION_TYPE_ENUM = Object.values(USER_WALLET_TRANSACTION_TYPE)

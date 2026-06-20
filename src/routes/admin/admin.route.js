@@ -11,6 +11,7 @@ import * as categoryController from '../../controllers/category/category.control
 import * as adminAuditController from '../../controllers/admin/admin-audit.controller.js'
 import * as adminFeePolicyController from '../../controllers/admin/admin-fee-policy.controller.js'
 import * as adminPlatformLedgerController from '../../controllers/admin/admin-platform-ledger.controller.js'
+import * as adminExchangeController from '../../controllers/admin/admin-exchange.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
@@ -47,6 +48,10 @@ import {
   adminUsersQuerySchema,
   adminWithdrawalsQuerySchema,
 } from '../../validations/admin/admin.validation.js'
+import {
+  adminExchangeOffersQuerySchema,
+  adminResolveExchangeDisputeSchema,
+} from '../../validations/exchange/exchange.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import adminStatsRoutes from './stats.route.js'
@@ -1154,6 +1159,31 @@ router.get(
   authenticate,
   requireAdmin,
   adminPlatformLedgerController.exportPlatformLedger
+)
+
+router.get(
+  '/exchanges',
+  authenticate,
+  requireAdmin,
+  validate(adminExchangeOffersQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminExchangeController.getAdminExchangeOffers
+)
+
+router.get(
+  '/exchanges/:exchangeOfferId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('exchangeOfferId'),
+  adminExchangeController.getAdminExchangeOfferById
+)
+
+router.post(
+  '/exchanges/:exchangeOfferId/resolve',
+  authenticate,
+  requireAdmin,
+  validateObjectId('exchangeOfferId'),
+  validate(adminResolveExchangeDisputeSchema),
+  adminExchangeController.resolveAdminExchangeDispute
 )
 
 router.get(

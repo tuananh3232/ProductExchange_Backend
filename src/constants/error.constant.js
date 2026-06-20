@@ -64,6 +64,19 @@ const ERRORS = {
     PAYMENT_REQUIRED: 'Order must be paid before it can be confirmed',
   },
 
+  EXCHANGE: {
+    NOT_FOUND: 'Exchange offer not found',
+    INVALID_PARTICIPANT: 'You are not a participant in this exchange offer',
+    PRODUCT_NOT_ELIGIBLE: 'Product is not eligible for exchange',
+    SELF_EXCHANGE_NOT_ALLOWED: 'Cannot exchange with your own product',
+    SHOP_PRODUCT_NOT_ALLOWED: 'Shop product cannot join exchange',
+    KYC_REQUIRED: 'Both sellers must have approved KYC',
+    INVALID_STATUS_TRANSITION: 'Invalid exchange status transition',
+    PAYMENT_REQUIRED: 'Exchange payment is required before continuing',
+    ALREADY_PAID: 'Exchange difference has already been paid',
+    DISPUTE_REQUIRED: 'Exchange must be in dispute for admin resolution',
+  },
+
   CONVERSATION: {
     AUTHENTICATION_REQUIRED: 'Authentication required',
     AUTHENTICATION_FAILED: 'Authentication failed',
