@@ -17,6 +17,9 @@ import { PAYMENT_STATUS, SETTLEMENT_STATUS } from '../../constants/status.consta
 import { previewFee } from '../fee-policy/fee-policy.service.js'
 import * as walletRepo from '../../repositories/wallet/wallet.repository.js'
 
+const STUCK_SETTLEMENT_STATUSES = [SETTLEMENT_STATUS.PENDING, SETTLEMENT_STATUS.HELD, SETTLEMENT_STATUS.DISPUTED]
+const STUCK_SETTLEMENT_HOURS = 24
+
 const buildCsv = (rows) => {
   const header = [
     'transactionId',
@@ -27,6 +30,8 @@ const buildCsv = (rows) => {
     'platformFee',
     'netSettlementAmount',
     'settlementStatus',
+    'reconciliationState',
+    'reconciliationIssues',
     'createdAt',
   ]
   const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
@@ -43,6 +48,8 @@ const buildCsv = (rows) => {
         row.platformFee,
         row.netSettlementAmount,
         row.settlementStatus,
+        row.monitoring?.reconciliationState || 'ok',
+        (row.monitoring?.reconciliationIssues || []).join('|'),
         row.createdAt,
       ].map(escapeCell).join(',')
     ),
@@ -57,6 +64,87 @@ const buildLedgerFilter = (query = {}) => {
   if (query.orderId) filter.order = query.orderId
 
   return filter
+}
+
+const isStuckSettlement = (transaction) => {
+  if (!STUCK_SETTLEMENT_STATUSES.includes(transaction.settlementStatus)) {
+    return false
+  }
+
+  const createdAt = transaction.createdAt ? new Date(transaction.createdAt) : null
+  if (!createdAt || Number.isNaN(createdAt.getTime())) {
+    return false
+  }
+
+  return Date.now() - createdAt.getTime() >= STUCK_SETTLEMENT_HOURS * 60 * 60 * 1000
+}
+
+const buildMonitoringForTransaction = (transaction, entries = []) => {
+  const reconciliationIssues = []
+
+  if (!entries.length) {
+    reconciliationIssues.push('missing_entries')
+  }
+
+  if (!entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.CLEARING)) {
+    reconciliationIssues.push('missing_clearing_entry')
+  }
+
+  if (transaction.platformFee > 0 && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.REVENUE)) {
+    reconciliationIssues.push('missing_revenue_entry')
+  }
+
+  if (isStuckSettlement(transaction)) {
+    reconciliationIssues.push('stuck_settlement')
+  }
+
+  return {
+    reconciliationState: reconciliationIssues.length ? 'issue' : 'ok',
+    reconciliationIssues,
+    isStuckSettlement: reconciliationIssues.includes('stuck_settlement'),
+    entryCount: entries.length,
+  }
+}
+
+const enrichLedgerTransactionsWithMonitoring = async (transactions) => {
+  if (!transactions.length) {
+    return []
+  }
+
+  const ledgerTransactionIds = transactions.map((transaction) => transaction._id)
+  const entries = await LedgerEntry.find({ ledgerTransaction: { $in: ledgerTransactionIds } }).lean()
+  const entriesByTransactionId = new Map()
+
+  for (const entry of entries) {
+    const key = String(entry.ledgerTransaction)
+    const current = entriesByTransactionId.get(key) || []
+    current.push(entry)
+    entriesByTransactionId.set(key, current)
+  }
+
+  return transactions.map((transaction) => {
+    const transactionEntries = entriesByTransactionId.get(String(transaction._id)) || []
+    return {
+      ...transaction,
+      monitoring: buildMonitoringForTransaction(transaction, transactionEntries),
+    }
+  })
+}
+
+const applyMonitoringFilter = (transactions, query = {}) => {
+  if (!query.reconciliationState || query.reconciliationState === 'all') {
+    return transactions
+  }
+
+  if (query.reconciliationState === 'issue') {
+    return transactions.filter((transaction) => transaction.monitoring?.reconciliationState === 'issue')
+  }
+
+  if (query.reconciliationState === 'stuck') {
+    return transactions.filter((transaction) => transaction.monitoring?.isStuckSettlement)
+  }
+
+  return transactions
 }
 
 const getPlatformWallet = async (walletKey, session = null) =>
@@ -484,18 +572,102 @@ export const getPlatformWalletSummary = async () => {
   }
 }
 
+export const getPlatformLedgerReconciliationSummary = async () => {
+  const [clearingWallet, revenueWallet, clearingEntries, revenueEntries, stuckTransactions, missingEntryTransactions] = await Promise.all([
+    getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING),
+    getPlatformWallet(PLATFORM_WALLET_KEYS.REVENUE),
+    LedgerEntry.aggregate([
+      { $match: { walletKey: PLATFORM_WALLET_KEYS.CLEARING } },
+      {
+        $group: {
+          _id: null,
+          expectedBalance: {
+            $sum: {
+              $cond: [{ $eq: ['$direction', LEDGER_ENTRY_DIRECTION.CREDIT] }, '$amount', { $multiply: ['$amount', -1] }],
+            },
+          },
+        },
+      },
+    ]),
+    LedgerEntry.aggregate([
+      { $match: { walletKey: PLATFORM_WALLET_KEYS.REVENUE } },
+      {
+        $group: {
+          _id: null,
+          expectedBalance: {
+            $sum: {
+              $cond: [{ $eq: ['$direction', LEDGER_ENTRY_DIRECTION.CREDIT] }, '$amount', { $multiply: ['$amount', -1] }],
+            },
+          },
+        },
+      },
+    ]),
+    LedgerTransaction.find({ settlementStatus: { $in: STUCK_SETTLEMENT_STATUSES } })
+      .sort({ createdAt: 1 })
+      .limit(10)
+      .lean(),
+    LedgerTransaction.aggregate([
+      {
+        $lookup: {
+          from: 'ledgerentries',
+          localField: '_id',
+          foreignField: 'ledgerTransaction',
+          as: 'entries',
+        },
+      },
+      { $match: { entries: { $size: 0 } } },
+      { $count: 'count' },
+    ]),
+  ])
+
+  const expectedClearingBalance = clearingEntries[0]?.expectedBalance || 0
+  const expectedRevenueBalance = revenueEntries[0]?.expectedBalance || 0
+  const clearingDrift = Number(clearingWallet.balance || 0) - Number(expectedClearingBalance)
+  const revenueDrift = Number(revenueWallet.balance || 0) - Number(expectedRevenueBalance)
+  const stuckItems = stuckTransactions.filter(isStuckSettlement)
+
+  return {
+    walletDrift: {
+      clearing: {
+        actualBalance: clearingWallet.balance || 0,
+        expectedBalance: expectedClearingBalance,
+        driftAmount: clearingDrift,
+        hasDrift: clearingDrift !== 0,
+      },
+      revenue: {
+        actualBalance: revenueWallet.balance || 0,
+        expectedBalance: expectedRevenueBalance,
+        driftAmount: revenueDrift,
+        hasDrift: revenueDrift !== 0,
+      },
+    },
+    issueCounts: {
+      missingEntryTransactions: missingEntryTransactions[0]?.count || 0,
+      stuckSettlements: stuckItems.length,
+      walletDriftIssues: [clearingDrift !== 0, revenueDrift !== 0].filter(Boolean).length,
+    },
+    stuckTransactions: stuckItems.map((transaction) => ({
+      _id: transaction._id,
+      transactionType: transaction.transactionType,
+      settlementStatus: transaction.settlementStatus,
+      createdAt: transaction.createdAt,
+      referenceType: transaction.referenceType,
+      referenceId: transaction.referenceId,
+      monitoring: buildMonitoringForTransaction(transaction, []),
+    })),
+  }
+}
+
 export const getPlatformLedgerTransactions = async (query, { page, limit, skip, sortBy, sortOrder }) => {
   const filter = buildLedgerFilter(query)
+  const baseTransactions = await LedgerTransaction.find(filter)
+    .populate('order', 'paymentRef totalAmount paymentStatus grossAmount totalPlatformFee netSettlementAmount settlementStatus')
+    .sort({ [sortBy]: sortOrder })
+    .lean()
 
-  const [transactions, total] = await Promise.all([
-    LedgerTransaction.find(filter)
-      .populate('order', 'paymentRef totalAmount paymentStatus grossAmount totalPlatformFee netSettlementAmount settlementStatus')
-      .sort({ [sortBy]: sortOrder })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    LedgerTransaction.countDocuments(filter),
-  ])
+  const monitoredTransactions = applyMonitoringFilter(await enrichLedgerTransactionsWithMonitoring(baseTransactions), query)
+  const transactions = monitoredTransactions.slice(skip, skip + limit)
+  const total = monitoredTransactions.length
 
   return {
     transactions,
@@ -513,18 +685,24 @@ export const getPlatformLedgerTransactionById = async (transactionId) => {
   }
 
   const entries = await LedgerEntry.find({ ledgerTransaction: transactionId }).sort({ createdAt: 1 }).lean()
-
-  return { transaction, entries }
+  return {
+    transaction: {
+      ...transaction,
+      monitoring: buildMonitoringForTransaction(transaction, entries),
+    },
+    entries,
+  }
 }
 
 export const exportPlatformLedgerTransactions = async (query) => {
   const rows = await LedgerTransaction.find(buildLedgerFilter(query))
     .sort({ createdAt: -1 })
     .lean()
+  const monitoredRows = applyMonitoringFilter(await enrichLedgerTransactionsWithMonitoring(rows), query)
 
   return {
     fileName: `platform-ledger-${new Date().toISOString().slice(0, 10)}.csv`,
     contentType: 'text/csv',
-    csv: buildCsv(rows),
+    csv: buildCsv(monitoredRows),
   }
 }

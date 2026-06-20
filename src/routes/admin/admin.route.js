@@ -1146,6 +1146,13 @@ router.get(
 )
 
 router.get(
+  '/platform-ledger/reconciliation',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.getPlatformLedgerReconciliationSummary
+)
+
+router.get(
   '/platform-ledger/:transactionId',
   authenticate,
   requireAdmin,

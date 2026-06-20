@@ -26,9 +26,12 @@ import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repo
 const EXCHANGE_LIST_POPULATE = [
   { path: 'requesterSeller', select: 'name email avatar' },
   { path: 'receiverSeller', select: 'name email avatar' },
-  { path: 'requesterProduct', select: 'title price status images seller shop ownerType' },
-  { path: 'receiverProduct', select: 'title price status images seller shop ownerType' },
+  { path: 'requesterProduct', select: 'title price status images seller shop ownerType category', populate: { path: 'category', select: 'name slug' } },
+  { path: 'receiverProduct', select: 'title price status images seller shop ownerType category', populate: { path: 'category', select: 'name slug' } },
 ]
+
+const HIGH_VALUE_EXCHANGE_THRESHOLD = 5000000
+const WATCHLIST_CATEGORY_KEYWORDS = ['dien-tu', 'điện tử', 'guong', 'gương', 'gom', 'gốm', 'glass', 'fragile']
 
 const notifyExchange = (recipient, type, exchangeOffer, message, sender = null) =>
   notifySafely({
@@ -136,6 +139,34 @@ const getExchangeOfferOrThrow = async (exchangeOfferId) => {
 }
 
 const populateExchangeOffer = (query) => EXCHANGE_LIST_POPULATE.reduce((current, item) => current.populate(item), query)
+
+const matchesWatchlistCategory = (category) => {
+  const source = [category?.slug, category?.name].filter(Boolean).join(' ').toLowerCase()
+  return WATCHLIST_CATEGORY_KEYWORDS.some((keyword) => source.includes(keyword))
+}
+
+const buildExchangeRiskSummary = (exchangeOffer) => {
+  const totalExposure = Number(exchangeOffer.cashDifferenceAmount || 0) + Number(exchangeOffer.platformFee || 0)
+  const hasCategoryRisk = [exchangeOffer.requesterProduct, exchangeOffer.receiverProduct]
+    .filter((product) => product && typeof product !== 'string')
+    .some((product) => matchesWatchlistCategory(product.category))
+
+  const flags = []
+  if (totalExposure >= HIGH_VALUE_EXCHANGE_THRESHOLD) flags.push('high_value')
+  if (hasCategoryRisk) flags.push('category_watchlist')
+
+  return {
+    level: flags.includes('high_value') ? 'high' : flags.length ? 'medium' : 'low',
+    flags,
+    totalExposure,
+    isHighValue: flags.includes('high_value'),
+  }
+}
+
+const withExchangeRiskSummary = (exchangeOffer) => ({
+  ...(typeof exchangeOffer.toObject === 'function' ? exchangeOffer.toObject() : exchangeOffer),
+  riskSummary: buildExchangeRiskSummary(exchangeOffer),
+})
 
 const getPopulatedExchangeOfferById = async (exchangeOfferId) => {
   const query = ExchangeOffer.findById(exchangeOfferId)
@@ -597,6 +628,12 @@ export const acceptExchangeOffer = async (exchangeOfferId, userContext) => {
 export const payExchangeDifference = async (exchangeOfferId, userContext) => {
   const exchangeOffer = await getExchangeOfferOrThrow(exchangeOfferId)
   assertParticipant(exchangeOffer, userContext._id)
+  if (
+    exchangeOffer.paidAt &&
+    [EXCHANGE_STATUS.PAID, EXCHANGE_STATUS.SHIPPED, EXCHANGE_STATUS.COMPLETED, EXCHANGE_STATUS.DISPUTED].includes(exchangeOffer.status)
+  ) {
+    return getPopulatedExchangeOfferById(exchangeOffer._id)
+  }
   assertStatusIn(exchangeOffer, [EXCHANGE_STATUS.ACCEPTED])
 
   if (!exchangeOffer.cashDifferencePayer || String(exchangeOffer.cashDifferencePayer) !== String(userContext._id)) {
@@ -749,15 +786,18 @@ export const getAdminExchangeOffers = async (query, { page, limit, skip, sortBy,
   ])
 
   return {
-    exchangeOffers,
+    exchangeOffers: exchangeOffers.map(withExchangeRiskSummary),
     meta: buildPaginationMeta(total, page, limit),
   }
 }
 
-export const getAdminExchangeOfferById = async (exchangeOfferId) => getPopulatedExchangeOfferById(exchangeOfferId)
+export const getAdminExchangeOfferById = async (exchangeOfferId) => withExchangeRiskSummary(await getPopulatedExchangeOfferById(exchangeOfferId))
 
 export const resolveAdminExchangeDispute = async (exchangeOfferId, payload, userContext) => {
   const exchangeOffer = await getExchangeOfferOrThrow(exchangeOfferId)
+  if (exchangeOffer.resolvedAt && exchangeOffer.resolution !== 'none') {
+    return getAdminExchangeOfferById(exchangeOfferId)
+  }
   assertStatusIn(exchangeOffer, [EXCHANGE_STATUS.DISPUTED])
 
   if (payload.resolution === 'complete') {

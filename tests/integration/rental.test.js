@@ -407,6 +407,109 @@ describe('rental integration', () => {
     ])
   })
 
+  it('supports idempotent retry for rental payment and admin claim resolution while exposing reconciliation summary', async () => {
+    const [{ user: seller, token: sellerToken }, { user: renter, token: renterToken }, { user: admin, token: adminToken }] = await Promise.all([
+      createApprovedSeller(),
+      loginMember(),
+      loginAdmin(),
+    ])
+
+    const category = await createSampleCategory()
+    await seedRentalFeePolicy({ adminId: admin._id, categoryId: category._id, fixedFee: 20000 })
+    const product = await createSellerProduct(seller._id, { categoryId: category._id, price: 750000, title: 'Rental Lamp' })
+
+    await UserWallet.create({ user: renter._id, balance: 1000000, totalTopUp: 1000000 })
+
+    const listing = await createRentalListing({
+      ownerToken: sellerToken,
+      productId: product._id.toString(),
+      dailyRate: 100000,
+      depositAmount: 300000,
+      lateFeePerDay: 25000,
+    })
+
+    const createResponse = await request(app)
+      .post(`${api}/rentals/bookings`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({ listingId: listing._id, startDate: '2026-06-10', endDate: '2026-06-11' })
+
+    expect(createResponse.status).toBe(201)
+    const bookingId = createResponse.body.data.rentalBooking._id
+
+    await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/pay`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .expect(200)
+
+    const secondPayResponse = await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/pay`)
+      .set('Authorization', `Bearer ${renterToken}`)
+
+    expect(secondPayResponse.status).toBe(200)
+    expect(secondPayResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.CONFIRMED)
+
+    await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/handover`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ note: 'Bàn giao đủ phụ kiện' })
+      .expect(200)
+
+    await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/return`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({ note: 'Trả đúng hạn', returnedAt: '2026-06-11T09:00:00.000Z' })
+      .expect(200)
+
+    const claimResponse = await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/claims`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ reason: 'Thiếu một phụ kiện đi kèm', requestedAmount: 70000 })
+
+    expect(claimResponse.status).toBe(201)
+    const claimId = claimResponse.body.data.rentalClaim._id
+
+    await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/confirm-return`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ note: 'Giữ cọc để chờ admin review claim' })
+      .expect(200)
+
+    await request(app)
+      .post(`${api}/admin/rental-claims/${claimId}/resolve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ approvedAmount: 70000, note: 'Duyệt claim lần đầu' })
+      .expect(200)
+
+    const secondResolveResponse = await request(app)
+      .post(`${api}/admin/rental-claims/${claimId}/resolve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ approvedAmount: 70000, note: 'Retry resolve cùng payload' })
+
+    expect(secondResolveResponse.status).toBe(200)
+    expect(secondResolveResponse.body.data.rentalClaim.status).toBe(RENTAL_CLAIM_STATUS.APPROVED)
+
+    const reconciliationResponse = await request(app)
+      .get(`${api}/admin/platform-ledger/reconciliation`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(reconciliationResponse.status).toBe(200)
+    expect(reconciliationResponse.body.data.issueCounts.stuckSettlements).toBeGreaterThanOrEqual(0)
+
+    const [renterWallet, paymentTransactions, claimSettlementTx] = await Promise.all([
+      UserWallet.findOne({ user: renter._id }).lean(),
+      UserWalletTransaction.find({ user: renter._id, type: USER_WALLET_TRANSACTION_TYPE.RENTAL_PAYMENT }).lean(),
+      LedgerTransaction.findOne({
+        referenceType: LEDGER_REFERENCE_TYPE.RENTAL_CLAIM,
+        referenceId: claimId,
+        transactionType: LEDGER_TRANSACTION_TYPE.RENTAL_CLAIM_SETTLEMENT,
+      }).lean(),
+    ])
+
+    expect(paymentTransactions).toHaveLength(1)
+    expect(renterWallet.balance).toBe(730000)
+    expect(claimSettlementTx?.netSettlementAmount).toBe(70000)
+  })
+
   it('allows shop owner to create a rental listing and read booking detail for a shop-owned product', async () => {
     const [{ user: shopOwner, token: shopToken }, { user: renter, token: renterToken }, { user: admin }] = await Promise.all([
       loginShopOwner(),

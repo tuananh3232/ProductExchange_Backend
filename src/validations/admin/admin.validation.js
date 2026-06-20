@@ -233,6 +233,7 @@ export const adminPlatformLedgerQuerySchema = Joi.object({
   transactionType: Joi.string().valid(...LEDGER_TRANSACTION_TYPE_ENUM),
   settlementStatus: Joi.string().valid(...['pending', 'held', 'settled', 'refunded', 'disputed']),
   orderId: objectId,
+  reconciliationState: Joi.string().valid('all', 'issue', 'stuck'),
 })
 
 export const adminStatsQuerySchema = Joi.object({
@@ -268,7 +269,7 @@ export const adminActivityQuerySchema = Joi.object({
 
 export const adminReportExportQuerySchema = Joi.object({
   type: Joi.string()
-    .valid('users', 'shops', 'orders', 'payments', 'withdrawals', 'user_withdrawals', 'categories')
+    .valid('users', 'shops', 'orders', 'payments', 'withdrawals', 'user_withdrawals', 'categories', 'platform_ledger', 'rental_claims', 'exchange_disputes')
     .required(),
   fromDate: Joi.date().iso().required(),
   toDate: Joi.date().iso().min(Joi.ref('fromDate')).required(),

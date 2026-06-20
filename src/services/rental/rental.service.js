@@ -56,7 +56,50 @@ const RENTAL_CLAIM_POPULATE = [
   { path: 'reviewedByAdmin', select: 'name email' },
 ]
 
+const HIGH_VALUE_RENTAL_THRESHOLD = 5000000
+const WATCHLIST_CATEGORY_KEYWORDS = ['dien-tu', 'điện tử', 'guong', 'gương', 'gom', 'gốm', 'glass', 'fragile']
+
 const populateChain = (query, populate) => populate.reduce((current, item) => current.populate(item), query)
+
+const matchesWatchlistCategory = (category) => {
+  const source = [category?.slug, category?.name].filter(Boolean).join(' ').toLowerCase()
+  return WATCHLIST_CATEGORY_KEYWORDS.some((keyword) => source.includes(keyword))
+}
+
+const withRentalRiskSummary = async (entity) => {
+  const booking = entity.booking || entity
+  const renterId = booking?.renter?._id || booking?.renter
+  const product =
+    entity?.listing?.product && typeof entity.listing.product !== 'string'
+      ? entity.listing.product
+      : booking?.product && typeof booking.product !== 'string'
+        ? booking.product
+        : null
+  const totalExposure = Number(booking?.rentAmount || 0) + Number(booking?.depositAmount || 0) + Number(booking?.lateFeeAmount || 0)
+  const renterDisputeCount = renterId
+    ? await RentalBooking.countDocuments({
+        renter: renterId,
+        status: RENTAL_BOOKING_STATUS.DISPUTED,
+        _id: { $ne: booking?._id || null },
+      })
+    : 0
+
+  const flags = []
+  if (totalExposure >= HIGH_VALUE_RENTAL_THRESHOLD) flags.push('high_value')
+  if (renterDisputeCount > 0) flags.push('renter_watchlist')
+  if (product && matchesWatchlistCategory(product.category)) flags.push('category_watchlist')
+
+  return {
+    ...(typeof entity.toObject === 'function' ? entity.toObject() : entity),
+    riskSummary: {
+      level: flags.includes('high_value') || flags.includes('renter_watchlist') ? 'high' : flags.length ? 'medium' : 'low',
+      flags,
+      totalExposure,
+      renterDisputeCount,
+      isHighValue: flags.includes('high_value'),
+    },
+  }
+}
 
 const appendTimeline = (booking, status, userId, note = '') => {
   booking.timeline = [
@@ -325,7 +368,7 @@ export const listRentalBookings = async (user, query, { page, limit, skip, sortB
   ])
 
   return {
-    rentalBookings: bookings,
+    rentalBookings: await Promise.all(bookings.map((booking) => withRentalRiskSummary(booking))),
     meta: buildPaginationMeta(total, page, limit),
   }
 }
@@ -342,6 +385,21 @@ export const getRentalBookingById = async (bookingId, user) => {
 
 export const payRentalBooking = async (bookingId, user) => {
   const booking = await getBookingByIdOrThrow(bookingId)
+
+  if (
+    booking.paidAt &&
+    [
+      RENTAL_BOOKING_STATUS.CONFIRMED,
+      RENTAL_BOOKING_STATUS.READY_FOR_HANDOVER,
+      RENTAL_BOOKING_STATUS.IN_RENTAL,
+      RENTAL_BOOKING_STATUS.RETURN_PENDING_CONFIRMATION,
+      RENTAL_BOOKING_STATUS.OVERDUE,
+      RENTAL_BOOKING_STATUS.COMPLETED,
+      RENTAL_BOOKING_STATUS.DISPUTED,
+    ].includes(booking.status)
+  ) {
+    return booking
+  }
 
   if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
     throw new AppError('Chỉ người thuê mới được thanh toán booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
@@ -758,7 +816,7 @@ export const createRentalClaim = async (bookingId, payload, user) => {
   appendTimeline(booking, RENTAL_BOOKING_STATUS.DISPUTED, user._id, payload.reason)
   await booking.save()
 
-  return getClaimByIdIncludingInactiveOrThrow(claim._id)
+  return getAdminRentalClaimById(claim._id)
 }
 
 export const listAdminRentalBookings = async (query, { page, limit, skip, sortBy, sortOrder }) => {
@@ -787,15 +845,19 @@ export const listAdminRentalClaims = async (query, { page, limit, skip, sortBy, 
   ])
 
   return {
-    rentalClaims: claims,
+    rentalClaims: await Promise.all(claims.map((claim) => withRentalRiskSummary(claim))),
     meta: buildPaginationMeta(total, page, limit),
   }
 }
 
-export const getAdminRentalClaimById = async (claimId) => getClaimByIdOrThrow(claimId)
+export const getAdminRentalClaimById = async (claimId) => withRentalRiskSummary(await getClaimByIdIncludingInactiveOrThrow(claimId))
 
 export const resolveAdminRentalClaim = async (claimId, payload, adminUser) => {
-  const claim = await getClaimByIdOrThrow(claimId)
+  const claim = await getClaimByIdIncludingInactiveOrThrow(claimId)
+
+  if (claim.reviewedAt && !claim.isActive) {
+    return getAdminRentalClaimById(claimId)
+  }
 
   if (![RENTAL_CLAIM_STATUS.OPEN, RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW, RENTAL_CLAIM_STATUS.WAITING_RENTER_RESPONSE].includes(claim.status)) {
     throw new AppError('Claim không còn ở trạng thái xử lý', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.DISPUTE_REQUIRED)

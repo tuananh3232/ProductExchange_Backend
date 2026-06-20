@@ -32,6 +32,15 @@ export const getPlatformWalletSummary = asyncHandler(async (req, res) => {
   })
 })
 
+export const getPlatformLedgerReconciliationSummary = asyncHandler(async (req, res) => {
+  const summary = await ledgerService.getPlatformLedgerReconciliationSummary()
+
+  sendSuccess(res, {
+    message: 'Lấy tổng hợp đối soát platform ledger thành công',
+    data: summary,
+  })
+})
+
 export const exportPlatformLedger = asyncHandler(async (req, res) => {
   const exported = await ledgerService.exportPlatformLedgerTransactions(req.query)
 
