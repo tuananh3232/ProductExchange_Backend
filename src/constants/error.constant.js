@@ -77,6 +77,20 @@ const ERRORS = {
     DISPUTE_REQUIRED: 'Exchange must be in dispute for admin resolution',
   },
 
+  RENTAL: {
+    LISTING_NOT_FOUND: 'Rental listing not found',
+    BOOKING_NOT_FOUND: 'Rental booking not found',
+    CLAIM_NOT_FOUND: 'Rental claim not found',
+    SELF_RENTAL_NOT_ALLOWED: 'Cannot rent your own product',
+    PRODUCT_NOT_ELIGIBLE: 'Product is not eligible for rental',
+    INVALID_OWNER_CONTEXT: 'Invalid rental owner context',
+    INVALID_STATUS_TRANSITION: 'Invalid rental status transition',
+    OVERLAPPING_BOOKING: 'Rental booking overlaps with an existing booking',
+    PAYMENT_REQUIRED: 'Rental booking payment is required before continuing',
+    CLAIM_OPEN: 'Rental claim is still open',
+    DISPUTE_REQUIRED: 'Rental claim must be under admin review',
+  },
+
   CONVERSATION: {
     AUTHENTICATION_REQUIRED: 'Authentication required',
     AUTHENTICATION_FAILED: 'Authentication failed',
@@ -161,6 +175,6 @@ const ERRORS = {
     INVALID_STATUS: 'Invalid withdrawal request status for this action',
     TRANSFER_PROOF_REQUIRED: 'Transfer proof is required to complete withdrawal',
   },
-};
+}
 
-export default ERRORS;
+export default ERRORS

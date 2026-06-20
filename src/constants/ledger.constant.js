@@ -11,6 +11,9 @@ export const LEDGER_TRANSACTION_TYPE = {
   EXCHANGE_PAYMENT_HOLD: 'exchange_payment_hold',
   EXCHANGE_SETTLEMENT_RELEASE: 'exchange_settlement_release',
   EXCHANGE_REFUND: 'exchange_refund',
+  RENTAL_PAYMENT_HOLD: 'rental_payment_hold',
+  RENTAL_RETURN_SETTLEMENT: 'rental_return_settlement',
+  RENTAL_CLAIM_SETTLEMENT: 'rental_claim_settlement',
 }
 
 export const LEDGER_TRANSACTION_TYPE_ENUM = Object.values(LEDGER_TRANSACTION_TYPE)
@@ -18,6 +21,8 @@ export const LEDGER_TRANSACTION_TYPE_ENUM = Object.values(LEDGER_TRANSACTION_TYP
 export const LEDGER_REFERENCE_TYPE = {
   ORDER: 'order',
   EXCHANGE: 'exchange',
+  RENTAL_BOOKING: 'rental_booking',
+  RENTAL_CLAIM: 'rental_claim',
 }
 
 export const LEDGER_REFERENCE_TYPE_ENUM = Object.values(LEDGER_REFERENCE_TYPE)

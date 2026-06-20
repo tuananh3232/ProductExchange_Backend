@@ -12,6 +12,7 @@ import * as adminAuditController from '../../controllers/admin/admin-audit.contr
 import * as adminFeePolicyController from '../../controllers/admin/admin-fee-policy.controller.js'
 import * as adminPlatformLedgerController from '../../controllers/admin/admin-platform-ledger.controller.js'
 import * as adminExchangeController from '../../controllers/admin/admin-exchange.controller.js'
+import * as adminRentalController from '../../controllers/admin/admin-rental.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
@@ -52,6 +53,11 @@ import {
   adminExchangeOffersQuerySchema,
   adminResolveExchangeDisputeSchema,
 } from '../../validations/exchange/exchange.validation.js'
+import {
+  adminRentalBookingsQuerySchema,
+  adminRentalClaimsQuerySchema,
+  adminResolveRentalClaimSchema,
+} from '../../validations/rental/rental.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import adminStatsRoutes from './stats.route.js'
@@ -1184,6 +1190,39 @@ router.post(
   validateObjectId('exchangeOfferId'),
   validate(adminResolveExchangeDisputeSchema),
   adminExchangeController.resolveAdminExchangeDispute
+)
+
+router.get(
+  '/rentals',
+  authenticate,
+  requireAdmin,
+  validate(adminRentalBookingsQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminRentalController.getAdminRentalBookings
+)
+
+router.get(
+  '/rental-claims',
+  authenticate,
+  requireAdmin,
+  validate(adminRentalClaimsQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminRentalController.getAdminRentalClaims
+)
+
+router.get(
+  '/rental-claims/:rentalClaimId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('rentalClaimId'),
+  adminRentalController.getAdminRentalClaimById
+)
+
+router.post(
+  '/rental-claims/:rentalClaimId/resolve',
+  authenticate,
+  requireAdmin,
+  validateObjectId('rentalClaimId'),
+  validate(adminResolveRentalClaimSchema),
+  adminRentalController.resolveAdminRentalClaim
 )
 
 router.get(
