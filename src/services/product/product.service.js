@@ -313,7 +313,7 @@ export const getProductById = async (id) => {
 export const getAdminProductById = async (id) => {
   const product = await productRepo.findById(id)
   if (!product) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
   return product
 }
@@ -412,7 +412,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
 export const updateAdminProductStatus = async (productId, userContext, { status, reason = '', adminNote = '' }) => {
   const product = await productRepo.findById(productId)
   if (!product) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
   if (status === 'inactive') {
@@ -427,7 +427,7 @@ export const updateAdminProductStatus = async (productId, userContext, { status,
     const allowedStatuses = PRODUCT_STATUS_TRANSITIONS[product.status] || []
     if (!allowedStatuses.includes(status)) {
       throw new AppError(
-        'KhÃ´ng thá»ƒ chuyá»ƒn tráº¡ng thÃ¡i sáº£n pháº©m theo vÃ²ng Ä‘á»i hiá»‡n táº¡i',
+        'Không thể chuyển trạng thái sản phẩm theo vòng đời hiện tại',
         HTTP_STATUS.BAD_REQUEST,
         ERRORS.PRODUCT.INVALID_STATUS_TRANSITION
       )
@@ -459,7 +459,7 @@ export const updateAdminProductStatus = async (productId, userContext, { status,
 export const hideAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
   const product = await productRepo.findById(productId)
   if (!product) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
   const updatedProduct = await productRepo.updateById(productId, {
@@ -489,7 +489,7 @@ export const hideAdminProduct = async (productId, userContext, { reason = '', ad
 export const restoreAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
   const product = await productRepo.findById(productId)
   if (!product) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
   const updatedProduct = await productRepo.updateById(productId, {

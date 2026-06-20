@@ -154,7 +154,7 @@ export const getAdminPayments = async (query, { page, limit, skip, sortBy, sortO
 export const getAdminPaymentById = async (paymentId) => {
   const payment = await paymentRepo.findById(paymentId)
   if (!payment) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
   }
 
   const sanitized = sanitizeAdminPayment(payment, { includeCallback: true })
@@ -175,7 +175,7 @@ export const getAdminPaymentById = async (paymentId) => {
 export const updateAdminPaymentStatus = async (paymentId, userContext, { status, evidence, adminNote = '' }) => {
   const payment = await paymentRepo.findById(paymentId)
   if (!payment) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
   }
 
   if (status === PAYMENT_STATUS.PAID) {
@@ -212,7 +212,7 @@ export const updateAdminPaymentStatus = async (paymentId, userContext, { status,
 export const reconcileAdminPayment = async (paymentId, userContext, { evidence = {}, adminNote = '' } = {}) => {
   const payment = await paymentRepo.findById(paymentId)
   if (!payment) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y giao dá»‹ch thanh toÃ¡n', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
   }
 
   if (payment.reconciliationState === 'matched' && payment.reconciledAt) {

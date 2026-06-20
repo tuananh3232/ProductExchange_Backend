@@ -305,7 +305,7 @@ export const getAdminOrders = async (query, { page, limit, skip, sortBy, sortOrd
 export const getAdminOrderById = async (orderId) => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
   const payment = await paymentRepo.findByOrder(order._id)
   return {
@@ -519,11 +519,11 @@ export const cancelAdminOrder = async (orderId, userContext, { reason = '', admi
 export const refundAdminOrder = async (orderId, userContext, { reason = '', adminNote = '' } = {}) => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
 
   if (order.paymentStatus !== PAYMENT_STATUS.PAID && order.paymentStatus !== PAYMENT_STATUS.REFUND_PENDING) {
-    throw new AppError('ÄÆ¡n hÃ ng khÃ´ng cÃ³ thanh toÃ¡n cáº§n hoÃ n', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
+    throw new AppError('Đơn hàng không có thanh toán cần hoàn', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
   }
 
   if (order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {

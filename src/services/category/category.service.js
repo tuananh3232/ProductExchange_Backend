@@ -53,7 +53,7 @@ export const getCategoryById = async (id) => {
 export const getAdminCategoryById = async (id) => {
   const category = await categoryRepo.findById(id)
   if (!category) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y danh má»¥c', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Không tìm thấy danh mục', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
   return category
 }
@@ -86,7 +86,7 @@ export const deleteCategory = async (id) => {
 export const updateAdminCategoryStatus = async (id, { isActive, reason = '', adminNote = '' }, actor) => {
   const category = await categoryRepo.findById(id)
   if (!category) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y danh má»¥c', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Không tìm thấy danh mục', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   const updated = await categoryRepo.updateById(id, {
