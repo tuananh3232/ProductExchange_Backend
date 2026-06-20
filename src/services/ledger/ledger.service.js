@@ -1,5 +1,4 @@
 import Order from '../../models/order.model.js'
-import Product from '../../models/product.model.js'
 import PlatformWallet from '../../models/platform-wallet.model.js'
 import LedgerTransaction from '../../models/ledger-transaction.model.js'
 import LedgerEntry from '../../models/ledger-entry.model.js'
@@ -31,6 +30,7 @@ const buildCsv = (rows) => {
     'createdAt',
   ]
   const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
   return [
     header.join(','),
     ...rows.map((row) =>
@@ -49,6 +49,16 @@ const buildCsv = (rows) => {
   ].join('\n')
 }
 
+const buildLedgerFilter = (query = {}) => {
+  const filter = {}
+
+  if (query.transactionType) filter.transactionType = query.transactionType
+  if (query.settlementStatus) filter.settlementStatus = query.settlementStatus
+  if (query.orderId) filter.order = query.orderId
+
+  return filter
+}
+
 const getPlatformWallet = async (walletKey, session = null) =>
   PlatformWallet.findOneAndUpdate(
     { walletKey },
@@ -57,9 +67,10 @@ const getPlatformWallet = async (walletKey, session = null) =>
   )
 
 const mutatePlatformWallet = async (walletKey, direction, amount, session = null) => {
-  const inc = direction === LEDGER_ENTRY_DIRECTION.CREDIT
-    ? { balance: amount, totalIn: amount }
-    : { balance: -amount, totalOut: amount }
+  const inc =
+    direction === LEDGER_ENTRY_DIRECTION.CREDIT
+      ? { balance: amount, totalIn: amount }
+      : { balance: -amount, totalOut: amount }
 
   return PlatformWallet.findOneAndUpdate(
     { walletKey },
@@ -71,6 +82,7 @@ const mutatePlatformWallet = async (walletKey, direction, amount, session = null
 const resolveFallbackFeePreview = (baseAmount, ownerType) => {
   const percent = ownerType === 'SHOP' ? 5 : 5
   const calculatedFee = Math.round((Number(baseAmount) * percent) / 100)
+
   return {
     feePolicyId: null,
     transactionType: 'SALE',
@@ -158,31 +170,39 @@ const createLedgerTransactionDetails = async ({
   const canSettleToShopWallet = Boolean(order.shop)
   const settlementStatus = canSettleToShopWallet ? SETTLEMENT_STATUS.SETTLED : SETTLEMENT_STATUS.HELD
 
-  const ledgerTransaction = await LedgerTransaction.create([
-    {
-      transactionType,
-      referenceType: 'order',
-      referenceId: order._id,
-      order: order._id,
-      grossAmount,
-      platformFee,
-      netSettlementAmount,
-      settlementStatus,
-      source,
-      description: `Ledger posting for order ${order._id}`,
-      metadata: {
-        paymentMethod: order.paymentMethod,
-        paymentProvider: order.paymentProvider,
-        shopId: order.shop?._id || order.shop || null,
-        sellerId: order.seller?._id || order.seller || null,
+  const ledgerTransaction = await LedgerTransaction.create(
+    [
+      {
+        transactionType,
+        referenceType: 'order',
+        referenceId: order._id,
+        order: order._id,
+        grossAmount,
+        platformFee,
+        netSettlementAmount,
+        settlementStatus,
+        source,
+        description: `Ledger posting for order ${order._id}`,
+        metadata: {
+          paymentMethod: order.paymentMethod,
+          paymentProvider: order.paymentProvider,
+          shopId: order.shop?._id || order.shop || null,
+          sellerId: order.seller?._id || order.seller || null,
+        },
       },
-    },
-  ], session ? { session } : {})
+    ],
+    session ? { session } : {}
+  )
 
   const tx = ledgerTransaction[0]
   const entries = []
 
-  const clearingAfterGross = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.CREDIT, grossAmount, session)
+  const clearingAfterGross = await mutatePlatformWallet(
+    PLATFORM_WALLET_KEYS.CLEARING,
+    LEDGER_ENTRY_DIRECTION.CREDIT,
+    grossAmount,
+    session
+  )
   entries.push({
     ledgerTransaction: tx._id,
     walletKey: PLATFORM_WALLET_KEYS.CLEARING,
@@ -195,7 +215,12 @@ const createLedgerTransactionDetails = async ({
   })
 
   if (platformFee > 0) {
-    const clearingAfterFee = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.DEBIT, platformFee, session)
+    const clearingAfterFee = await mutatePlatformWallet(
+      PLATFORM_WALLET_KEYS.CLEARING,
+      LEDGER_ENTRY_DIRECTION.DEBIT,
+      platformFee,
+      session
+    )
     entries.push({
       ledgerTransaction: tx._id,
       walletKey: PLATFORM_WALLET_KEYS.CLEARING,
@@ -206,7 +231,12 @@ const createLedgerTransactionDetails = async ({
       note: 'Move platform fee out of clearing wallet',
     })
 
-    const revenueAfterFee = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.REVENUE, LEDGER_ENTRY_DIRECTION.CREDIT, platformFee, session)
+    const revenueAfterFee = await mutatePlatformWallet(
+      PLATFORM_WALLET_KEYS.REVENUE,
+      LEDGER_ENTRY_DIRECTION.CREDIT,
+      platformFee,
+      session
+    )
     entries.push({
       ledgerTransaction: tx._id,
       walletKey: PLATFORM_WALLET_KEYS.REVENUE,
@@ -219,7 +249,12 @@ const createLedgerTransactionDetails = async ({
   }
 
   if (canSettleToShopWallet && netSettlementAmount > 0) {
-    const clearingAfterNet = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.DEBIT, netSettlementAmount, session)
+    const clearingAfterNet = await mutatePlatformWallet(
+      PLATFORM_WALLET_KEYS.CLEARING,
+      LEDGER_ENTRY_DIRECTION.DEBIT,
+      netSettlementAmount,
+      session
+    )
     entries.push({
       ledgerTransaction: tx._id,
       walletKey: PLATFORM_WALLET_KEYS.CLEARING,
@@ -324,24 +359,27 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
   const order = await resolveOrderForSettlement(orderId)
 
   return runMongoTransaction(async (session) => {
-    const reversalDocs = await LedgerTransaction.create([
-      {
-        transactionType: LEDGER_TRANSACTION_TYPE.REFUND_REVERSAL,
-        referenceType: 'order',
-        referenceId: order._id,
-        order: order._id,
-        grossAmount: settlement.grossAmount,
-        platformFee: settlement.platformFee,
-        netSettlementAmount: settlement.netSettlementAmount,
-        settlementStatus: SETTLEMENT_STATUS.REFUNDED,
-        source,
-        description: `Refund reversal for order ${order._id}`,
-        metadata: {
-          reason,
-          reverseLedgerTransactionId: settlement._id,
+    const reversalDocs = await LedgerTransaction.create(
+      [
+        {
+          transactionType: LEDGER_TRANSACTION_TYPE.REFUND_REVERSAL,
+          referenceType: 'order',
+          referenceId: order._id,
+          order: order._id,
+          grossAmount: settlement.grossAmount,
+          platformFee: settlement.platformFee,
+          netSettlementAmount: settlement.netSettlementAmount,
+          settlementStatus: SETTLEMENT_STATUS.REFUNDED,
+          source,
+          description: `Refund reversal for order ${order._id}`,
+          metadata: {
+            reason,
+            reverseLedgerTransactionId: settlement._id,
+          },
         },
-      },
-    ], session ? { session } : {})
+      ],
+      session ? { session } : {}
+    )
 
     const reversal = reversalDocs[0]
     const entries = []
@@ -355,7 +393,13 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
           ERRORS.WALLET.INSUFFICIENT_BALANCE
         )
       }
-      const clearingAfterNet = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.CREDIT, settlement.netSettlementAmount, session)
+
+      const clearingAfterNet = await mutatePlatformWallet(
+        PLATFORM_WALLET_KEYS.CLEARING,
+        LEDGER_ENTRY_DIRECTION.CREDIT,
+        settlement.netSettlementAmount,
+        session
+      )
       entries.push({
         ledgerTransaction: reversal._id,
         walletKey: PLATFORM_WALLET_KEYS.CLEARING,
@@ -369,7 +413,12 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
     }
 
     if (settlement.platformFee > 0) {
-      const revenueAfterReverse = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.REVENUE, LEDGER_ENTRY_DIRECTION.DEBIT, settlement.platformFee, session)
+      const revenueAfterReverse = await mutatePlatformWallet(
+        PLATFORM_WALLET_KEYS.REVENUE,
+        LEDGER_ENTRY_DIRECTION.DEBIT,
+        settlement.platformFee,
+        session
+      )
       entries.push({
         ledgerTransaction: reversal._id,
         walletKey: PLATFORM_WALLET_KEYS.REVENUE,
@@ -380,7 +429,12 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
         note: 'Reverse platform fee revenue',
       })
 
-      const clearingAfterFee = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.CREDIT, settlement.platformFee, session)
+      const clearingAfterFee = await mutatePlatformWallet(
+        PLATFORM_WALLET_KEYS.CLEARING,
+        LEDGER_ENTRY_DIRECTION.CREDIT,
+        settlement.platformFee,
+        session
+      )
       entries.push({
         ledgerTransaction: reversal._id,
         walletKey: PLATFORM_WALLET_KEYS.CLEARING,
@@ -410,8 +464,14 @@ export const getPlatformWalletSummary = async () => {
   const [clearingWallet, revenueWallet, settledCount, heldCount] = await Promise.all([
     getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING),
     getPlatformWallet(PLATFORM_WALLET_KEYS.REVENUE),
-    LedgerTransaction.countDocuments({ transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT, settlementStatus: SETTLEMENT_STATUS.SETTLED }),
-    LedgerTransaction.countDocuments({ transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT, settlementStatus: SETTLEMENT_STATUS.HELD }),
+    LedgerTransaction.countDocuments({
+      transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
+      settlementStatus: SETTLEMENT_STATUS.SETTLED,
+    }),
+    LedgerTransaction.countDocuments({
+      transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
+      settlementStatus: SETTLEMENT_STATUS.HELD,
+    }),
   ])
 
   return {
@@ -425,10 +485,7 @@ export const getPlatformWalletSummary = async () => {
 }
 
 export const getPlatformLedgerTransactions = async (query, { page, limit, skip, sortBy, sortOrder }) => {
-  const filter = {}
-  if (query.transactionType) filter.transactionType = query.transactionType
-  if (query.settlementStatus) filter.settlementStatus = query.settlementStatus
-  if (query.orderId) filter.order = query.orderId
+  const filter = buildLedgerFilter(query)
 
   const [transactions, total] = await Promise.all([
     LedgerTransaction.find(filter)
@@ -461,7 +518,7 @@ export const getPlatformLedgerTransactionById = async (transactionId) => {
 }
 
 export const exportPlatformLedgerTransactions = async (query) => {
-  const rows = await LedgerTransaction.find(query.orderId ? { order: query.orderId } : {})
+  const rows = await LedgerTransaction.find(buildLedgerFilter(query))
     .sort({ createdAt: -1 })
     .lean()
 
