@@ -19,7 +19,9 @@ const ledgerTransactionModel = {
 
 const ledgerEntryModel = {
   insertMany: jest.fn(),
-  find: jest.fn(),
+  find: jest.fn().mockReturnValue({
+    lean: jest.fn().mockResolvedValue([]),
+  }),
 }
 
 const feeSnapshotModel = {
