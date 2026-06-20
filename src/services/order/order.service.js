@@ -16,6 +16,7 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 import { ROLES } from '../../constants/role.constant.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import * as ledgerService from '../ledger/ledger.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -195,6 +196,10 @@ export const createOrder = async (buyerId, payload) => {
     quantity,
     unitPrice,
     totalAmount,
+    grossAmount: totalAmount,
+    totalPlatformFee: 0,
+    netSettlementAmount: totalAmount,
+    settlementStatus: 'pending',
     status: ORDER_STATUS.PENDING,
     shippingAddress,
     note: payload.note || '',
@@ -326,8 +331,20 @@ export const getAdminOrderById = async (orderId) => {
           transactionRef: payment.transactionRef,
           responseCode: payment.responseCode,
           paidAt: payment.paidAt,
+          settlementStatus: order.settlementStatus,
+          grossAmount: order.grossAmount,
+          totalPlatformFee: order.totalPlatformFee,
+          netSettlementAmount: order.netSettlementAmount,
         }
       : null,
+    settlementSummary: {
+      grossAmount: order.grossAmount,
+      totalPlatformFee: order.totalPlatformFee,
+      netSettlementAmount: order.netSettlementAmount,
+      settlementStatus: order.settlementStatus,
+      feePolicyId: order.feePolicyId || null,
+      feeSnapshotId: order.feeSnapshotId || null,
+    },
     statusHistory: order.history || [],
     cancellationInformation: order.status === ORDER_STATUS.CANCELLED ? order.history?.filter((item) => item.status === ORDER_STATUS.CANCELLED) || [] : [],
     refundInformation: {
@@ -406,6 +423,9 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   const updated = await orderRepo.updateById(orderId, cancelUpdate)
 
   await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+  if (order.paymentStatus === PAYMENT_STATUS.PAID || order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
+    await ledgerService.reverseOrderSettlement(orderId, { source: 'order_cancel', reason: note || 'Order cancelled' })
+  }
 
   // Tự động hoàn ví nếu đơn thanh toán bằng ví
   if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
@@ -445,9 +465,6 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
     await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'sold' })
-    if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-      await walletService.creditFromOrder(updated)
-    }
   }
 
   if (nextStatus === ORDER_STATUS.CANCELLED) {
@@ -528,6 +545,8 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
       })
     }
   }
+
+  await ledgerService.reverseOrderSettlement(orderId, { source: 'admin_refund', reason: reason || adminNote || 'Admin refund requested' })
 
   await writeAuditLog({
     adminId: userContext._id,

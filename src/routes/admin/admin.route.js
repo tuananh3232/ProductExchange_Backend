@@ -10,6 +10,7 @@ import * as paymentController from '../../controllers/payment/payment.controller
 import * as categoryController from '../../controllers/category/category.controller.js'
 import * as adminAuditController from '../../controllers/admin/admin-audit.controller.js'
 import * as adminFeePolicyController from '../../controllers/admin/admin-fee-policy.controller.js'
+import * as adminPlatformLedgerController from '../../controllers/admin/admin-platform-ledger.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
@@ -25,6 +26,7 @@ import {
   adminFeePolicyCreateSchema,
   adminFeePolicyPreviewSchema,
   adminFeePolicyUpdateSchema,
+  adminPlatformLedgerQuerySchema,
   adminCategoryStatusSchema,
   adminCategoryUpdateSchema,
   adminOrderActionSchema,
@@ -1122,6 +1124,36 @@ router.post(
   requireAdmin,
   validateObjectId('feePolicyId'),
   adminFeePolicyController.disableFeePolicy
+)
+
+router.get(
+  '/platform-ledger',
+  authenticate,
+  requireAdmin,
+  validate(adminPlatformLedgerQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminPlatformLedgerController.getPlatformLedgerTransactions
+)
+
+router.get(
+  '/platform-ledger/:transactionId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('transactionId'),
+  adminPlatformLedgerController.getPlatformLedgerTransactionById
+)
+
+router.get(
+  '/platform-wallet/summary',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.getPlatformWalletSummary
+)
+
+router.get(
+  '/platform-wallet/export',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.exportPlatformLedger
 )
 
 router.get(

@@ -33,6 +33,16 @@ export {
   FEE_ROUNDING,
   FEE_ROUNDING_ENUM,
 } from './fee.constant.js';
+export {
+  PLATFORM_WALLET_KEYS,
+  PLATFORM_WALLET_KEY_ENUM,
+  LEDGER_TRANSACTION_TYPE,
+  LEDGER_TRANSACTION_TYPE_ENUM,
+  LEDGER_REFERENCE_TYPE,
+  LEDGER_REFERENCE_TYPE_ENUM,
+  LEDGER_ENTRY_DIRECTION,
+  LEDGER_ENTRY_DIRECTION_ENUM,
+} from './ledger.constant.js';
 export { default as PERMISSIONS, ROLE_PERMISSION_MAP } from './permission.constant.js';
 export { default as HTTP_STATUS } from './http-status.constant.js';
 export { default as ERRORS } from './error.constant.js';

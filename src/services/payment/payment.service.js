@@ -10,6 +10,7 @@ import { env } from '../../configs/env.config.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import * as ledgerService from '../ledger/ledger.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
@@ -352,6 +353,9 @@ export const handleVnpayCallback = async (callbackPayload) => {
   }
 
   await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  if (nextStatus === PAYMENT_STATUS.PAID) {
+    await ledgerService.settlePaidOrder(payment.order, { source: 'vnpay_callback' })
+  }
   await notifyPaymentResult(updatedPayment, nextStatus)
 
   return { payment: updatedPayment, orderId: payment.order, status: nextStatus }
@@ -468,8 +472,14 @@ export const handlePayosWebhook = async (webhookData) => {
   const isBatchWebhook = updatedPayment.orders?.length > 0
   if (isBatchWebhook) {
     await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+    if (nextStatus === PAYMENT_STATUS.PAID) {
+      await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_webhook' })))
+    }
   } else {
     await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    if (nextStatus === PAYMENT_STATUS.PAID) {
+      await ledgerService.settlePaidOrder(payment.order, { source: 'payos_webhook' })
+    }
   }
   await notifyPaymentResult(updatedPayment, nextStatus)
 
@@ -680,8 +690,14 @@ export const handlePayosReturn = async (query) => {
     const isBatchReturn = updatedPayment.orders?.length > 0
     if (isBatchReturn) {
       await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
+      }
     } else {
       await Order.findByIdAndUpdate(payment.order, orderUpdate)
+      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
+      }
     }
     await notifyPaymentResult(updatedPayment, nextStatus)
 

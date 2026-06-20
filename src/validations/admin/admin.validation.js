@@ -14,6 +14,9 @@ import {
   FEE_ROUNDING_ENUM,
   FEE_TRANSACTION_TYPE_ENUM,
 } from '../../constants/fee.constant.js'
+import {
+  LEDGER_TRANSACTION_TYPE_ENUM,
+} from '../../constants/ledger.constant.js'
 
 const objectId = Joi.string().trim().pattern(/^[a-f\d]{24}$/i)
 const page = Joi.number().integer().min(1).default(1)
@@ -223,6 +226,13 @@ export const adminFeePolicyPreviewSchema = Joi.object({
   categoryId: objectId.allow(null),
   baseAmount: Joi.number().min(0).required(),
   transactionCreatedAt: Joi.date().iso().optional(),
+})
+
+export const adminPlatformLedgerQuerySchema = Joi.object({
+  ...pagination(['createdAt', 'updatedAt', 'grossAmount', 'platformFee', 'netSettlementAmount']),
+  transactionType: Joi.string().valid(...LEDGER_TRANSACTION_TYPE_ENUM),
+  settlementStatus: Joi.string().valid(...['pending', 'held', 'settled', 'refunded', 'disputed']),
+  orderId: objectId,
 })
 
 export const adminStatsQuerySchema = Joi.object({
