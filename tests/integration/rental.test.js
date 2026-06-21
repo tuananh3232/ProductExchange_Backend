@@ -138,7 +138,144 @@ const createAndPayBooking = async ({ renterToken, listingId, startDate, endDate 
   return bookingId
 }
 
+const formatDateOnly = (value) => value.toISOString().slice(0, 10)
+const addDays = (value, amount) => {
+  const next = new Date(value)
+  next.setDate(next.getDate() + amount)
+  return next
+}
+const atHour = (value, hour) => {
+  const next = new Date(value)
+  next.setHours(hour, 0, 0, 0)
+  return next
+}
+
 describe('rental integration', () => {
+  it('allows renter to view detail, update, and cancel a payment-pending booking before the rental start date', async () => {
+    const [{ user: seller, token: sellerToken }, { user: renter, token: renterToken }] = await Promise.all([
+      createApprovedSeller(),
+      loginMember(),
+    ])
+
+    const category = await createSampleCategory()
+    const product = await createSellerProduct(seller._id, { categoryId: category._id, price: 500000, title: 'Rental Desk' })
+
+    const listing = await createRentalListing({
+      ownerToken: sellerToken,
+      productId: product._id.toString(),
+      dailyRate: 100000,
+      depositAmount: 300000,
+      lateFeePerDay: 25000,
+    })
+
+    const initialStartDate = new Date()
+    initialStartDate.setDate(initialStartDate.getDate() + 3)
+    const initialEndDate = new Date(initialStartDate)
+    initialEndDate.setDate(initialEndDate.getDate() + 1)
+
+    const createResponse = await request(app)
+      .post(`${api}/rentals/bookings`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({
+        listingId: listing._id,
+        startDate: formatDateOnly(initialStartDate),
+        endDate: formatDateOnly(initialEndDate),
+        note: 'Tạo booking ban đầu',
+      })
+
+    expect(createResponse.status).toBe(201)
+    const bookingId = createResponse.body.data.rentalBooking._id
+
+    const detailResponse = await request(app)
+      .get(`${api}/rentals/bookings/${bookingId}`)
+      .set('Authorization', `Bearer ${renterToken}`)
+
+    expect(detailResponse.status).toBe(200)
+    expect(detailResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.PAYMENT_PENDING)
+
+    const updatedStartDate = new Date()
+    updatedStartDate.setDate(updatedStartDate.getDate() + 5)
+    const updatedEndDate = new Date(updatedStartDate)
+    updatedEndDate.setDate(updatedEndDate.getDate() + 2)
+
+    const updateResponse = await request(app)
+      .patch(`${api}/rentals/bookings/${bookingId}`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({
+        startDate: formatDateOnly(updatedStartDate),
+        endDate: formatDateOnly(updatedEndDate),
+        note: 'Đổi lịch thuê trước khi thanh toán',
+      })
+
+    expect(updateResponse.status).toBe(200)
+    expect(updateResponse.body.data.rentalBooking.plannedDays).toBe(3)
+    expect(updateResponse.body.data.rentalBooking.rentAmount).toBe(300000)
+    expect(updateResponse.body.data.rentalBooking.note).toBe('Đổi lịch thuê trước khi thanh toán')
+
+    const cancelResponse = await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/cancel`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({ note: 'Hủy vì nhập sai ngày thuê' })
+
+    expect(cancelResponse.status).toBe(200)
+    expect(cancelResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.CANCELLED)
+    expect(cancelResponse.body.data.rentalBooking.cancelledAt).toBeTruthy()
+  })
+
+  it('auto-cancels payment-pending bookings after the rental start date and blocks payment retries', async () => {
+    const [{ user: seller, token: sellerToken }, { user: renter, token: renterToken }] = await Promise.all([
+      createApprovedSeller(),
+      loginMember(),
+    ])
+
+    const category = await createSampleCategory()
+    const product = await createSellerProduct(seller._id, { categoryId: category._id, price: 450000, title: 'Rental Chair' })
+
+    await UserWallet.create({ user: renter._id, balance: 1000000, totalTopUp: 1000000 })
+
+    const listing = await createRentalListing({
+      ownerToken: sellerToken,
+      productId: product._id.toString(),
+      dailyRate: 50000,
+      depositAmount: 150000,
+      lateFeePerDay: 15000,
+    })
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - 1)
+    const endDate = new Date()
+    endDate.setDate(endDate.getDate() + 1)
+
+    const createResponse = await request(app)
+      .post(`${api}/rentals/bookings`)
+      .set('Authorization', `Bearer ${renterToken}`)
+      .send({
+        listingId: listing._id,
+        startDate: formatDateOnly(startDate),
+        endDate: formatDateOnly(endDate),
+      })
+
+    expect(createResponse.status).toBe(201)
+    const bookingId = createResponse.body.data.rentalBooking._id
+
+    const detailResponse = await request(app)
+      .get(`${api}/rentals/bookings/${bookingId}`)
+      .set('Authorization', `Bearer ${renterToken}`)
+
+    expect(detailResponse.status).toBe(200)
+    expect(detailResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.CANCELLED)
+
+    const payResponse = await request(app)
+      .post(`${api}/rentals/bookings/${bookingId}/pay`)
+      .set('Authorization', `Bearer ${renterToken}`)
+
+    expect(payResponse.status).toBe(400)
+
+    const booking = await RentalBooking.findById(bookingId).lean()
+    expect(booking.status).toBe(RENTAL_BOOKING_STATUS.CANCELLED)
+    expect(booking.cancelledAt).toBeTruthy()
+  })
+
   it('settles early return by using actualDays and refunds unused rent to the renter', async () => {
     const [{ user: seller, token: sellerToken }, { user: renter, token: renterToken }, { user: admin }] = await Promise.all([
       createApprovedSeller(),
@@ -159,12 +296,15 @@ describe('rental integration', () => {
       depositAmount: 300000,
       lateFeePerDay: 40000,
     })
+    const rentalStartDate = addDays(new Date(), 10)
+    const rentalEndDate = addDays(rentalStartDate, 4)
+    const returnedAt = atHour(addDays(rentalStartDate, 2), 9)
 
     const bookingId = await createAndPayBooking({
       renterToken,
       listingId: listing._id,
-      startDate: '2026-06-01',
-      endDate: '2026-06-05',
+      startDate: formatDateOnly(rentalStartDate),
+      endDate: formatDateOnly(rentalEndDate),
     })
 
     await request(app)
@@ -176,7 +316,7 @@ describe('rental integration', () => {
     await request(app)
       .post(`${api}/rentals/bookings/${bookingId}/return`)
       .set('Authorization', `Bearer ${renterToken}`)
-      .send({ note: 'Trả sớm hơn dự kiến', returnedAt: '2026-06-03T09:00:00.000Z' })
+      .send({ note: 'Trả sớm hơn dự kiến', returnedAt: returnedAt.toISOString() })
       .expect(200)
 
     const confirmResponse = await request(app)
@@ -240,12 +380,15 @@ describe('rental integration', () => {
       depositAmount: 300000,
       lateFeePerDay: 20000,
     })
+    const rentalStartDate = addDays(new Date(), 10)
+    const rentalEndDate = addDays(rentalStartDate, 1)
+    const returnedAt = atHour(addDays(rentalStartDate, 3), 11)
 
     const bookingId = await createAndPayBooking({
       renterToken,
       listingId: listing._id,
-      startDate: '2026-06-01',
-      endDate: '2026-06-02',
+      startDate: formatDateOnly(rentalStartDate),
+      endDate: formatDateOnly(rentalEndDate),
     })
 
     await request(app)
@@ -257,7 +400,7 @@ describe('rental integration', () => {
     await request(app)
       .post(`${api}/rentals/bookings/${bookingId}/return`)
       .set('Authorization', `Bearer ${renterToken}`)
-      .send({ note: 'Trả muộn', returnedAt: '2026-06-04T11:00:00.000Z' })
+      .send({ note: 'Trả muộn', returnedAt: returnedAt.toISOString() })
       .expect(200)
 
     const confirmResponse = await request(app)
@@ -315,12 +458,15 @@ describe('rental integration', () => {
       depositAmount: 300000,
       lateFeePerDay: 20000,
     })
+    const rentalStartDate = addDays(new Date(), 10)
+    const rentalEndDate = addDays(rentalStartDate, 1)
+    const returnedAt = atHour(addDays(rentalStartDate, 1), 9)
 
     const bookingId = await createAndPayBooking({
       renterToken,
       listingId: listing._id,
-      startDate: '2026-06-01',
-      endDate: '2026-06-02',
+      startDate: formatDateOnly(rentalStartDate),
+      endDate: formatDateOnly(rentalEndDate),
     })
 
     await request(app)
@@ -332,7 +478,7 @@ describe('rental integration', () => {
     await request(app)
       .post(`${api}/rentals/bookings/${bookingId}/return`)
       .set('Authorization', `Bearer ${renterToken}`)
-      .send({ note: 'Trả đúng hạn', returnedAt: '2026-06-02T09:00:00.000Z' })
+      .send({ note: 'Trả đúng hạn', returnedAt: returnedAt.toISOString() })
       .expect(200)
 
     const claimResponse = await request(app)
@@ -427,11 +573,14 @@ describe('rental integration', () => {
       depositAmount: 300000,
       lateFeePerDay: 25000,
     })
+    const rentalStartDate = addDays(new Date(), 10)
+    const rentalEndDate = addDays(rentalStartDate, 1)
+    const returnedAt = atHour(addDays(rentalStartDate, 1), 9)
 
     const createResponse = await request(app)
       .post(`${api}/rentals/bookings`)
       .set('Authorization', `Bearer ${renterToken}`)
-      .send({ listingId: listing._id, startDate: '2026-06-10', endDate: '2026-06-11' })
+      .send({ listingId: listing._id, startDate: formatDateOnly(rentalStartDate), endDate: formatDateOnly(rentalEndDate) })
 
     expect(createResponse.status).toBe(201)
     const bookingId = createResponse.body.data.rentalBooking._id
@@ -457,7 +606,7 @@ describe('rental integration', () => {
     await request(app)
       .post(`${api}/rentals/bookings/${bookingId}/return`)
       .set('Authorization', `Bearer ${renterToken}`)
-      .send({ note: 'Trả đúng hạn', returnedAt: '2026-06-11T09:00:00.000Z' })
+      .send({ note: 'Trả đúng hạn', returnedAt: returnedAt.toISOString() })
       .expect(200)
 
     const claimResponse = await request(app)
@@ -533,12 +682,14 @@ describe('rental integration', () => {
       depositAmount: 250000,
       lateFeePerDay: 30000,
     })
+    const rentalStartDate = addDays(new Date(), 10)
+    const rentalEndDate = addDays(rentalStartDate, 2)
 
     const bookingId = await createAndPayBooking({
       renterToken,
       listingId: listing._id,
-      startDate: '2026-06-10',
-      endDate: '2026-06-12',
+      startDate: formatDateOnly(rentalStartDate),
+      endDate: formatDateOnly(rentalEndDate),
     })
 
     const detailResponse = await request(app)

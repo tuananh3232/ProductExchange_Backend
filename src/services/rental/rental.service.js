@@ -131,6 +131,9 @@ const diffDaysInclusive = (start, end) => {
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1)
 }
 
+const isPaymentWindowExpired = (booking, now = new Date()) =>
+  booking.status === RENTAL_BOOKING_STATUS.PAYMENT_PENDING && booking.startDate && now.getTime() >= new Date(booking.startDate).getTime()
+
 const mutatePlatformWallet = async (walletKey, direction, amount) => {
   const inc =
     direction === LEDGER_ENTRY_DIRECTION.CREDIT
@@ -211,6 +214,34 @@ const getBookingByIdOrThrow = async (bookingId) => {
   return booking
 }
 
+const expireBookingIfNeeded = async (booking, note = 'Booking quá hạn thanh toán nên đã tự hủy') => {
+  if (!booking || !isPaymentWindowExpired(booking)) {
+    return booking
+  }
+
+  booking.status = RENTAL_BOOKING_STATUS.CANCELLED
+  booking.cancelledAt = new Date()
+  booking.note = booking.note || note
+  appendTimeline(booking, RENTAL_BOOKING_STATUS.CANCELLED, booking.renter?._id || booking.renter, note)
+  await booking.save()
+  return getBookingByIdOrThrow(booking._id)
+}
+
+const expirePendingBookings = async (filter = {}) => {
+  const bookings = await RentalBooking.find({
+    ...filter,
+    isActive: true,
+    status: RENTAL_BOOKING_STATUS.PAYMENT_PENDING,
+    startDate: { $lte: new Date() },
+  })
+
+  if (!bookings.length) {
+    return
+  }
+
+  await Promise.all(bookings.map((booking) => expireBookingIfNeeded(booking)))
+}
+
 const getClaimByIdOrThrow = async (claimId) => {
   const claim = await populateChain(RentalClaim.findById(claimId), RENTAL_CLAIM_POPULATE)
   if (!claim || !claim.isActive) {
@@ -225,6 +256,36 @@ const getClaimByIdIncludingInactiveOrThrow = async (claimId) => {
     throw new AppError('Không tìm thấy claim cho thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
   }
   return claim
+}
+
+const buildBookingDraft = async ({ listing, payload, excludeBookingId = null }) => {
+  const startDate = startOfDay(payload.startDate)
+  const endDate = endOfDay(payload.endDate)
+  const plannedDays = diffDaysInclusive(startDate, endDate)
+
+  if (plannedDays < 1 || plannedDays > 30 || plannedDays < listing.minRentalDays || plannedDays > listing.maxRentalDays) {
+    throw new AppError('Thời gian thuê phải từ 1 đến 30 ngày', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+
+  const overlap = await RentalBooking.exists({
+    listing: listing._id,
+    isActive: true,
+    status: { $in: ACTIVE_BOOKING_STATUSES },
+    ...(excludeBookingId ? { _id: { $ne: excludeBookingId } } : {}),
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate },
+  })
+
+  if (overlap) {
+    throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
+  }
+
+  return {
+    startDate,
+    endDate,
+    plannedDays,
+    rentAmount: listing.dailyRate * plannedDays,
+  }
 }
 
 export const createRentalListing = async (payload, user) => {
@@ -286,6 +347,7 @@ export const getRentalListingById = async (listingId) => assertListingForBooking
 
 export const createRentalBooking = async (payload, user) => {
   const listing = await assertListingForBooking(payload.listingId)
+  await expirePendingBookings({ listing: listing._id })
 
   const productOwnerId =
     listing.ownerType === 'SELLER'
@@ -362,6 +424,8 @@ export const listRentalBookings = async (user, query, { page, limit, skip, sortB
     filter.status = query.status
   }
 
+  await expirePendingBookings(filter)
+
   const [bookings, total] = await Promise.all([
     populateChain(RentalBooking.find(filter).sort({ [sortBy]: sortOrder }).skip(skip).limit(limit), RENTAL_BOOKING_POPULATE),
     RentalBooking.countDocuments(filter),
@@ -374,7 +438,7 @@ export const listRentalBookings = async (user, query, { page, limit, skip, sortB
 }
 
 export const getRentalBookingById = async (bookingId, user) => {
-  const booking = await getBookingByIdOrThrow(bookingId)
+  const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
 
   if (!isBookingOwnerActor(booking, user._id)) {
     assertBookingParticipantAccess(booking, user._id)
@@ -383,8 +447,66 @@ export const getRentalBookingById = async (bookingId, user) => {
   return booking
 }
 
+export const updateRentalBooking = async (bookingId, payload, user) => {
+  const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
+
+  if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
+    throw new AppError('Chỉ người thuê mới được cập nhật booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
+    throw new AppError('Booking không còn ở trạng thái chờ thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
+
+  if (isPaymentWindowExpired(booking)) {
+    throw new AppError('Booking đã quá hạn cập nhật', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.PAYMENT_WINDOW_EXPIRED)
+  }
+
+  const listingId = booking.listing?._id || booking.listing
+  const listing = await assertListingForBooking(listingId)
+  const draft = await buildBookingDraft({ listing, payload, excludeBookingId: booking._id })
+
+  booking.startDate = draft.startDate
+  booking.endDate = draft.endDate
+  booking.plannedDays = draft.plannedDays
+  booking.rentAmount = draft.rentAmount
+  booking.dailyRate = listing.dailyRate
+  booking.depositAmount = listing.depositAmount
+  booking.depositHeldAmount = listing.depositAmount
+  booking.lateFeePerDay = listing.lateFeePerDay
+  booking.note = payload.note || ''
+  appendTimeline(booking, RENTAL_BOOKING_STATUS.PAYMENT_PENDING, user._id, payload.note || 'Cập nhật booking chờ thanh toán')
+  await booking.save()
+
+  return getBookingByIdOrThrow(booking._id)
+}
+
+export const cancelRentalBooking = async (bookingId, payload, user) => {
+  const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
+
+  if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
+    throw new AppError('Chỉ người thuê mới được hủy booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
+    throw new AppError('Booking không còn ở trạng thái chờ thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
+
+  if (isPaymentWindowExpired(booking)) {
+    throw new AppError('Booking đã quá hạn hủy', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.PAYMENT_WINDOW_EXPIRED)
+  }
+
+  booking.status = RENTAL_BOOKING_STATUS.CANCELLED
+  booking.cancelledAt = new Date()
+  booking.note = payload.note || booking.note || ''
+  appendTimeline(booking, RENTAL_BOOKING_STATUS.CANCELLED, user._id, payload.note || 'Người thuê hủy booking trước khi thanh toán')
+  await booking.save()
+
+  return getBookingByIdOrThrow(booking._id)
+}
+
 export const payRentalBooking = async (bookingId, user) => {
-  const booking = await getBookingByIdOrThrow(bookingId)
+  const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
 
   if (
     booking.paidAt &&
@@ -407,6 +529,10 @@ export const payRentalBooking = async (bookingId, user) => {
 
   if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
     throw new AppError('Booking không còn ở trạng thái chờ thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
+
+  if (isPaymentWindowExpired(booking)) {
+    throw new AppError('Booking đã quá hạn thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.PAYMENT_WINDOW_EXPIRED)
   }
 
   const totalHoldAmount = booking.rentAmount + booking.depositAmount

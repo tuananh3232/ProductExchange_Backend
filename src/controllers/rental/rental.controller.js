@@ -63,6 +63,24 @@ export const getRentalBookingById = asyncHandler(async (req, res) => {
   })
 })
 
+export const updateRentalBooking = asyncHandler(async (req, res) => {
+  const rentalBooking = await rentalService.updateRentalBooking(req.params.rentalBookingId, req.body, req.user)
+
+  sendSuccess(res, {
+    message: 'Cập nhật booking thuê thành công',
+    data: { rentalBooking },
+  })
+})
+
+export const cancelRentalBooking = asyncHandler(async (req, res) => {
+  const rentalBooking = await rentalService.cancelRentalBooking(req.params.rentalBookingId, req.body, req.user)
+
+  sendSuccess(res, {
+    message: 'Hủy booking thuê thành công',
+    data: { rentalBooking },
+  })
+})
+
 export const payRentalBooking = asyncHandler(async (req, res) => {
   const rentalBooking = await rentalService.payRentalBooking(req.params.rentalBookingId, req.user)
 

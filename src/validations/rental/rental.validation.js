@@ -37,6 +37,16 @@ export const createRentalBookingSchema = Joi.object({
   note: Joi.string().trim().max(1000).allow('').optional(),
 })
 
+export const updateRentalBookingSchema = Joi.object({
+  startDate: Joi.date().required(),
+  endDate: Joi.date().required(),
+  note: Joi.string().trim().max(1000).allow('').optional(),
+})
+
+export const cancelRentalBookingSchema = Joi.object({
+  note: Joi.string().trim().max(1000).allow('').optional(),
+})
+
 export const rentalBookingsQuerySchema = Joi.object({
   page,
   limit,

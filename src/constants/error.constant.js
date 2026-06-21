@@ -87,6 +87,7 @@ const ERRORS = {
     INVALID_STATUS_TRANSITION: 'Invalid rental status transition',
     OVERLAPPING_BOOKING: 'Rental booking overlaps with an existing booking',
     PAYMENT_REQUIRED: 'Rental booking payment is required before continuing',
+    PAYMENT_WINDOW_EXPIRED: 'Rental booking payment window has expired',
     CLAIM_OPEN: 'Rental claim is still open',
     DISPUTE_REQUIRED: 'Rental claim must be under admin review',
   },
