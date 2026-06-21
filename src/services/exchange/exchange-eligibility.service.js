@@ -1,4 +1,4 @@
-import Product, { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import Product, { PRODUCT_OWNER_TYPES, PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import User from '../../models/user.model.js'
 import ExchangeOffer from '../../models/exchange-offer.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -54,6 +54,10 @@ const assertSellerOwnedProduct = (product) => {
 
   if (!product.seller) {
     throw new AppError('Sản phẩm không có seller hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.EXCHANGE.PRODUCT_NOT_ELIGIBLE)
+  }
+
+  if ((product.transactionMode || PRODUCT_TRANSACTION_MODES.SELL) !== PRODUCT_TRANSACTION_MODES.EXCHANGE) {
+    throw new AppError('Sản phẩm chưa bật chế độ trao đổi', HTTP_STATUS.BAD_REQUEST, ERRORS.EXCHANGE.PRODUCT_NOT_ELIGIBLE)
   }
 }
 

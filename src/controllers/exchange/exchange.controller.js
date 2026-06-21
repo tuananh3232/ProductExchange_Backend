@@ -23,6 +23,15 @@ export const getMyExchangeOfferById = asyncHandler(async (req, res) => {
   })
 })
 
+export const previewExchangeOffer = asyncHandler(async (req, res) => {
+  const preview = await exchangeService.previewExchangeOffer(req.body, req.user)
+
+  sendSuccess(res, {
+    message: 'Xem trước đề nghị trao đổi thành công',
+    data: { preview },
+  })
+})
+
 export const createExchangeOffer = asyncHandler(async (req, res) => {
   const exchangeOffer = await exchangeService.createExchangeOffer(req.body, req.user)
 

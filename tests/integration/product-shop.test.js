@@ -368,6 +368,81 @@ describe('product and shop integration', () => {
     expect(detailResponse.body.data.product.rentalInfo?.listingId).toBeTruthy()
   })
 
+  it('filters public products by exchange mode and returns exchangeInfo for exchange products', async () => {
+    const { user: seller, token: sellerToken } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Exchange Product Seller', idNumber: '123456789199' }
+    })
+    const { user: otherSeller } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Exchange Partner Seller', idNumber: '123456789200' }
+    })
+    const category = await createSampleCategory()
+
+    const [sellProduct, exchangeProduct, partnerExchangeProduct] = await Promise.all([
+      createSampleProduct({
+        owner: seller._id,
+        seller: seller._id,
+        ownerType: PRODUCT_OWNER_TYPES.SELLER,
+        transactionMode: 'sell',
+        shop: null,
+        category: category._id,
+        status: PRODUCT_STATUS.AVAILABLE,
+        isActive: true,
+      }),
+      createSampleProduct({
+        owner: seller._id,
+        seller: seller._id,
+        ownerType: PRODUCT_OWNER_TYPES.SELLER,
+        transactionMode: 'exchange',
+        shop: null,
+        category: category._id,
+        status: PRODUCT_STATUS.AVAILABLE,
+        isActive: true,
+      }),
+      createSampleProduct({
+        owner: otherSeller._id,
+        seller: otherSeller._id,
+        ownerType: PRODUCT_OWNER_TYPES.SELLER,
+        transactionMode: 'exchange',
+        shop: null,
+        category: category._id,
+        status: PRODUCT_STATUS.AVAILABLE,
+        isActive: true,
+      }),
+    ])
+
+    await request(app)
+      .post(`${api}/exchanges/offers`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        requesterProductId: exchangeProduct._id.toString(),
+        receiverProductId: partnerExchangeProduct._id.toString(),
+        note: 'Lock exchange product',
+      })
+
+    const [exchangeResponse, detailResponse] = await Promise.all([
+      request(app).get(`${api}/products`).query({ transactionMode: 'exchange' }),
+      request(app).get(`${api}/products/${exchangeProduct._id}`),
+    ])
+
+    expect(exchangeResponse.status).toBe(200)
+    expect(exchangeResponse.body.data.products.some((product) => product._id.toString() === sellProduct._id.toString())).toBe(false)
+    expect(exchangeResponse.body.data.products.some((product) => product._id.toString() === exchangeProduct._id.toString())).toBe(true)
+
+    const exchangeListItem = exchangeResponse.body.data.products.find((product) => product._id.toString() === exchangeProduct._id.toString())
+    expect(exchangeListItem.transactionMode).toBe('exchange')
+    expect(exchangeListItem.exchangeInfo).toMatchObject({
+      exchangeableBySellerOnly: true,
+      ownerSellerId: seller._id.toString(),
+      ownerKycStatus: 'approved',
+      hasOpenExchange: true,
+      activeExchangeOfferCount: 1,
+    })
+
+    expect(detailResponse.status).toBe(200)
+    expect(detailResponse.body.data.product.transactionMode).toBe('exchange')
+    expect(detailResponse.body.data.product.exchangeInfo?.ownerSellerId).toBe(seller._id.toString())
+  })
+
   it('does not allow a different seller to manage someone else product', async () => {
     const { user: owner } = await loginSeller()
     const { token: otherSellerToken } = await loginSeller()

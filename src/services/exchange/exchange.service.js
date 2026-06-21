@@ -485,6 +485,35 @@ const mapOfferPayload = async ({ requesterProductId, receiverProductId, note, cu
   }
 }
 
+export const previewExchangeOffer = async (payload, userContext) => {
+  const mapped = await mapOfferPayload({
+    requesterProductId: payload.requesterProductId,
+    receiverProductId: payload.receiverProductId,
+    note: payload.note,
+    currentUserId: userContext._id,
+  })
+
+  return {
+    eligibility: {
+      canCreateOffer: true,
+      requesterProductId: mapped.requesterProduct,
+      receiverProductId: mapped.receiverProduct,
+    },
+    requesterSeller: mapped.requesterSeller,
+    receiverSeller: mapped.receiverSeller,
+    requesterProductId: mapped.requesterProduct,
+    receiverProductId: mapped.receiverProduct,
+    requesterProductValue: mapped.requesterProductValue,
+    receiverProductValue: mapped.receiverProductValue,
+    cashDifferenceAmount: mapped.cashDifferenceAmount,
+    cashDifferenceDirection: mapped.cashDifferenceDirection,
+    cashDifferencePayer: mapped.cashDifferencePayer,
+    cashDifferenceReceiver: mapped.cashDifferenceReceiver,
+    platformFee: mapped.platformFee,
+    feePolicyId: mapped.feePolicyId || null,
+  }
+}
+
 export const createExchangeOffer = async (payload, userContext) => {
   const mapped = await mapOfferPayload({
     requesterProductId: payload.requesterProductId,

@@ -48,6 +48,7 @@ const createSellerProduct = async (sellerId, { categoryId, price, title } = {}) 
     price: price ?? 100000,
     stock: 1,
     listingType: 'sell',
+    transactionMode: 'exchange',
     condition: 'good',
     category: categoryId,
     owner: sellerId,
@@ -375,6 +376,7 @@ describe('exchange integration', () => {
       price: 650000,
       stock: 1,
       listingType: 'sell',
+      transactionMode: 'sell',
       condition: 'good',
       category: category._id,
       owner: shopSeller._id,
@@ -397,5 +399,32 @@ describe('exchange integration', () => {
 
     expect(response.status).toBe(400)
     expect(response.body.success).toBe(false)
+  })
+
+  it('previews exchange settlement for eligible exchange products', async () => {
+    const [{ user: requester, token: requesterToken }, { user: receiver }, { user: admin }] =
+      await Promise.all([createApprovedSeller(), createApprovedSeller(), loginAdmin()])
+
+    const category = await createSampleCategory()
+    await seedExchangeFeePolicy({ adminId: admin._id, categoryId: category._id, fixedFee: 15000 })
+    const [requesterProduct, receiverProduct] = await Promise.all([
+      createSellerProduct(requester._id, { categoryId: category._id, price: 550000, title: 'Requester Bench' }),
+      createSellerProduct(receiver._id, { categoryId: category._id, price: 700000, title: 'Receiver Shelf' }),
+    ])
+
+    const response = await request(app)
+      .post(`${api}/exchanges/offers/preview`)
+      .set('Authorization', `Bearer ${requesterToken}`)
+      .send({
+        requesterProductId: requesterProduct._id.toString(),
+        receiverProductId: receiverProduct._id.toString(),
+      })
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.preview.eligibility.canCreateOffer).toBe(true)
+    expect(response.body.data.preview.requesterProductValue).toBe(550000)
+    expect(response.body.data.preview.receiverProductValue).toBe(700000)
+    expect(response.body.data.preview.cashDifferenceAmount).toBe(150000)
+    expect(response.body.data.preview.platformFee).toBe(15000)
   })
 })

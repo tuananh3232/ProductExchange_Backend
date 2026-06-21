@@ -16,7 +16,7 @@ export const createProductSchema = Joi.object({
   price: Joi.number().min(0).required(),
   stock: Joi.number().integer().min(0),
   listingType: Joi.string().valid('sell').required(),
-  transactionMode: Joi.string().valid('sell', 'rental'),
+  transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
   category: Joi.string().hex().length(24).required(),
   shop: Joi.when('ownerType', {
@@ -37,7 +37,7 @@ export const updateProductSchema = Joi.object({
   description: Joi.string().trim().min(20).max(3000),
   price: Joi.number().min(0),
   stock: Joi.number().integer().min(0),
-  transactionMode: Joi.string().valid('sell', 'rental'),
+  transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
   category: Joi.string().hex().length(24),
   shop: Joi.string().hex().length(24).allow(null),

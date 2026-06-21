@@ -19,6 +19,12 @@ export const createExchangeOfferSchema = Joi.object({
   note: Joi.string().trim().max(1000).allow('').optional(),
 })
 
+export const previewExchangeOfferSchema = Joi.object({
+  requesterProductId: objectId.required(),
+  receiverProductId: objectId.required(),
+  note: Joi.string().trim().max(1000).allow('').optional(),
+})
+
 export const counterExchangeOfferSchema = Joi.object({
   requesterProductId: objectId.optional(),
   receiverProductId: objectId.optional(),

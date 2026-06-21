@@ -18,6 +18,11 @@ jest.unstable_mockModule('../../src/models/product.model.js', () => ({
     SHOP: 'SHOP',
     SELLER: 'SELLER',
   },
+  PRODUCT_TRANSACTION_MODES: {
+    SELL: 'sell',
+    RENTAL: 'rental',
+    EXCHANGE: 'exchange',
+  },
 }))
 jest.unstable_mockModule('../../src/models/user.model.js', () => ({ default: userModel }))
 jest.unstable_mockModule('../../src/models/exchange-offer.model.js', () => ({ default: exchangeOfferModel }))
@@ -58,6 +63,7 @@ describe('exchange eligibility service', () => {
         isActive: true,
         status: 'available',
         ownerType: 'SHOP',
+        transactionMode: 'exchange',
         shop: 'shop-1',
         seller: null,
       }))
@@ -66,6 +72,7 @@ describe('exchange eligibility service', () => {
         isActive: true,
         status: 'available',
         ownerType: 'SELLER',
+        transactionMode: 'exchange',
         shop: null,
         seller: 'seller-b',
       }))
@@ -88,6 +95,7 @@ describe('exchange eligibility service', () => {
         isActive: true,
         status: 'available',
         ownerType: 'SELLER',
+        transactionMode: 'exchange',
         shop: null,
         seller: 'seller-a',
         price: 150000,
@@ -97,6 +105,7 @@ describe('exchange eligibility service', () => {
         isActive: true,
         status: 'available',
         ownerType: 'SELLER',
+        transactionMode: 'exchange',
         shop: null,
         seller: 'seller-b',
         price: 100000,
@@ -115,5 +124,39 @@ describe('exchange eligibility service', () => {
 
     expect(result.terms.cashDifferenceAmount).toBe(50000)
     expect(result.terms.cashDifferenceDirection).toBe('receiver_to_requester')
+  })
+
+  it('rejects products that are not in exchange mode', async () => {
+    productModel.findById
+      .mockReturnValueOnce(makePopulateQuery({
+        _id: 'product-a',
+        isActive: true,
+        status: 'available',
+        ownerType: 'SELLER',
+        transactionMode: 'sell',
+        shop: null,
+        seller: 'seller-a',
+        price: 150000,
+      }))
+      .mockReturnValueOnce(makePopulateQuery({
+        _id: 'product-b',
+        isActive: true,
+        status: 'available',
+        ownerType: 'SELLER',
+        transactionMode: 'exchange',
+        shop: null,
+        seller: 'seller-b',
+        price: 100000,
+      }))
+
+    await expect(
+      exchangeEligibilityService.getExchangeEligibility({
+        requesterProductId: 'product-a',
+        receiverProductId: 'product-b',
+        currentUserId: 'seller-a',
+      })
+    ).rejects.toMatchObject({
+      errorCode: 'Product is not eligible for exchange',
+    })
   })
 })

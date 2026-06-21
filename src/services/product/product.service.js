@@ -8,7 +8,9 @@ import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
+import { EXCHANGE_STATUS } from '../../constants/status.constant.js'
 import RentalListing from '../../models/rental-listing.model.js'
+import ExchangeOffer from '../../models/exchange-offer.model.js'
 import { PRODUCT_OWNER_TYPES, PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { notifySafely } from '../notification/notification.service.js'
@@ -21,6 +23,14 @@ const PRODUCT_STATUS_TRANSITIONS = {
   pending: ['available', 'hidden', 'sold'],
   sold: [],
 }
+
+const OPEN_EXCHANGE_STATUSES = [
+  EXCHANGE_STATUS.PENDING_ACCEPTANCE,
+  EXCHANGE_STATUS.ACCEPTED,
+  EXCHANGE_STATUS.PAID,
+  EXCHANGE_STATUS.SHIPPED,
+  EXCHANGE_STATUS.DISPUTED,
+]
 
 const normalizeImages = (images = []) => {
   const hasPrimary = images.some((image) => image?.isPrimary)
@@ -46,7 +56,76 @@ const toRentalInfo = (listing) => {
 
 const normalizeProductDocument = (product) => (typeof product?.toObject === 'function' ? product.toObject() : { ...product })
 
-const attachRentalInfo = async (product) => {
+const getOwnerKycStatus = (product) => {
+  const sellerKycStatus = product?.seller && typeof product.seller === 'object' ? product.seller.kyc?.status : null
+  const ownerKycStatus = product?.owner && typeof product.owner === 'object' ? product.owner.kyc?.status : null
+
+  return sellerKycStatus || ownerKycStatus || 'none'
+}
+
+const buildExchangeInfo = (product, openExchangeCount = 0) => {
+  if (product.transactionMode !== PRODUCT_TRANSACTION_MODES.EXCHANGE) {
+    return null
+  }
+
+  const ownerSellerId =
+    product?.seller && typeof product.seller === 'object'
+      ? product.seller._id?.toString?.() || product.seller._id || null
+      : product?.seller?.toString?.() || product?.owner?.toString?.() || null
+  const ownerKycStatus = getOwnerKycStatus(product)
+  const isExchangeEligible =
+    product.isActive &&
+    product.status === 'available' &&
+    product.ownerType === PRODUCT_OWNER_TYPES.SELLER &&
+    !product.shop &&
+    ownerKycStatus === 'approved' &&
+    openExchangeCount === 0
+
+  return {
+    isExchangeEligible,
+    exchangeableBySellerOnly: true,
+    ownerSellerId,
+    ownerKycStatus,
+    activeExchangeOfferCount: openExchangeCount,
+    hasOpenExchange: openExchangeCount > 0,
+  }
+}
+
+const getOpenExchangeCountMap = async (productIds = []) => {
+  if (!productIds.length) {
+    return new Map()
+  }
+
+  const exchangeOffers = await ExchangeOffer.find({
+    isActive: true,
+    status: { $in: OPEN_EXCHANGE_STATUSES },
+    $or: [
+      { requesterProduct: { $in: productIds } },
+      { receiverProduct: { $in: productIds } },
+    ],
+  })
+    .select('requesterProduct receiverProduct')
+    .lean()
+
+  const countMap = new Map(productIds.map((productId) => [String(productId), 0]))
+
+  exchangeOffers.forEach((offer) => {
+    const requesterProductId = String(offer.requesterProduct)
+    const receiverProductId = String(offer.receiverProduct)
+
+    if (countMap.has(requesterProductId)) {
+      countMap.set(requesterProductId, (countMap.get(requesterProductId) || 0) + 1)
+    }
+
+    if (countMap.has(receiverProductId) && receiverProductId !== requesterProductId) {
+      countMap.set(receiverProductId, (countMap.get(receiverProductId) || 0) + 1)
+    }
+  })
+
+  return countMap
+}
+
+const attachProductReadModel = async (product, exchangeCountMap = new Map()) => {
   if (!product) return product
 
   const normalizedProduct = normalizeProductDocument(product)
@@ -73,14 +152,23 @@ const attachRentalInfo = async (product) => {
     })
   }
 
+  const transactionMode = activeRentalListing
+    ? PRODUCT_TRANSACTION_MODES.RENTAL
+    : (normalizedProduct.transactionMode || PRODUCT_TRANSACTION_MODES.SELL)
+  const openExchangeCount = exchangeCountMap.get(String(normalizedProduct._id)) || 0
+
   return {
     ...normalizedProduct,
-    transactionMode: activeRentalListing ? PRODUCT_TRANSACTION_MODES.RENTAL : (normalizedProduct.transactionMode || PRODUCT_TRANSACTION_MODES.SELL),
+    transactionMode,
     rentalInfo: toRentalInfo(activeRentalListing),
+    exchangeInfo: buildExchangeInfo({ ...normalizedProduct, transactionMode }, openExchangeCount),
   }
 }
 
-const attachRentalInfoList = async (products = []) => Promise.all(products.map((product) => attachRentalInfo(product)))
+const attachProductReadModelList = async (products = []) => {
+  const exchangeCountMap = await getOpenExchangeCountMap(products.map((product) => product?._id).filter(Boolean))
+  return Promise.all(products.map((product) => attachProductReadModel(product, exchangeCountMap)))
+}
 
 // Khi có $text, ưu tiên điểm liên quan trước rồi mới sort theo tiêu chí người dùng chọn
 const textSearchOptions = (filter, pag) =>
@@ -319,10 +407,24 @@ const applyTransactionModeFilter = async (query, filter) => {
     }
   }
 
+  if (query.transactionMode === PRODUCT_TRANSACTION_MODES.EXCHANGE) {
+    return {
+      ...filter,
+      _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
+      transactionMode: PRODUCT_TRANSACTION_MODES.EXCHANGE,
+    }
+  }
+
   return {
     ...filter,
     _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
-    transactionMode: { $ne: PRODUCT_TRANSACTION_MODES.RENTAL },
+    transactionMode: PRODUCT_TRANSACTION_MODES.SELL,
+  }
+}
+
+const assertTransactionModeForOwnership = (transactionMode, ownerType) => {
+  if (transactionMode === PRODUCT_TRANSACTION_MODES.EXCHANGE && ownerType !== PRODUCT_OWNER_TYPES.SELLER) {
+    throw new AppError('Chỉ sản phẩm của seller cá nhân mới được đăng ở chế độ trao đổi', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
 }
 
@@ -330,14 +432,14 @@ export const getProducts = async (query, pagination) => {
   const pag = normalizeProductSort(pagination)
   const filter = await applyTransactionModeFilter(query, buildFilter(query))
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products: await attachRentalInfoList(products), meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
   const filter = await applyTransactionModeFilter(query, buildFilter(query, { publicOnly: false }))
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products: await attachRentalInfoList(products), meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getShopProducts = async (shopId, userContext, query, pagination) => {
@@ -356,7 +458,7 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products: await attachRentalInfoList(products), meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getSellerProducts = async (userContext, query, pagination) => {
@@ -374,7 +476,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products: await attachRentalInfoList(products), meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getProductById = async (id) => {
@@ -382,7 +484,7 @@ export const getProductById = async (id) => {
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  return attachRentalInfo(product)
+  return attachProductReadModel(product, await getOpenExchangeCountMap([product._id]))
 }
 
 export const getAdminProductById = async (id) => {
@@ -390,13 +492,14 @@ export const getAdminProductById = async (id) => {
   if (!product) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  return attachRentalInfo(product)
+  return attachProductReadModel(product, await getOpenExchangeCountMap([product._id]))
 }
 
 export const createProduct = async (userContext, productData, files = []) => {
   const ownership = await resolveCreateOwnership(productData, userContext)
   const safeProductData = { ...productData }
   delete safeProductData.ownerType
+  assertTransactionModeForOwnership(safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL, ownership.ownerType)
 
   const uploadedImages = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
   const images = normalizeImages(uploadedImages)
@@ -418,6 +521,9 @@ export const updateProduct = async (productId, userContext, updateData) => {
   await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
 
   const nextUpdateData = await normalizeUpdateOwnership(product, updateData, userContext)
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'transactionMode')) {
+    assertTransactionModeForOwnership(nextUpdateData.transactionMode, product.ownerType)
+  }
   if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
     nextUpdateData.location = {
       ...(product.location || {}),

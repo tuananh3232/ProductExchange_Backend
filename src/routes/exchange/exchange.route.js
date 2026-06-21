@@ -10,6 +10,7 @@ import {
   exchangeActionSchema,
   exchangeDisputeSchema,
   exchangeOffersQuerySchema,
+  previewExchangeOfferSchema,
 } from '../../validations/exchange/exchange.validation.js'
 
 const router = Router()
@@ -20,6 +21,14 @@ router.get(
   requirePermissions(PERMISSIONS.SELLER_EXCHANGE_READ),
   validate(exchangeOffersQuerySchema, 'query'),
   exchangeController.listMyExchangeOffers
+)
+
+router.post(
+  '/offers/preview',
+  authenticate,
+  requirePermissions(PERMISSIONS.SELLER_EXCHANGE_CREATE),
+  validate(previewExchangeOfferSchema),
+  exchangeController.previewExchangeOffer
 )
 
 router.post(

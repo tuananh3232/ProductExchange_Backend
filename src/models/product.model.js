@@ -10,6 +10,7 @@ export const PRODUCT_OWNER_TYPES = {
 export const PRODUCT_TRANSACTION_MODES = {
   SELL: 'sell',
   RENTAL: 'rental',
+  EXCHANGE: 'exchange',
 }
 
 const productSchema = new mongoose.Schema(

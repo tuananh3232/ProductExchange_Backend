@@ -29,8 +29,8 @@ export const create = (data) => Product.create(data).then(normalizeProductImages
 
 export const findById = (id) =>
   Product.findById(id)
-    .populate('owner', 'name avatar rating phone')
-    .populate('seller', 'name avatar rating phone')
+    .populate('owner', 'name avatar rating phone kyc')
+    .populate('seller', 'name avatar rating phone kyc')
     .populate('category', 'name slug')
     .populate('shop', 'name slug owner staff')
     .populate('activeRentalListing')
@@ -38,8 +38,8 @@ export const findById = (id) =>
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1, sort = null }) =>
   Product.find(filter)
-    .populate('owner', 'name avatar rating')
-    .populate('seller', 'name avatar rating')
+    .populate('owner', 'name avatar rating kyc')
+    .populate('seller', 'name avatar rating kyc')
     .populate('category', 'name slug')
     .populate('shop', 'name slug')
     .populate('activeRentalListing')

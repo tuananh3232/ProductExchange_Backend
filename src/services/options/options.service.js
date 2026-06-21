@@ -10,7 +10,7 @@ import {
 import * as categoryRepo from '../../repositories/category/category.repository.js'
 
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair', 'poor']
-const PRODUCT_LISTING_TYPES = ['sell', 'rental']
+const PRODUCT_LISTING_TYPES = ['sell', 'rental', 'exchange']
 const PRODUCT_OWNER_TYPES = ['SHOP', 'SELLER']
 const USER_STATUSES = ['active', 'inactive']
 const KYC_STATUSES = ['none', 'pending', 'approved', 'rejected']
@@ -20,6 +20,7 @@ const LABELS = {
   ...COMBO_LABELS,
   sell: 'Sell',
   rental: 'Rental',
+  exchange: 'Trao đổi',
   new: 'New',
   like_new: 'Like New',
   good: 'Good',
