@@ -16,6 +16,7 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 import { ROLES } from '../../constants/role.constant.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import * as ledgerService from '../ledger/ledger.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -151,12 +152,12 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
 
 export const createOrder = async (buyerId, payload) => {
   const productId = payload.productId || payload.product
-  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType price isActive title')
+  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType transactionMode price isActive title')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (!['sell', 'both'].includes(product.listingType)) {
+  if ((product.transactionMode || 'sell') !== 'sell') {
     throw new AppError('Sản phẩm này không hỗ trợ đặt đơn mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
   }
 
@@ -195,6 +196,10 @@ export const createOrder = async (buyerId, payload) => {
     quantity,
     unitPrice,
     totalAmount,
+    grossAmount: totalAmount,
+    totalPlatformFee: 0,
+    netSettlementAmount: totalAmount,
+    settlementStatus: 'pending',
     status: ORDER_STATUS.PENDING,
     shippingAddress,
     note: payload.note || '',
@@ -300,7 +305,7 @@ export const getAdminOrders = async (query, { page, limit, skip, sortBy, sortOrd
 export const getAdminOrderById = async (orderId) => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
   const payment = await paymentRepo.findByOrder(order._id)
   return {
@@ -326,8 +331,20 @@ export const getAdminOrderById = async (orderId) => {
           transactionRef: payment.transactionRef,
           responseCode: payment.responseCode,
           paidAt: payment.paidAt,
+          settlementStatus: order.settlementStatus,
+          grossAmount: order.grossAmount,
+          totalPlatformFee: order.totalPlatformFee,
+          netSettlementAmount: order.netSettlementAmount,
         }
       : null,
+    settlementSummary: {
+      grossAmount: order.grossAmount,
+      totalPlatformFee: order.totalPlatformFee,
+      netSettlementAmount: order.netSettlementAmount,
+      settlementStatus: order.settlementStatus,
+      feePolicyId: order.feePolicyId || null,
+      feeSnapshotId: order.feeSnapshotId || null,
+    },
     statusHistory: order.history || [],
     cancellationInformation: order.status === ORDER_STATUS.CANCELLED ? order.history?.filter((item) => item.status === ORDER_STATUS.CANCELLED) || [] : [],
     refundInformation: {
@@ -406,6 +423,9 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
   const updated = await orderRepo.updateById(orderId, cancelUpdate)
 
   await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+  if (order.paymentStatus === PAYMENT_STATUS.PAID || order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
+    await ledgerService.reverseOrderSettlement(orderId, { source: 'order_cancel', reason: note || 'Order cancelled' })
+  }
 
   // Tự động hoàn ví nếu đơn thanh toán bằng ví
   if (order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentMethod === 'wallet') {
@@ -445,9 +465,6 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
     await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'sold' })
-    if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-      await walletService.creditFromOrder(updated)
-    }
   }
 
   if (nextStatus === ORDER_STATUS.CANCELLED) {
@@ -502,11 +519,11 @@ export const cancelAdminOrder = async (orderId, userContext, { reason = '', admi
 export const refundAdminOrder = async (orderId, userContext, { reason = '', adminNote = '' } = {}) => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
-    throw new AppError('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
 
   if (order.paymentStatus !== PAYMENT_STATUS.PAID && order.paymentStatus !== PAYMENT_STATUS.REFUND_PENDING) {
-    throw new AppError('ÄÆ¡n hÃ ng khÃ´ng cÃ³ thanh toÃ¡n cáº§n hoÃ n', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
+    throw new AppError('Đơn hàng không có thanh toán cần hoàn', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
   }
 
   if (order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
@@ -528,6 +545,8 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
       })
     }
   }
+
+  await ledgerService.reverseOrderSettlement(orderId, { source: 'admin_refund', reason: reason || adminNote || 'Admin refund requested' })
 
   await writeAuditLog({
     adminId: userContext._id,

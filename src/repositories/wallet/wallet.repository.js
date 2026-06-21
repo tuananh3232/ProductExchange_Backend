@@ -11,7 +11,7 @@ export const findOrCreateByShop = (shopId) =>
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   )
 
-export const incrementBalance = (shopId, amount) =>
+export const incrementBalance = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -20,7 +20,19 @@ export const incrementBalance = (shopId, amount) =>
         totalEarned: amount,
       },
     },
-    { returnDocument: 'after', upsert: true }
+    { returnDocument: 'after', upsert: true, ...options }
+  )
+
+export const decrementBalance = (shopId, amount, options = {}) =>
+  Wallet.findOneAndUpdate(
+    { shop: shopId, balance: { $gte: amount } },
+    {
+      $inc: {
+        balance: -amount,
+        totalEarned: -amount,
+      },
+    },
+    { returnDocument: 'after', ...options }
   )
 
 export const deductForWithdrawal = (shopId, amount) =>

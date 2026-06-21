@@ -13,14 +13,14 @@ export const findBatchByOrders = (orderIds) =>
 
 export const findById = (id) =>
   Payment.findById(id)
-    .populate('order', 'status paymentStatus paymentMethod paymentProvider totalAmount buyer shop seller')
+    .populate('order', 'status paymentStatus paymentMethod paymentProvider totalAmount grossAmount totalPlatformFee netSettlementAmount settlementStatus buyer shop seller')
     .populate('orders', 'status paymentStatus totalAmount')
     .populate('buyer', 'name email avatar')
     .populate('reconciledBy', 'name email')
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 }) =>
   Payment.find(filter)
-    .populate('order', 'status paymentStatus totalAmount')
+    .populate('order', 'status paymentStatus totalAmount grossAmount totalPlatformFee netSettlementAmount settlementStatus')
     .populate('buyer', 'name email avatar')
     .sort({ [sortBy]: sortOrder })
     .skip(skip)

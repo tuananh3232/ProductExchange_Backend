@@ -64,6 +64,34 @@ const ERRORS = {
     PAYMENT_REQUIRED: 'Order must be paid before it can be confirmed',
   },
 
+  EXCHANGE: {
+    NOT_FOUND: 'Exchange offer not found',
+    INVALID_PARTICIPANT: 'You are not a participant in this exchange offer',
+    PRODUCT_NOT_ELIGIBLE: 'Product is not eligible for exchange',
+    SELF_EXCHANGE_NOT_ALLOWED: 'Cannot exchange with your own product',
+    SHOP_PRODUCT_NOT_ALLOWED: 'Shop product cannot join exchange',
+    KYC_REQUIRED: 'Both sellers must have approved KYC',
+    INVALID_STATUS_TRANSITION: 'Invalid exchange status transition',
+    PAYMENT_REQUIRED: 'Exchange payment is required before continuing',
+    ALREADY_PAID: 'Exchange difference has already been paid',
+    DISPUTE_REQUIRED: 'Exchange must be in dispute for admin resolution',
+  },
+
+  RENTAL: {
+    LISTING_NOT_FOUND: 'Rental listing not found',
+    BOOKING_NOT_FOUND: 'Rental booking not found',
+    CLAIM_NOT_FOUND: 'Rental claim not found',
+    SELF_RENTAL_NOT_ALLOWED: 'Cannot rent your own product',
+    PRODUCT_NOT_ELIGIBLE: 'Product is not eligible for rental',
+    INVALID_OWNER_CONTEXT: 'Invalid rental owner context',
+    INVALID_STATUS_TRANSITION: 'Invalid rental status transition',
+    OVERLAPPING_BOOKING: 'Rental booking overlaps with an existing booking',
+    PAYMENT_REQUIRED: 'Rental booking payment is required before continuing',
+    PAYMENT_WINDOW_EXPIRED: 'Rental booking payment window has expired',
+    CLAIM_OPEN: 'Rental claim is still open',
+    DISPUTE_REQUIRED: 'Rental claim must be under admin review',
+  },
+
   CONVERSATION: {
     AUTHENTICATION_REQUIRED: 'Authentication required',
     AUTHENTICATION_FAILED: 'Authentication failed',
@@ -148,6 +176,6 @@ const ERRORS = {
     INVALID_STATUS: 'Invalid withdrawal request status for this action',
     TRANSFER_PROOF_REQUIRED: 'Transfer proof is required to complete withdrawal',
   },
-};
+}
 
-export default ERRORS;
+export default ERRORS

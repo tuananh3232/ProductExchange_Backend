@@ -9,6 +9,10 @@ import * as orderController from '../../controllers/order/order.controller.js'
 import * as paymentController from '../../controllers/payment/payment.controller.js'
 import * as categoryController from '../../controllers/category/category.controller.js'
 import * as adminAuditController from '../../controllers/admin/admin-audit.controller.js'
+import * as adminFeePolicyController from '../../controllers/admin/admin-fee-policy.controller.js'
+import * as adminPlatformLedgerController from '../../controllers/admin/admin-platform-ledger.controller.js'
+import * as adminExchangeController from '../../controllers/admin/admin-exchange.controller.js'
+import * as adminRentalController from '../../controllers/admin/admin-rental.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
@@ -20,6 +24,11 @@ import {
   adminKycQuerySchema,
   adminCategoriesQuerySchema,
   adminCategoryCreateSchema,
+  adminFeePoliciesQuerySchema,
+  adminFeePolicyCreateSchema,
+  adminFeePolicyPreviewSchema,
+  adminFeePolicyUpdateSchema,
+  adminPlatformLedgerQuerySchema,
   adminCategoryStatusSchema,
   adminCategoryUpdateSchema,
   adminOrderActionSchema,
@@ -40,6 +49,15 @@ import {
   adminUsersQuerySchema,
   adminWithdrawalsQuerySchema,
 } from '../../validations/admin/admin.validation.js'
+import {
+  adminExchangeOffersQuerySchema,
+  adminResolveExchangeDisputeSchema,
+} from '../../validations/exchange/exchange.validation.js'
+import {
+  adminRentalBookingsQuerySchema,
+  adminRentalClaimsQuerySchema,
+  adminResolveRentalClaimSchema,
+} from '../../validations/rental/rental.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import adminStatsRoutes from './stats.route.js'
@@ -1061,6 +1079,157 @@ router.get(
   requireAdmin,
   validateObjectId('withdrawalId'),
   userWalletController.adminGetUserWithdrawalById
+)
+
+router.get(
+  '/fee-policies',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePoliciesQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminFeePolicyController.getFeePolicies
+)
+
+router.post(
+  '/fee-policies',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePolicyCreateSchema),
+  adminFeePolicyController.createFeePolicy
+)
+
+router.post(
+  '/fee-policies/preview',
+  authenticate,
+  requireAdmin,
+  validate(adminFeePolicyPreviewSchema),
+  adminFeePolicyController.previewFee
+)
+
+router.post(
+  '/fee-policies/seed',
+  authenticate,
+  requireAdmin,
+  adminFeePolicyController.seedDefaultSaleFeePolicies
+)
+
+router.get(
+  '/fee-policies/:feePolicyId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  adminFeePolicyController.getFeePolicyById
+)
+
+router.patch(
+  '/fee-policies/:feePolicyId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  validate(adminFeePolicyUpdateSchema),
+  adminFeePolicyController.updateFeePolicy
+)
+
+router.post(
+  '/fee-policies/:feePolicyId/disable',
+  authenticate,
+  requireAdmin,
+  validateObjectId('feePolicyId'),
+  adminFeePolicyController.disableFeePolicy
+)
+
+router.get(
+  '/platform-ledger',
+  authenticate,
+  requireAdmin,
+  validate(adminPlatformLedgerQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminPlatformLedgerController.getPlatformLedgerTransactions
+)
+
+router.get(
+  '/platform-ledger/reconciliation',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.getPlatformLedgerReconciliationSummary
+)
+
+router.get(
+  '/platform-ledger/:transactionId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('transactionId'),
+  adminPlatformLedgerController.getPlatformLedgerTransactionById
+)
+
+router.get(
+  '/platform-wallet/summary',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.getPlatformWalletSummary
+)
+
+router.get(
+  '/platform-wallet/export',
+  authenticate,
+  requireAdmin,
+  adminPlatformLedgerController.exportPlatformLedger
+)
+
+router.get(
+  '/exchanges',
+  authenticate,
+  requireAdmin,
+  validate(adminExchangeOffersQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminExchangeController.getAdminExchangeOffers
+)
+
+router.get(
+  '/exchanges/:exchangeOfferId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('exchangeOfferId'),
+  adminExchangeController.getAdminExchangeOfferById
+)
+
+router.post(
+  '/exchanges/:exchangeOfferId/resolve',
+  authenticate,
+  requireAdmin,
+  validateObjectId('exchangeOfferId'),
+  validate(adminResolveExchangeDisputeSchema),
+  adminExchangeController.resolveAdminExchangeDispute
+)
+
+router.get(
+  '/rentals',
+  authenticate,
+  requireAdmin,
+  validate(adminRentalBookingsQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminRentalController.getAdminRentalBookings
+)
+
+router.get(
+  '/rental-claims',
+  authenticate,
+  requireAdmin,
+  validate(adminRentalClaimsQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminRentalController.getAdminRentalClaims
+)
+
+router.get(
+  '/rental-claims/:rentalClaimId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('rentalClaimId'),
+  adminRentalController.getAdminRentalClaimById
+)
+
+router.post(
+  '/rental-claims/:rentalClaimId/resolve',
+  authenticate,
+  requireAdmin,
+  validateObjectId('rentalClaimId'),
+  validate(adminResolveRentalClaimSchema),
+  adminRentalController.resolveAdminRentalClaim
 )
 
 router.get(

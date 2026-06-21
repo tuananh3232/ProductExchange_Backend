@@ -53,7 +53,7 @@ const formatCart = (cart) => {
 
 const getOrCreateCart = async (userId) => (await Cart.findOne({ user: userId })) || new Cart({ user: userId, items: [] })
 
-const populateCart = (cart) => cart.populate('items.product', 'title price stock status isActive images owner ownerType shop seller listingType')
+const populateCart = (cart) => cart.populate('items.product', 'title price stock status isActive images owner ownerType shop seller listingType transactionMode')
 
 const assertProductAvailableForQuantity = (product, quantity) => {
   const reason = getUnavailableReason(product, quantity)
@@ -68,7 +68,7 @@ const assertProductAvailableForQuantity = (product, quantity) => {
 const assertProductCheckoutable = (product, quantity, userId) => {
   assertProductAvailableForQuantity(product, quantity)
 
-  if (!['sell', 'both'].includes(product.listingType)) {
+  if ((product.transactionMode || 'sell') !== 'sell') {
     throw new AppError('Sản phẩm này không hỗ trợ đặt mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
   }
 
@@ -209,7 +209,7 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
 
   const checkoutItems = getCheckoutItems(cart, payload.selectedProductIds)
   const productIds = checkoutItems.map((item) => item.product.toString())
-  const products = await Product.find({ _id: { $in: productIds } }).select('_id price stock status isActive owner ownerType shop seller listingType')
+  const products = await Product.find({ _id: { $in: productIds } }).select('_id price stock status isActive owner ownerType shop seller listingType transactionMode')
   const productById = new Map(products.map((product) => [product._id.toString(), product]))
 
   for (const item of checkoutItems) {

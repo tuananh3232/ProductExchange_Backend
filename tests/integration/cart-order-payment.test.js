@@ -2,7 +2,7 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { loginMember } from '../setup/auth.js'
+import { loginMember, loginSeller } from '../setup/auth.js'
 import { createSampleProduct } from '../setup/factories.js'
 import Cart from '../../src/models/cart.model.js'
 import Product from '../../src/models/product.model.js'
@@ -72,6 +72,40 @@ describe('cart, order, and payment integration', () => {
     expect(response.status).toBe(400)
     expect(response.body.errors[0].reason).toBe('inactive')
     expect(cart).toBeNull()
+  })
+
+  it('rejects rental products in cart checkout and direct order creation', async () => {
+    const [{ token }, { user: seller }] = await Promise.all([loginMember(), loginSeller()])
+    const rentalProduct = await createSampleProduct({
+      owner: seller._id,
+      seller: seller._id,
+      ownerType: 'SELLER',
+      shop: null,
+      transactionMode: 'rental',
+      status: PRODUCT_STATUS.AVAILABLE,
+      stock: 3,
+    })
+
+    const addToCartResponse = await request(app)
+      .post(`${api}/cart/add-combo`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: rentalProduct._id.toString(), quantity: 1 }] })
+
+    expect(addToCartResponse.status).toBe(200)
+
+    const checkoutResponse = await request(app)
+      .post(`${api}/cart/checkout`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ selectedProductIds: [rentalProduct._id.toString()] })
+
+    expect(checkoutResponse.status).toBe(400)
+
+    const directOrderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: rentalProduct._id.toString(), quantity: 1, shippingAddress })
+
+    expect(directOrderResponse.status).toBe(400)
   })
 
   it('creates an order for an available product and marks the product pending', async () => {

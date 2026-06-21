@@ -1,6 +1,9 @@
 import Category from '../../models/category.model.js'
+import ExchangeOffer from '../../models/exchange-offer.model.js'
+import LedgerTransaction from '../../models/ledger-transaction.model.js'
 import Order from '../../models/order.model.js'
 import Payment from '../../models/payment.model.js'
+import RentalClaim from '../../models/rental-claim.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import UserWalletWithdrawal from '../../models/user-wallet-withdrawal.model.js'
@@ -142,6 +145,48 @@ const exportConfig = {
       { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
     ],
   },
+  platform_ledger: {
+    model: LedgerTransaction,
+    columns: [
+      { header: 'id', value: (row) => row._id },
+      { header: 'transactionType', value: (row) => row.transactionType },
+      { header: 'referenceType', value: (row) => row.referenceType },
+      { header: 'referenceId', value: (row) => row.referenceId },
+      { header: 'grossAmount', value: (row) => row.grossAmount },
+      { header: 'platformFee', value: (row) => row.platformFee },
+      { header: 'netSettlementAmount', value: (row) => row.netSettlementAmount },
+      { header: 'settlementStatus', value: (row) => row.settlementStatus },
+      { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
+    ],
+  },
+  rental_claims: {
+    model: RentalClaim,
+    columns: [
+      { header: 'id', value: (row) => row._id },
+      { header: 'booking', value: (row) => row.booking },
+      { header: 'ownerType', value: (row) => row.ownerType },
+      { header: 'requestedAmount', value: (row) => row.requestedAmount },
+      { header: 'approvedAmount', value: (row) => row.approvedAmount },
+      { header: 'status', value: (row) => row.status },
+      { header: 'reviewedAt', value: (row) => row.reviewedAt?.toISOString?.() || '' },
+      { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
+    ],
+  },
+  exchange_disputes: {
+    model: ExchangeOffer,
+    columns: [
+      { header: 'id', value: (row) => row._id },
+      { header: 'requesterSeller', value: (row) => row.requesterSeller },
+      { header: 'receiverSeller', value: (row) => row.receiverSeller },
+      { header: 'cashDifferenceAmount', value: (row) => row.cashDifferenceAmount },
+      { header: 'platformFee', value: (row) => row.platformFee },
+      { header: 'status', value: (row) => row.status },
+      { header: 'resolution', value: (row) => row.resolution },
+      { header: 'disputeOpenedAt', value: (row) => row.disputeOpenedAt?.toISOString?.() || '' },
+      { header: 'resolvedAt', value: (row) => row.resolvedAt?.toISOString?.() || '' },
+      { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
+    ],
+  },
 }
 
 export const exportAdminReport = async ({ type, fromDate, toDate }) => {
@@ -151,6 +196,19 @@ export const exportAdminReport = async ({ type, fromDate, toDate }) => {
   }
 
   const filter = buildDateRange({ fromDate, toDate, requireRange: true })
+  if (type === 'exchange_disputes') {
+    filter.disputeOpenedAt = filter.createdAt
+    delete filter.createdAt
+    filter.disputeOpenedAt = {
+      ...filter.disputeOpenedAt,
+      $exists: true,
+    }
+  }
+
+  if (type === 'rental_claims') {
+    filter.ownerType = { $in: ['SELLER', 'SHOP'] }
+  }
+
   const rows = await config.model.find(filter).sort({ createdAt: -1 }).limit(MAX_EXPORT_ROWS).lean()
 
   return {

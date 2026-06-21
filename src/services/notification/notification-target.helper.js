@@ -97,23 +97,35 @@ const voucherTypes = new Set([NOTIFICATION_TYPES.VOUCHER_CREATED, NOTIFICATION_T
 const flashSaleTypes = new Set([NOTIFICATION_TYPES.FLASH_SALE_STARTED, NOTIFICATION_TYPES.FLASH_SALE_ENDING_SOON])
 
 const comboTypes = new Set([NOTIFICATION_TYPES.COMBO_RECOMMENDED])
+ 
+const exchangeTypes = new Set([
+  NOTIFICATION_TYPES.EXCHANGE_OFFER_CREATED,
+  NOTIFICATION_TYPES.EXCHANGE_COUNTERED,
+  NOTIFICATION_TYPES.EXCHANGE_ACCEPTED,
+  NOTIFICATION_TYPES.EXCHANGE_PAID,
+  NOTIFICATION_TYPES.EXCHANGE_SHIPPED,
+  NOTIFICATION_TYPES.EXCHANGE_COMPLETED,
+  NOTIFICATION_TYPES.EXCHANGE_CANCELLED,
+  NOTIFICATION_TYPES.EXCHANGE_DISPUTED,
+  NOTIFICATION_TYPES.EXCHANGE_RESOLVED
+])
 
 const systemTypes = new Set([
   NOTIFICATION_TYPES.SYSTEM_MAINTENANCE,
   NOTIFICATION_TYPES.SYSTEM_POLICY_UPDATED,
   NOTIFICATION_TYPES.SYSTEM
 ])
-
+ 
 const getExplicitRelativeUrl = (payload) => {
   const explicitTargetUrl = payload.targetUrl || payload.actionUrl
   return isRelativeUrl(explicitTargetUrl) ? explicitTargetUrl : null
 }
-
+ 
 export const buildNotificationTarget = (payload = {}) => {
   const metadata = compactObject({ ...(payload.data || {}), ...(payload.metadata || {}) })
   const explicitTargetUrl = getExplicitRelativeUrl(payload)
   const type = payload.type
-
+ 
   if (chatTypes.has(type)) {
     const conversationId = firstId(metadata.conversationId, payload.targetId)
     return {
@@ -121,6 +133,16 @@ export const buildNotificationTarget = (payload = {}) => {
       targetId: conversationId,
       targetUrl: explicitTargetUrl || (conversationId ? `/chats/${encodeId(conversationId)}` : '/chats'),
       metadata: compactObject({ ...metadata, conversationId })
+    }
+  }
+
+  if (exchangeTypes.has(type)) {
+    const exchangeOfferId = firstId(metadata.exchangeOfferId, payload.targetId)
+    return {
+      targetType: NOTIFICATION_TARGET_TYPES.EXCHANGE,
+      targetId: exchangeOfferId,
+      targetUrl: explicitTargetUrl || (exchangeOfferId ? `/seller/exchanges/${encodeId(exchangeOfferId)}` : '/seller/exchanges'),
+      metadata: compactObject({ ...metadata, exchangeOfferId })
     }
   }
 

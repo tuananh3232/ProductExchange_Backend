@@ -481,7 +481,7 @@ const sanitizeAdminUserDetail = (user) => {
 export const getAdminUserById = async (userId) => {
   const user = await userRepo.findById(userId)
   if (!user) {
-    throw new AppError('NgÆ°á»i dÃ¹ng khÃ´ng tá»“n táº¡i', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   const [shops, userWallet, orderSummary] = await Promise.all([
@@ -543,7 +543,7 @@ export const getAdminUserById = async (userId) => {
 export const updateAdminUserStatus = async (userId, { isActive, reason = '', adminNote = '' }, actor) => {
   const user = await userRepo.findById(userId)
   if (!user) {
-    throw new AppError('NgÆ°á»i dÃ¹ng khÃ´ng tá»“n táº¡i', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   if (actor?._id?.toString() === user._id.toString()) {

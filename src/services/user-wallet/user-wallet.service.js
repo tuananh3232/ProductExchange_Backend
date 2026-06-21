@@ -11,6 +11,7 @@ import Order from '../../models/order.model.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import * as ledgerService from '../ledger/ledger.service.js'
 
 // ─── Get wallet ──────────────────────────────────────────────────────────────
 
@@ -125,6 +126,8 @@ export const payOrderWithWallet = async (orderId, userContext) => {
     data: { orderId, transactionId: tx._id },
   })
 
+  await ledgerService.settlePaidOrder(orderId, { source: 'user_wallet' })
+
   return { wallet: updatedWallet, transaction: tx }
 }
 
@@ -203,6 +206,8 @@ export const payOrdersWithWallet = async (orderIds, userContext) => {
     actionUrl: '/orders',
     data: { orderIds: uniqueIds, totalAmount },
   })
+
+  await Promise.all(uniqueIds.map((id) => ledgerService.settlePaidOrder(id, { source: 'user_wallet_batch' })))
 
   return { wallet: updatedWallet, transactions, orderCount: orders.length, totalAmount }
 }

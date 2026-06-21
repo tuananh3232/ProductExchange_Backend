@@ -23,6 +23,13 @@ export const creditTopup = (userId, amount) =>
     { returnDocument: 'after', upsert: true }
   )
 
+export const creditExchangeSettlement = (userId, amount, options = {}) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { balance: amount } },
+    { returnDocument: 'after', upsert: true, ...options }
+  )
+
 export const deductForOrder = (userId, amount) =>
   UserWallet.findOneAndUpdate(
     { user: userId, balance: { $gte: amount } },
@@ -30,11 +37,25 @@ export const deductForOrder = (userId, amount) =>
     { returnDocument: 'after' }
   )
 
+export const deductForExchange = (userId, amount, options = {}) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId, balance: { $gte: amount } },
+    { $inc: { balance: -amount, totalSpent: amount } },
+    { returnDocument: 'after', ...options }
+  )
+
 export const refundFromOrder = (userId, amount) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     { $inc: { balance: amount, totalSpent: -amount } },
     { returnDocument: 'after', upsert: true }
+  )
+
+export const refundFromExchange = (userId, amount, options = {}) =>
+  UserWallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { balance: amount, totalSpent: -amount } },
+    { returnDocument: 'after', upsert: true, ...options }
   )
 
 // atomic deduct: chỉ thành công khi balance >= amount

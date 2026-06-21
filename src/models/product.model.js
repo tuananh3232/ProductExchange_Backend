@@ -7,6 +7,12 @@ export const PRODUCT_OWNER_TYPES = {
   SELLER: 'SELLER',
 }
 
+export const PRODUCT_TRANSACTION_MODES = {
+  SELL: 'sell',
+  RENTAL: 'rental',
+  EXCHANGE: 'exchange',
+}
+
 const productSchema = new mongoose.Schema(
   {
     title: {
@@ -34,6 +40,17 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: ['sell'],
       required: [true, 'Listing type is required'],
+    },
+    transactionMode: {
+      type: String,
+      enum: Object.values(PRODUCT_TRANSACTION_MODES),
+      default: PRODUCT_TRANSACTION_MODES.SELL,
+      index: true,
+    },
+    activeRentalListing: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'RentalListing',
+      default: null,
     },
     condition: {
       type: String,
@@ -193,6 +210,7 @@ productSchema.index({ shop: 1, status: 1 })
 productSchema.index({ seller: 1, status: 1 })
 productSchema.index({ ownerType: 1, status: 1 })
 productSchema.index({ listingType: 1, status: 1 })
+productSchema.index({ transactionMode: 1, status: 1 })
 productSchema.index({ createdAt: -1 })
 productSchema.index({ isActive: 1, status: 1, stock: 1, decorRole: 1, price: 1 })
 
