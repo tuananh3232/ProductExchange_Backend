@@ -152,12 +152,12 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
 
 export const createOrder = async (buyerId, payload) => {
   const productId = payload.productId || payload.product
-  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType price isActive title')
+  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType transactionMode price isActive title')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
 
-  if (!['sell', 'both'].includes(product.listingType)) {
+  if ((product.transactionMode || 'sell') !== 'sell') {
     throw new AppError('Sản phẩm này không hỗ trợ đặt đơn mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
   }
 

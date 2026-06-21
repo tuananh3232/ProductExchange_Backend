@@ -168,6 +168,10 @@ describe('rental integration', () => {
       lateFeePerDay: 25000,
     })
 
+    const syncedProduct = await Product.findById(product._id).lean()
+    expect(syncedProduct.transactionMode).toBe('rental')
+    expect(String(syncedProduct.activeRentalListing)).toBe(String(listing._id))
+
     const initialStartDate = new Date()
     initialStartDate.setDate(initialStartDate.getDate() + 3)
     const initialEndDate = new Date(initialStartDate)

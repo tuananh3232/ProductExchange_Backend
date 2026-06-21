@@ -2,6 +2,7 @@ import FeeSnapshot from '../../models/fee-snapshot.model.js'
 import LedgerEntry from '../../models/ledger-entry.model.js'
 import LedgerTransaction from '../../models/ledger-transaction.model.js'
 import PlatformWallet from '../../models/platform-wallet.model.js'
+import Product, { PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import RentalBooking from '../../models/rental-booking.model.js'
 import RentalClaim from '../../models/rental-claim.model.js'
 import RentalInspection from '../../models/rental-inspection.model.js'
@@ -294,6 +295,12 @@ const buildBookingDraft = async ({ listing, payload, excludeBookingId = null }) 
   }
 }
 
+const syncProductRentalMode = async (productId, listingId) =>
+  Product.findByIdAndUpdate(productId, {
+    transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL,
+    activeRentalListing: listingId,
+  })
+
 export const createRentalListing = async (payload, user) => {
   const product = await assertRentalProductEligibility(payload.productId)
   const ownerContext = await assertRentalListingOwnerContext(product, payload, user._id)
@@ -308,6 +315,7 @@ export const createRentalListing = async (payload, user) => {
     existingListing.title = payload.title || product.title
     existingListing.description = payload.description || product.description
     await existingListing.save()
+    await syncProductRentalMode(product._id, existingListing._id)
     return populateChain(RentalListing.findById(existingListing._id), RENTAL_LISTING_POPULATE)
   }
 
@@ -324,6 +332,8 @@ export const createRentalListing = async (payload, user) => {
     minRentalDays: payload.minRentalDays ?? 1,
     maxRentalDays: payload.maxRentalDays ?? 30,
   })
+
+  await syncProductRentalMode(product._id, listing._id)
 
   return populateChain(RentalListing.findById(listing._id), RENTAL_LISTING_POPULATE)
 }

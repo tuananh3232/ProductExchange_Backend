@@ -51,8 +51,8 @@ const router = Router()
  *         schema:
  *           type: string
  *       - in: query
- *         name: listingType
- *         schema: { type: string, enum: [sell] }
+ *         name: transactionMode
+ *         schema: { type: string, enum: [sell, rental] }
  *       - in: query
  *         name: minPrice
  *         schema: { type: number }
@@ -102,6 +102,9 @@ const router = Router()
  *               listingType:
  *                 type: string
  *                 enum: [sell]
+ *               transactionMode:
+ *                 type: string
+ *                 enum: [sell, rental]
  *               condition:
  *                 type: string
  *                 enum: [new, like_new, good, fair, poor]

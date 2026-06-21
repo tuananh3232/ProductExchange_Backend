@@ -33,6 +33,7 @@ export const findById = (id) =>
     .populate('seller', 'name avatar rating phone')
     .populate('category', 'name slug')
     .populate('shop', 'name slug owner staff')
+    .populate('activeRentalListing')
     .then(normalizeProductImages)
 
 export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1, sort = null }) =>
@@ -41,6 +42,7 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
     .populate('seller', 'name avatar rating')
     .populate('category', 'name slug')
     .populate('shop', 'name slug')
+    .populate('activeRentalListing')
     .sort(sort || { [sortBy]: sortOrder })
     .skip(skip)
     .limit(limit)

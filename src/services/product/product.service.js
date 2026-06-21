@@ -8,7 +8,8 @@ import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
-import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import RentalListing from '../../models/rental-listing.model.js'
+import { PRODUCT_OWNER_TYPES, PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
@@ -28,6 +29,58 @@ const normalizeImages = (images = []) => {
     isPrimary: hasPrimary ? Boolean(image.isPrimary) : index === 0,
   }))
 }
+
+const toRentalInfo = (listing) => {
+  if (!listing) return null
+
+  return {
+    listingId: listing._id?.toString?.() || listing._id || null,
+    dailyRate: Number(listing.dailyRate || 0),
+    depositAmount: Number(listing.depositAmount || 0),
+    lateFeePerDay: Number(listing.lateFeePerDay || 0),
+    minRentalDays: Math.max(1, Number(listing.minRentalDays || 1)),
+    maxRentalDays: Math.min(30, Number(listing.maxRentalDays || 30)),
+    isActive: Boolean(listing.isActive),
+  }
+}
+
+const normalizeProductDocument = (product) => (typeof product?.toObject === 'function' ? product.toObject() : { ...product })
+
+const attachRentalInfo = async (product) => {
+  if (!product) return product
+
+  const normalizedProduct = normalizeProductDocument(product)
+  const populatedRentalListing =
+    normalizedProduct.activeRentalListing && typeof normalizedProduct.activeRentalListing === 'object'
+      ? normalizedProduct.activeRentalListing
+      : null
+  const activeRentalListing = populatedRentalListing || await RentalListing.findOne({ product: normalizedProduct._id, isActive: true }).lean()
+
+  if (
+    activeRentalListing &&
+    (String(normalizedProduct.activeRentalListing?._id || normalizedProduct.activeRentalListing || '') !== String(activeRentalListing._id) ||
+      normalizedProduct.transactionMode !== PRODUCT_TRANSACTION_MODES.RENTAL)
+  ) {
+    await productRepo.updateById(normalizedProduct._id, {
+      transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL,
+      activeRentalListing: activeRentalListing._id,
+    })
+  }
+
+  if (!activeRentalListing && normalizedProduct.activeRentalListing) {
+    await productRepo.updateById(normalizedProduct._id, {
+      activeRentalListing: null,
+    })
+  }
+
+  return {
+    ...normalizedProduct,
+    transactionMode: activeRentalListing ? PRODUCT_TRANSACTION_MODES.RENTAL : (normalizedProduct.transactionMode || PRODUCT_TRANSACTION_MODES.SELL),
+    rentalInfo: toRentalInfo(activeRentalListing),
+  }
+}
+
+const attachRentalInfoList = async (products = []) => Promise.all(products.map((product) => attachRentalInfo(product)))
 
 // Khi có $text, ưu tiên điểm liên quan trước rồi mới sort theo tiêu chí người dùng chọn
 const textSearchOptions = (filter, pag) =>
@@ -251,18 +304,40 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
   return filter
 }
 
+const applyTransactionModeFilter = async (query, filter) => {
+  if (!query.transactionMode) return filter
+
+  const activeRentalProductIds = await RentalListing.distinct('product', { isActive: true })
+
+  if (query.transactionMode === PRODUCT_TRANSACTION_MODES.RENTAL) {
+    return {
+      ...filter,
+      $or: [
+        { _id: { $in: activeRentalProductIds } },
+        { transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL },
+      ],
+    }
+  }
+
+  return {
+    ...filter,
+    _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
+    transactionMode: { $ne: PRODUCT_TRANSACTION_MODES.RENTAL },
+  }
+}
+
 export const getProducts = async (query, pagination) => {
   const pag = normalizeProductSort(pagination)
-  const filter = buildFilter(query)
+  const filter = await applyTransactionModeFilter(query, buildFilter(query))
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachRentalInfoList(products), meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
-  const filter = buildFilter(query, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter(query, { publicOnly: false }))
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachRentalInfoList(products), meta }
 }
 
 export const getShopProducts = async (shopId, userContext, query, pagination) => {
@@ -274,14 +349,14 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
 
-  const filter = buildFilter({ ...query, shopId }, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter({ ...query, shopId }, { publicOnly: false }))
   if (query.isActive === undefined) {
     filter.isActive = true
   }
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachRentalInfoList(products), meta }
 }
 
 export const getSellerProducts = async (userContext, query, pagination) => {
@@ -289,7 +364,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
     throw new AppError('Bạn cần có role seller để xem sản phẩm cá nhân', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
-  const filter = buildFilter(query, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter(query, { publicOnly: false }))
   filter.ownerType = PRODUCT_OWNER_TYPES.SELLER
   filter.seller = userContext._id
   filter.isActive = true
@@ -299,7 +374,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachRentalInfoList(products), meta }
 }
 
 export const getProductById = async (id) => {
@@ -307,7 +382,7 @@ export const getProductById = async (id) => {
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  return product
+  return attachRentalInfo(product)
 }
 
 export const getAdminProductById = async (id) => {
@@ -315,7 +390,7 @@ export const getAdminProductById = async (id) => {
   if (!product) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  return product
+  return attachRentalInfo(product)
 }
 
 export const createProduct = async (userContext, productData, files = []) => {
@@ -328,6 +403,7 @@ export const createProduct = async (userContext, productData, files = []) => {
 
   return productRepo.create({
     ...safeProductData,
+    transactionMode: safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL,
     ...ownership,
     images,
   })

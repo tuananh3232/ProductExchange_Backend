@@ -21,6 +21,7 @@ const productPayload = (overrides = {}) => ({
   price: 150000,
   stock: 3,
   listingType: 'sell',
+  transactionMode: 'sell',
   condition: 'new',
   location: { province: 'Test Province', district: 'Test District' },
   ...overrides
@@ -256,6 +257,7 @@ describe('product and shop integration', () => {
     expect(response.status).toBe(201)
     expect(response.body.data.product.shop.toString()).toBe(shop._id.toString())
     expect(response.body.data.product.ownerType).toBe(PRODUCT_OWNER_TYPES.SHOP)
+    expect(response.body.data.product.transactionMode).toBe('sell')
   })
 
   it('allows a seller to create a personal product', async () => {
@@ -270,6 +272,7 @@ describe('product and shop integration', () => {
     expect(response.status).toBe(201)
     expect(response.body.data.product.ownerType).toBe(PRODUCT_OWNER_TYPES.SELLER)
     expect(response.body.data.product.seller).toBeDefined()
+    expect(response.body.data.product.transactionMode).toBe('sell')
   })
 
   it('does not allow a member to create a product', async () => {
@@ -296,6 +299,73 @@ describe('product and shop integration', () => {
     expect(ids).toContain(availableProduct._id.toString())
     expect(ids).not.toContain(hiddenProduct._id.toString())
     expect(ids).not.toContain(inactiveProduct._id.toString())
+  })
+
+  it('filters public products by transactionMode and returns rentalInfo for rental products', async () => {
+    const { user: seller, token } = await loginSeller({
+      kyc: { status: 'approved', fullName: 'Rental Product Seller', idNumber: '123456789099' }
+    })
+    const category = await createSampleCategory()
+    const sellProduct = await createSampleProduct({
+      owner: seller._id,
+      seller: seller._id,
+      ownerType: PRODUCT_OWNER_TYPES.SELLER,
+      shop: null,
+      category: category._id,
+      status: PRODUCT_STATUS.AVAILABLE,
+      isActive: true,
+    })
+    const rentalProduct = await createSampleProduct({
+      owner: seller._id,
+      seller: seller._id,
+      ownerType: PRODUCT_OWNER_TYPES.SELLER,
+      shop: null,
+      category: category._id,
+      status: PRODUCT_STATUS.AVAILABLE,
+      isActive: true,
+    })
+
+    const listingResponse = await request(app)
+      .post(`${api}/rentals/listings`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        productId: rentalProduct._id.toString(),
+        ownerType: 'SELLER',
+        dailyRate: 120000,
+        depositAmount: 250000,
+        lateFeePerDay: 15000,
+        minRentalDays: 2,
+        maxRentalDays: 15,
+      })
+
+    expect(listingResponse.status).toBe(201)
+
+    const [sellResponse, rentalResponse, detailResponse] = await Promise.all([
+      request(app).get(`${api}/products`).query({ transactionMode: 'sell' }),
+      request(app).get(`${api}/products`).query({ transactionMode: 'rental' }),
+      request(app).get(`${api}/products/${rentalProduct._id}`),
+    ])
+
+    expect(sellResponse.status).toBe(200)
+    expect(sellResponse.body.data.products.some((product) => product._id.toString() === sellProduct._id.toString())).toBe(true)
+    expect(sellResponse.body.data.products.some((product) => product._id.toString() === rentalProduct._id.toString())).toBe(false)
+
+    expect(rentalResponse.status).toBe(200)
+    expect(rentalResponse.body.data.products).toHaveLength(1)
+    expect(rentalResponse.body.data.products[0]._id.toString()).toBe(rentalProduct._id.toString())
+    expect(rentalResponse.body.data.products[0].transactionMode).toBe('rental')
+    expect(rentalResponse.body.data.products[0].rentalInfo).toMatchObject({
+      dailyRate: 120000,
+      depositAmount: 250000,
+      lateFeePerDay: 15000,
+      minRentalDays: 2,
+      maxRentalDays: 15,
+      isActive: true,
+    })
+
+    expect(detailResponse.status).toBe(200)
+    expect(detailResponse.body.data.product.transactionMode).toBe('rental')
+    expect(detailResponse.body.data.product.rentalInfo?.listingId).toBeTruthy()
   })
 
   it('does not allow a different seller to manage someone else product', async () => {
