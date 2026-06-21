@@ -131,6 +131,12 @@ const diffDaysInclusive = (start, end) => {
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1)
 }
 
+const resolveRentalDaysErrorMessage = (listing) => {
+  const minDays = Math.max(1, Number(listing?.minRentalDays || 1))
+  const maxDays = Math.min(30, Number(listing?.maxRentalDays || 30))
+  return `Thời gian thuê phải từ ${minDays} đến ${maxDays} ngày`
+}
+
 const isPaymentWindowExpired = (booking, now = new Date()) =>
   booking.status === RENTAL_BOOKING_STATUS.PAYMENT_PENDING && booking.startDate && now.getTime() >= new Date(booking.startDate).getTime()
 
@@ -264,7 +270,7 @@ const buildBookingDraft = async ({ listing, payload, excludeBookingId = null }) 
   const plannedDays = diffDaysInclusive(startDate, endDate)
 
   if (plannedDays < 1 || plannedDays > 30 || plannedDays < listing.minRentalDays || plannedDays > listing.maxRentalDays) {
-    throw new AppError('Thời gian thuê phải từ 1 đến 30 ngày', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    throw new AppError(resolveRentalDaysErrorMessage(listing), HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
 
   const overlap = await RentalBooking.exists({
@@ -363,7 +369,7 @@ export const createRentalBooking = async (payload, user) => {
   const plannedDays = diffDaysInclusive(startDate, endDate)
 
   if (plannedDays < 1 || plannedDays > 30 || plannedDays < listing.minRentalDays || plannedDays > listing.maxRentalDays) {
-    throw new AppError('Thời gian thuê phải từ 1 đến 30 ngày', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    throw new AppError(resolveRentalDaysErrorMessage(listing), HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
 
   const overlap = await RentalBooking.exists({
