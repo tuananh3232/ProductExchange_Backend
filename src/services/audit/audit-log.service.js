@@ -63,26 +63,53 @@ const sanitizeMetadata = (metadata = {}) => {
   }, {})
 }
 
+// Groups raw audit `targetType` values into the coarse modules the admin UI filters by.
+export const AUDIT_TARGET_TYPE_TO_MODULE = {
+  user: 'users',
+  role: 'users',
+  product: 'products',
+  category: 'products',
+  shop: 'shops',
+  order: 'orders',
+  exchange: 'orders',
+  payment: 'payments',
+  withdrawal: 'payments',
+  notification: 'notifications',
+}
+
+const buildAuditDescription = (value) => {
+  if (value.reason) return value.reason
+  if (value.previousStatus || value.newStatus) {
+    return `${value.previousStatus || '—'} → ${value.newStatus || '—'}`
+  }
+  return value.adminNote || ''
+}
+
 export const serializeAuditLog = (log) => {
   const value = typeof log?.toObject === 'function' ? log.toObject() : { ...(log || {}) }
+  const actor = value.adminId?._id
+    ? {
+        _id: value.adminId._id.toString(),
+        name: value.adminId.name,
+        email: value.adminId.email,
+        role: Array.isArray(value.adminId.roles) ? value.adminId.roles[0] : undefined,
+      }
+    : null
   return {
     _id: value._id?.toString?.() || value._id,
-    adminId: value.adminId?._id
-      ? {
-          _id: value.adminId._id.toString(),
-          name: value.adminId.name,
-          email: value.adminId.email,
-        }
-      : value.adminId?.toString?.() || value.adminId,
     action: value.action,
-    targetType: value.targetType,
-    targetId: value.targetId?.toString?.() || value.targetId,
+    module: AUDIT_TARGET_TYPE_TO_MODULE[value.targetType] || value.targetType || 'general',
+    entityType: value.targetType,
+    entityId: value.targetId?.toString?.() || value.targetId,
+    description: buildAuditDescription(value),
+    actor,
+    metadata: sanitizeMetadata(value.metadata || {}),
+    createdAt: value.createdAt,
+    // Raw fields retained for backward compatibility / detail views.
     previousStatus: value.previousStatus || '',
     newStatus: value.newStatus || '',
     reason: value.reason || '',
     adminNote: value.adminNote || '',
-    metadata: sanitizeMetadata(value.metadata || {}),
-    createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   }
 }
@@ -91,7 +118,7 @@ export const listAuditLogs = async (filter = {}, { page = 1, limit = 10, sortOrd
   const skip = (page - 1) * limit
   const [logs, total] = await Promise.all([
     AuditLog.find(filter)
-      .populate('adminId', 'name email')
+      .populate('adminId', 'name email roles')
       .sort({ createdAt: sortOrder })
       .skip(skip)
       .limit(limit),

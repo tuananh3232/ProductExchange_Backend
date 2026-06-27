@@ -1,4 +1,3 @@
-import mongoose from 'mongoose'
 import FeePolicy from '../../models/fee-policy.model.js'
 import FeeSnapshot from '../../models/fee-snapshot.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -6,6 +5,7 @@ import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import { runMongoTransaction } from '../../utils/mongo-transaction.util.js'
 import { FEE_OWNER_TYPE } from '../../constants/fee.constant.js'
 import { FEE_POLICY_STATUS } from '../../constants/status.constant.js'
 
@@ -325,10 +325,9 @@ export const seedDefaultSaleFeePolicies = async (adminId = null) => {
     { minAmount: 5000000, maxAmount: null, percent: 12 },
   ]
 
-  const session = await mongoose.startSession()
-  try {
-    session.startTransaction()
-    await FeePolicy.deleteMany({ transactionType: 'SALE', ownerType: 'ALL', categoryId: null }, { session })
+  return runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    await FeePolicy.deleteMany({ transactionType: 'SALE', ownerType: 'ALL', categoryId: null }, options)
 
     const created = await FeePolicy.insertMany(
       defaults.map((item) => ({
@@ -349,15 +348,9 @@ export const seedDefaultSaleFeePolicies = async (adminId = null) => {
         createdByAdminId: adminId,
         updatedByAdminId: adminId,
       })),
-      { session }
+      options
     )
 
-    await session.commitTransaction()
     return created
-  } catch (error) {
-    await session.abortTransaction()
-    throw error
-  } finally {
-    session.endSession()
-  }
+  })
 }

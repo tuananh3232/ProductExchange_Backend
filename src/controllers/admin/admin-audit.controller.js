@@ -4,7 +4,7 @@ import { sendSuccess } from '../../utils/response.util.js'
 
 export const getAuditLogs = asyncHandler(async (req, res) => {
   const { auditLogs, meta } = await adminAuditService.getAuditLogs(req.query)
-  sendSuccess(res, { message: 'Lấy nhật ký kiểm tra thành công', data: { auditLogs }, meta })
+  sendSuccess(res, { message: 'Lấy nhật ký kiểm tra thành công', data: { logs: auditLogs }, meta })
 })
 
 export const getUserActivity = asyncHandler(async (req, res) => {

@@ -250,6 +250,7 @@ export const adminAuditQuerySchema = Joi.object({
   limit,
   action: Joi.string().trim().max(100),
   targetType: Joi.string().trim().max(50),
+  module: Joi.string().trim().valid('users', 'products', 'shops', 'orders', 'payments', 'notifications'),
   targetId: objectId,
   adminId: objectId,
   fromDate: Joi.date().iso(),

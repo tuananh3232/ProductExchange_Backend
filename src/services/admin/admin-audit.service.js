@@ -5,7 +5,14 @@ import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { listAuditLogs } from '../audit/audit-log.service.js'
+import { listAuditLogs, AUDIT_TARGET_TYPE_TO_MODULE } from '../audit/audit-log.service.js'
+
+// Reverse of AUDIT_TARGET_TYPE_TO_MODULE: a UI module maps back to every raw targetType it groups.
+const MODULE_TO_TARGET_TYPES = Object.entries(AUDIT_TARGET_TYPE_TO_MODULE).reduce((acc, [targetType, module]) => {
+  acc[module] = acc[module] || []
+  acc[module].push(targetType)
+  return acc
+}, {})
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(value.toString())
 
@@ -44,6 +51,9 @@ const buildAuditFilter = (query = {}) => {
 
   if (query.action) filter.action = query.action
   if (query.targetType) filter.targetType = query.targetType
+  else if (query.module && MODULE_TO_TARGET_TYPES[query.module]) {
+    filter.targetType = { $in: MODULE_TO_TARGET_TYPES[query.module] }
+  }
   if (query.targetId) filter.targetId = toObjectId(query.targetId)
   if (query.adminId) filter.adminId = toObjectId(query.adminId)
 

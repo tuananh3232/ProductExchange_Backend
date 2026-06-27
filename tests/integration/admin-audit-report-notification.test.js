@@ -4,7 +4,7 @@ import { env } from '../../src/configs/env.config.js'
 import { ROLES } from '../../src/constants/role.constant.js'
 import { SHOP_STATUS } from '../../src/constants/status.constant.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { createTestUser, loginAdmin, loginMember } from '../setup/auth.js'
+import { createTestUser, loginAdmin, loginMember, loginSeller } from '../setup/auth.js'
 import { createSampleProduct, createSampleShop } from '../setup/factories.js'
 import AuditLog from '../../src/models/audit-log.model.js'
 import Notification from '../../src/models/notification.model.js'
@@ -162,6 +162,39 @@ describe('admin audit, report, and notification flows', () => {
     expect(adminNotification.recipientCount).toBe(1)
     expect(listResponse.status).toBe(200)
     expect(listResponse.body.data.notifications.map((item) => item.title)).toContain('Admin Notice')
+  })
+
+  it('serves audit logs to admins in UI shape and blocks sellers', async () => {
+    const { token: adminToken } = await loginAdmin()
+    const { token: sellerToken } = await loginSeller()
+    const product = await createSampleProduct({ status: 'available', isActive: true })
+
+    // Generate an audit entry (PRODUCT_HIDDEN -> grouped under the "products" module).
+    await request(app)
+      .patch(`${api}/admin/products/${product._id}/hide`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ reason: 'Unsafe listing' })
+
+    const adminResponse = await request(app)
+      .get(`${api}/admin/audit-logs`)
+      .query({ module: 'products' })
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const sellerResponse = await request(app)
+      .get(`${api}/admin/audit-logs`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+
+    expect(adminResponse.status).toBe(200)
+    expect(Array.isArray(adminResponse.body.data.logs)).toBe(true)
+    const hideLog = adminResponse.body.data.logs.find((log) => log.action === 'PRODUCT_HIDDEN')
+    expect(hideLog).toBeTruthy()
+    expect(hideLog.module).toBe('products')
+    expect(hideLog.entityType).toBe('product')
+    expect(hideLog.description).toBeTruthy()
+    expect(hideLog.actor).toBeTruthy()
+    expect(hideLog.actor.role).toBe(ROLES.ADMIN)
+
+    expect(sellerResponse.status).toBe(403)
   })
 
   it('exposes product moderation history from audit logs', async () => {
