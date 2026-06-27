@@ -101,6 +101,10 @@ const productSchema = new mongoose.Schema(
       enum: PRODUCT_STATUS_ENUM,
       default: 'available',
     },
+    rating: {
+      average: { type: Number, default: 0, min: 0, max: 5 },
+      count: { type: Number, default: 0, min: 0 },
+    },
     isActive: { type: Boolean, default: true },
     moderationBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -212,6 +216,7 @@ productSchema.index({ ownerType: 1, status: 1 })
 productSchema.index({ listingType: 1, status: 1 })
 productSchema.index({ transactionMode: 1, status: 1 })
 productSchema.index({ createdAt: -1 })
+productSchema.index({ 'rating.average': -1 })
 productSchema.index({ isActive: 1, status: 1, stock: 1, decorRole: 1, price: 1 })
 
 export default mongoose.model('Product', productSchema)

@@ -26,6 +26,8 @@ export const uploadProductImages = base.array('images', 10)
 
 export const uploadProductVisualImage = base.single('image')
 
+export const uploadReviewImages = base.array('images', 6)
+
 const roomSceneBase = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: imageFilter })
 export const uploadRoomSceneImage = roomSceneBase.single('image')
 

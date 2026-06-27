@@ -64,6 +64,16 @@ const ERRORS = {
     PAYMENT_REQUIRED: 'Order must be paid before it can be confirmed',
   },
 
+  REVIEW: {
+    NOT_FOUND: 'Review not found',
+    ALREADY_REVIEWED: 'You have already reviewed this order',
+    ORDER_NOT_DELIVERED: 'Order must be delivered before it can be reviewed',
+    NOT_BUYER: 'You can only review your own purchased orders',
+    ORDER_PRODUCT_MISMATCH: 'Product does not belong to this order',
+    NOT_REVIEW_OWNER: 'You are not the owner of this review',
+    CANNOT_REPLY: 'You are not allowed to reply to this review',
+  },
+
   EXCHANGE: {
     NOT_FOUND: 'Exchange offer not found',
     INVALID_PARTICIPANT: 'You are not a participant in this exchange offer',
