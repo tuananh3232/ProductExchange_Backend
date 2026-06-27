@@ -12,6 +12,7 @@ import {
   rentalInspectionActionSchema,
   rentalListingsQuerySchema,
   updateRentalBookingSchema,
+  updateRentalListingSchema,
 } from '../../validations/rental/rental.validation.js'
 
 const router = Router()
@@ -26,6 +27,14 @@ router.post(
 )
 
 router.get('/listings/:rentalListingId', validateObjectId('rentalListingId'), rentalController.getRentalListingById)
+
+router.patch(
+  '/listings/:rentalListingId',
+  authenticate,
+  validateObjectId('rentalListingId'),
+  validate(updateRentalListingSchema),
+  rentalController.updateRentalListing
+)
 
 router.get(
   '/bookings',

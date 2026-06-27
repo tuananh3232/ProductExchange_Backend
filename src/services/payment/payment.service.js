@@ -15,6 +15,13 @@ import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import { withTimeout } from '../../utils/with-timeout.util.js'
+
+const PAYOS_TIMEOUT_MS = 15000
+const PAYOS_TIMEOUT_OPTS = {
+  message: 'Cổng thanh toán PayOS phản hồi quá lâu, vui lòng thử lại.',
+  errorCode: 'PAYOS_TIMEOUT',
+}
 
 const getPayosClient = () => {
   const { clientId, apiKey, checksumKey } = env.payment.payos
@@ -352,7 +359,11 @@ export const handleVnpayCallback = async (callbackPayload) => {
     orderUpdate.paidAt = new Date()
   }
 
-  await Order.findByIdAndUpdate(payment.order, orderUpdate)
+  // Không ghi đè đơn đã được thanh toán bằng phương thức khác (vd ví) — tránh hạ cấp trạng thái
+  await Order.findOneAndUpdate(
+    { _id: payment.order, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+    orderUpdate
+  )
   if (nextStatus === PAYMENT_STATUS.PAID) {
     await ledgerService.settlePaidOrder(payment.order, { source: 'vnpay_callback' })
   }
@@ -418,13 +429,17 @@ export const createPayosPayment = async (orderId, userContext) => {
 
   // PayOS giới hạn description tối đa 25 ký tự
   const shortId = order._id.toString().slice(-8)
-  const paymentLink = await payos.paymentRequests.create({
-    orderCode,
-    amount,
-    description: `Thanh toan #${shortId}`,
-    returnUrl: env.payment.payos.returnUrl,
-    cancelUrl: env.payment.payos.cancelUrl,
-  })
+  const paymentLink = await withTimeout(
+    payos.paymentRequests.create({
+      orderCode,
+      amount,
+      description: `Thanh toan #${shortId}`,
+      returnUrl: env.payment.payos.returnUrl,
+      cancelUrl: env.payment.payos.cancelUrl,
+    }),
+    PAYOS_TIMEOUT_MS,
+    PAYOS_TIMEOUT_OPTS
+  )
 
   return { payment, paymentUrl: paymentLink.checkoutUrl }
 }
@@ -471,12 +486,19 @@ export const handlePayosWebhook = async (webhookData) => {
 
   const isBatchWebhook = updatedPayment.orders?.length > 0
   if (isBatchWebhook) {
-    await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+    // Không ghi đè đơn đã được thanh toán bằng phương thức khác (vd ví)
+    await Order.updateMany(
+      { _id: { $in: updatedPayment.orders }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      orderUpdate
+    )
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_webhook' })))
     }
   } else {
-    await Order.findByIdAndUpdate(payment.order, orderUpdate)
+    await Order.findOneAndUpdate(
+      { _id: payment.order, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      orderUpdate
+    )
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await ledgerService.settlePaidOrder(payment.order, { source: 'payos_webhook' })
     }
@@ -519,7 +541,11 @@ export const createWalletTopup = async (amount, userContext) => {
   if (existingPending?.checkoutUrl) {
     try {
       const payos = getPayosClient()
-      const paymentInfo = await payos.paymentRequests.get(existingPending.orderCode)
+      const paymentInfo = await withTimeout(
+        payos.paymentRequests.get(existingPending.orderCode),
+        PAYOS_TIMEOUT_MS,
+        PAYOS_TIMEOUT_OPTS
+      )
       if (paymentInfo.status === 'PENDING') {
         return { topup: existingPending, paymentUrl: existingPending.checkoutUrl }
       }
@@ -558,13 +584,17 @@ export const createWalletTopup = async (amount, userContext) => {
 
   // PayOS giới hạn description tối đa 25 ký tự
   const shortId = topup._id.toString().slice(-6)
-  const paymentLink = await payos.paymentRequests.create({
-    orderCode,
-    amount: roundedAmount,
-    description: `Nap vi #${shortId}`,
-    returnUrl: env.payment.payos.topupReturnUrl,
-    cancelUrl: env.payment.payos.topupCancelUrl,
-  })
+  const paymentLink = await withTimeout(
+    payos.paymentRequests.create({
+      orderCode,
+      amount: roundedAmount,
+      description: `Nap vi #${shortId}`,
+      returnUrl: env.payment.payos.topupReturnUrl,
+      cancelUrl: env.payment.payos.topupCancelUrl,
+    }),
+    PAYOS_TIMEOUT_MS,
+    PAYOS_TIMEOUT_OPTS
+  )
 
   const savedTopup = await userWalletRepo.updateTopup(topup._id, { checkoutUrl: paymentLink.checkoutUrl })
 
@@ -629,7 +659,11 @@ export const handleTopupReturn = async (query, callerId = null) => {
   let paymentStatus
   try {
     const payos = getPayosClient()
-    const paymentInfo = await payos.paymentRequests.get(Number(orderCode))
+    const paymentInfo = await withTimeout(
+      payos.paymentRequests.get(Number(orderCode)),
+      PAYOS_TIMEOUT_MS,
+      PAYOS_TIMEOUT_OPTS
+    )
     paymentStatus = paymentInfo.status // 'PAID' | 'CANCELLED' | 'EXPIRED' | 'PENDING' | 'PROCESSING'
   } catch {
     // Fallback về query params khi không gọi được PayOS

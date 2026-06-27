@@ -13,6 +13,15 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
 
+// Trạng thái cho phép thanh toán lại bằng ví: chưa trả, hoặc lần thanh toán qua cổng
+// trước đó đã bị bỏ dở (đang chờ/thất bại/đã hủy). Chỉ chặn khi đơn đã PAID hoặc đang hoàn tiền.
+const WALLET_PAYABLE_STATUSES = [
+  PAYMENT_STATUS.UNPAID,
+  PAYMENT_STATUS.PENDING_PAYMENT,
+  PAYMENT_STATUS.FAILED,
+  PAYMENT_STATUS.CANCELLED,
+]
+
 // ─── Get wallet ──────────────────────────────────────────────────────────────
 
 export const getMyWallet = async (userId) => {
@@ -78,7 +87,7 @@ export const payOrderWithWallet = async (orderId, userContext) => {
     throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)
   }
 
-  if (order.paymentStatus !== PAYMENT_STATUS.UNPAID) {
+  if (!WALLET_PAYABLE_STATUSES.includes(order.paymentStatus)) {
     throw new AppError('Đơn hàng đang được xử lý bởi phương thức thanh toán khác', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ALREADY_PAID_BY_OTHER)
   }
 
@@ -153,7 +162,7 @@ export const payOrdersWithWallet = async (orderIds, userContext) => {
     if (order.paymentStatus === PAYMENT_STATUS.PAID) {
       throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)
     }
-    if (order.paymentStatus !== PAYMENT_STATUS.UNPAID) {
+    if (!WALLET_PAYABLE_STATUSES.includes(order.paymentStatus)) {
       throw new AppError('Đơn hàng đang được xử lý bởi phương thức thanh toán khác', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ALREADY_PAID_BY_OTHER)
     }
   }

@@ -9,7 +9,11 @@
       "Bash(xargs ls -la)",
       "Bash(xargs grep -l \"kyc\\\\|KYC\")",
       "Bash(grep -E \"\\\\.\\(js|json|env\\)$\")",
-      "Bash(Get-ChildItem -Path \"d:\\\\Study\\\\FPTU\\\\Term8\\\\EXE202\\\\BE\\\\ProductExchange_Backend\" -Directory)"
+      "Bash(Get-ChildItem -Path \"d:\\\\Study\\\\FPTU\\\\Term8\\\\EXE202\\\\BE\\\\ProductExchange_Backend\" -Directory)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects integration --runInBand --runTestsByPath tests/integration/payment-batch.test.js)",
+      "Bash(grep -nA40 \"createSampleOrder\")"
     ]
   }
 }

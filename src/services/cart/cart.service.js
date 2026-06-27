@@ -53,7 +53,17 @@ const formatCart = (cart) => {
 
 const getOrCreateCart = async (userId) => (await Cart.findOne({ user: userId })) || new Cart({ user: userId, items: [] })
 
-const populateCart = (cart) => cart.populate('items.product', 'title price stock status isActive images owner ownerType shop seller listingType transactionMode')
+const populateCart = (cart) =>
+  cart.populate({
+    path: 'items.product',
+    select: 'title price stock status isActive images owner ownerType shop seller category listingType transactionMode',
+    populate: [
+      { path: 'shop', select: 'name' },
+      { path: 'category', select: 'name' },
+      { path: 'seller', select: 'name' },
+      { path: 'owner', select: 'name' },
+    ],
+  })
 
 const assertProductAvailableForQuantity = (product, quantity) => {
   const reason = getUnavailableReason(product, quantity)

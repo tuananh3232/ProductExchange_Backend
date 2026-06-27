@@ -249,6 +249,37 @@ const expirePendingBookings = async (filter = {}) => {
   await Promise.all(bookings.map((booking) => expireBookingIfNeeded(booking)))
 }
 
+// Đánh dấu các booking đang thuê đã quá ngày trả -> "overdue" (phí trễ tính khi xác nhận trả)
+const markOverdueBookings = async () => {
+  const now = new Date()
+  const bookings = await RentalBooking.find({
+    isActive: true,
+    status: RENTAL_BOOKING_STATUS.IN_RENTAL,
+    endDate: { $lt: now },
+  })
+
+  if (!bookings.length) {
+    return 0
+  }
+
+  await Promise.all(
+    bookings.map((booking) => {
+      booking.status = RENTAL_BOOKING_STATUS.OVERDUE
+      appendTimeline(booking, RENTAL_BOOKING_STATUS.OVERDUE, booking.renter, 'Quá hạn trả — hệ thống tự chuyển sang trạng thái quá hạn')
+      return booking.save()
+    })
+  )
+
+  return bookings.length
+}
+
+// Tác vụ bảo trì định kỳ cho module thuê: hủy booking quá hạn thanh toán + đánh dấu booking quá hạn trả.
+export const runRentalMaintenance = async () => {
+  await expirePendingBookings()
+  const overdueCount = await markOverdueBookings()
+  return { overdueCount }
+}
+
 const getClaimByIdOrThrow = async (claimId) => {
   const claim = await populateChain(RentalClaim.findById(claimId), RENTAL_CLAIM_POPULATE)
   if (!claim || !claim.isActive) {
@@ -360,6 +391,36 @@ export const listRentalListings = async (query, { page, limit, skip, sortBy, sor
 }
 
 export const getRentalListingById = async (listingId) => assertListingForBooking(listingId)
+
+export const updateRentalListing = async (listingId, payload, user) => {
+  const listing = await populateChain(RentalListing.findById(listingId), RENTAL_LISTING_POPULATE)
+  if (!listing || !listing.isActive) {
+    throw new AppError('Không tìm thấy tin cho thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.LISTING_NOT_FOUND)
+  }
+
+  const isOwner =
+    listing.ownerType === 'SHOP'
+      ? String(listing.shop?.owner?._id || listing.shop?.owner || '') === String(user._id)
+      : String(listing.seller?._id || listing.seller || '') === String(user._id)
+  const isAdmin = (user.roles || []).includes('admin')
+  if (!isOwner && !isAdmin) {
+    throw new AppError('Bạn không có quyền chỉnh sửa tin cho thuê này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  for (const field of ['dailyRate', 'depositAmount', 'lateFeePerDay', 'minRentalDays', 'maxRentalDays']) {
+    if (payload[field] !== undefined) listing[field] = payload[field]
+  }
+  if (payload.title !== undefined) listing.title = payload.title || listing.product?.title || listing.title
+  if (payload.description !== undefined) listing.description = payload.description
+  if (payload.isActive !== undefined) listing.isActive = payload.isActive
+
+  if (listing.minRentalDays > listing.maxRentalDays) {
+    throw new AppError('Số ngày thuê tối thiểu không được lớn hơn tối đa', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+
+  await listing.save()
+  return populateChain(RentalListing.findById(listing._id), RENTAL_LISTING_POPULATE)
+}
 
 export const createRentalBooking = async (payload, user) => {
   const listing = await assertListingForBooking(payload.listingId)

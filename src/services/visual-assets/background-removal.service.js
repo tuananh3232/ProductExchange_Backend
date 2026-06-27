@@ -38,11 +38,25 @@ const _removeWithRemoveBg = async (buffer) => {
   form.append('size', 'auto')
 
   const fetch = (await import('node-fetch')).default
-  const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-    method: 'POST',
-    headers: { 'X-Api-Key': apiKey, ...form.getHeaders() },
-    body: form,
-  })
+  // Giới hạn thời gian gọi remove.bg để tránh treo request khi upstream chậm
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 20000)
+  let response
+  try {
+    response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-Api-Key': apiKey, ...form.getHeaders() },
+      body: form,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new AppError('Dịch vụ tách nền phản hồi quá lâu, vui lòng thử lại.', HTTP_STATUS.GATEWAY_TIMEOUT, 'BG_REMOVAL_TIMEOUT')
+    }
+    throw new AppError('Không kết nối được dịch vụ tách nền, vui lòng thử lại.', HTTP_STATUS.BAD_GATEWAY, 'BG_REMOVAL_UNAVAILABLE')
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     let friendlyMessage = 'Không thể tách nền ảnh này. Vui lòng kiểm tra lại chất lượng ảnh.'

@@ -30,6 +30,17 @@ export const createRentalListingSchema = Joi.object({
   maxRentalDays: Joi.number().integer().min(1).max(30).default(30),
 })
 
+export const updateRentalListingSchema = Joi.object({
+  title: Joi.string().trim().max(200).allow('').optional(),
+  description: Joi.string().trim().max(2000).allow('').optional(),
+  dailyRate: Joi.number().min(0).optional(),
+  depositAmount: Joi.number().min(0).optional(),
+  lateFeePerDay: Joi.number().min(0).optional(),
+  minRentalDays: Joi.number().integer().min(1).max(30).optional(),
+  maxRentalDays: Joi.number().integer().min(1).max(30).optional(),
+  isActive: Joi.boolean().optional(),
+}).min(1)
+
 export const createRentalBookingSchema = Joi.object({
   listingId: objectId.required(),
   startDate: Joi.date().required(),

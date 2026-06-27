@@ -33,6 +33,15 @@ export const getRentalListingById = asyncHandler(async (req, res) => {
   })
 })
 
+export const updateRentalListing = asyncHandler(async (req, res) => {
+  const rentalListing = await rentalService.updateRentalListing(req.params.rentalListingId, req.body, req.user)
+
+  sendSuccess(res, {
+    message: 'Cập nhật tin cho thuê thành công',
+    data: { rentalListing },
+  })
+})
+
 export const createRentalBooking = asyncHandler(async (req, res) => {
   const rentalBooking = await rentalService.createRentalBooking(req.body, req.user)
 
