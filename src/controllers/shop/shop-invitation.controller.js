@@ -4,20 +4,44 @@ import { getPaginationParams } from '../../utils/pagination.util.js';
 import MESSAGES from '../../constants/message.constant.js';
 import HTTP_STATUS from '../../constants/http-status.constant.js';
 
+const INVITE_DEBUG_ENABLED = process.env.DEBUG_SHOP_STAFF_INVITE === 'true';
+
+const logInviteDebug = (stage, payload = {}) => {
+  if (!INVITE_DEBUG_ENABLED) return;
+  console.log(`[shop-staff-invite] ${stage}`, payload);
+};
+
 export const sendInvitation = async (req, res, next) => {
   try {
+    logInviteDebug('controller.sendInvitation.enter', {
+      shopId: req.params.id,
+      userId: req.user?._id?.toString?.() || req.user?._id || null,
+      email: req.body?.email || null,
+      permissionCount: Array.isArray(req.body?.permissions) ? req.body.permissions.length : 0,
+    });
+
     const invitation = await shopInvitationService.sendInvitation(
       req.params.id,
       req.user,
       req.body.email,
       req.body.permissions || []
     );
+    logInviteDebug('controller.sendInvitation.beforeResponse', {
+      shopId: req.params.id,
+      invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+      status: invitation?.status || null,
+    });
     sendSuccess(res, {
       message: MESSAGES.SHOP.INVITATION_SENT,
       data: { invitation },
       statusCode: HTTP_STATUS.CREATED,
     });
   } catch (error) {
+    logInviteDebug('controller.sendInvitation.error', {
+      shopId: req.params.id,
+      email: req.body?.email || null,
+      error: error.message,
+    });
     next(error);
   }
 };
