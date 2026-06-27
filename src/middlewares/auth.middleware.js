@@ -9,6 +9,13 @@ import { reconcileOwnerShopQuota } from '../services/shop/shop.service.js'
 import { ROLES } from '../constants/role.constant.js'
 import PERMISSIONS from '../constants/permission.constant.js'
 
+const INVITE_DEBUG_ENABLED = process.env.DEBUG_SHOP_STAFF_INVITE === 'true'
+
+const logInviteDebug = (stage, payload = {}) => {
+  if (!INVITE_DEBUG_ENABLED) return
+  console.log(`[shop-staff-invite] ${stage}`, payload)
+}
+
 /**
  * Middleware xac thuc JWT
  * Trich xuat token tu header: Authorization: Bearer <token>
@@ -121,9 +128,18 @@ export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
   return async (req, res, next) => {
     try {
       const shopId = req.params?.[shopIdParam]
+      const shouldDebug = permissionKey === PERMISSIONS.SHOP_STAFF_INVITE
 
       if (!shopId) {
         throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
+      }
+
+      if (shouldDebug) {
+        logInviteDebug('middleware.requireShopPermission.before', {
+          shopId,
+          permissionKey,
+          userId: req.user?._id?.toString?.() || req.user?._id || null,
+        })
       }
 
       const allowed = await canAccessShopPermission(req.user, shopId, permissionKey)
@@ -131,8 +147,24 @@ export const requireShopPermission = (permissionKey, shopIdParam = 'id') => {
         throw new AppError('Bạn không có quyền thực hiện hành động này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
       }
 
+      if (shouldDebug) {
+        logInviteDebug('middleware.requireShopPermission.after', {
+          shopId,
+          permissionKey,
+          allowed,
+        })
+      }
+
       next()
     } catch (error) {
+      if (permissionKey === PERMISSIONS.SHOP_STAFF_INVITE) {
+        logInviteDebug('middleware.requireShopPermission.error', {
+          permissionKey,
+          shopId: req.params?.[shopIdParam] || null,
+          userId: req.user?._id?.toString?.() || req.user?._id || null,
+          error: error.message,
+        })
+      }
       next(error)
     }
   }

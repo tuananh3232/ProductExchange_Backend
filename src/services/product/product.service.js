@@ -418,7 +418,11 @@ const applyTransactionModeFilter = async (query, filter) => {
   return {
     ...filter,
     _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
-    transactionMode: PRODUCT_TRANSACTION_MODES.SELL,
+    $or: [
+      { transactionMode: PRODUCT_TRANSACTION_MODES.SELL },
+      { transactionMode: { $exists: false } },
+      { transactionMode: null },
+    ],
   }
 }
 
