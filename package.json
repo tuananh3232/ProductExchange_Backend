@@ -8,7 +8,7 @@
     "dev": "nodemon src/server.js",
     "dev:test": "set DOTENV_CONFIG_PATH=.env.test&& nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node scripts/seed-product-data.js",
+    "seed": "node scripts/seed-decor-data.js",
     "seed:decor": "node scripts/seed-decor-data.js",
     "init:empty-db": "node scripts/init-empty-db.js",
     "seed:decor:test": "set DOTENV_CONFIG_PATH=.env.test&& node scripts/seed-decor-data.js",

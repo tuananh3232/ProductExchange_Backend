@@ -42,7 +42,9 @@ const sortProducts = (products, criteria) =>
   [...products].sort((left, right) => {
     const scoreDifference = getMatchScore(right, criteria) - getMatchScore(left, criteria)
     if (scoreDifference) return scoreDifference
-    return left.price - right.price
+    const priceDifference = left.price - right.price
+    if (priceDifference) return priceDifference
+    return getId(left).localeCompare(getId(right))
   })
 
 // [FIX 2] Sort GIẢM dần theo giá (đắt nhất trước) trong cùng score tier
@@ -153,6 +155,16 @@ const buildBaseFilter = (criteria) => ({
   decorRole: { $in: DECOR_ROLES },
 })
 
+const COMBO_CRITERIA_FIELDS = ['style', 'roomType', 'colorTone']
+
+const buildCriteriaFilter = (criteria, fields = COMBO_CRITERIA_FIELDS) => {
+  const filter = {}
+  for (const field of fields) {
+    if (criteria[field]) filter[field] = { $in: [criteria[field], null] }
+  }
+  return filter
+}
+
 // [FIX 3] Fallback query khi pool sản phẩm quá ít:
 // - Lần 1: lọc strict (style + roomType + colorTone, cho phép null)
 // - Lần 2: bỏ colorTone nếu pool vẫn nhỏ
@@ -161,10 +173,7 @@ const fetchProductPool = async (criteria) => {
   const minPoolSize = Math.max((criteria.maxItems || 5) * COMBO_TYPES.length * 2, 20)
 
   // Strict filter
-  const strictFilter = buildBaseFilter(criteria)
-  for (const field of ['style', 'roomType', 'colorTone']) {
-    if (criteria[field]) strictFilter[field] = { $in: [criteria[field], null] }
-  }
+  const strictFilter = { ...buildBaseFilter(criteria), ...buildCriteriaFilter(criteria) }
   const products = await Product.find(strictFilter).populate('category', 'name slug').lean()
   if (products.length >= minPoolSize) return products
 
@@ -172,8 +181,7 @@ const fetchProductPool = async (criteria) => {
   const seen = new Set(products.map((p) => p._id.toString()))
   if (criteria.colorTone) {
     const f1 = buildBaseFilter(criteria)
-    if (criteria.style) f1.style = { $in: [criteria.style, null] }
-    if (criteria.roomType) f1.roomType = { $in: [criteria.roomType, null] }
+    Object.assign(f1, buildCriteriaFilter(criteria, ['style', 'roomType']))
     const extras1 = await Product.find(f1).populate('category', 'name slug').lean()
     for (const p of extras1) {
       if (!seen.has(p._id.toString())) {
@@ -187,7 +195,7 @@ const fetchProductPool = async (criteria) => {
   // Fallback 2: thả lỏng thêm style (giữ roomType)
   if (criteria.style) {
     const f2 = buildBaseFilter(criteria)
-    if (criteria.roomType) f2.roomType = { $in: [criteria.roomType, null] }
+    Object.assign(f2, buildCriteriaFilter(criteria, ['roomType']))
     const extras2 = await Product.find(f2).populate('category', 'name slug').lean()
     for (const p of extras2) {
       if (!seen.has(p._id.toString())) {
@@ -199,6 +207,82 @@ const fetchProductPool = async (criteria) => {
 
   return products
 }
+
+const parseExcludeProductIds = (rawExcludeProductIds) => {
+  if (!rawExcludeProductIds) return []
+
+  return [...new Set(
+    String(rawExcludeProductIds)
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => mongoose.isValidObjectId(id))
+  )]
+}
+
+const buildAlternativesBaseFilter = (query, excludeProductIds) => {
+  const filter = {
+    isActive: true,
+    status: 'available',
+    stock: { $gt: 0 },
+    decorRole: query.decorRole,
+  }
+
+  if (query.maxPrice) filter.price = { $lte: query.maxPrice }
+  if (excludeProductIds.length) filter._id = { $nin: excludeProductIds }
+
+  return filter
+}
+
+const fetchAlternativePool = async (query, excludeProductIds) => {
+  const limit = Number(query.limit) || 10
+  const minPoolSize = Math.max(limit * 2, 10)
+  const baseFilter = buildAlternativesBaseFilter(query, excludeProductIds)
+  const products = []
+  const seen = new Set()
+
+  const mergeQuery = async (criteriaFields, fallbackLevel) => {
+    const filter = { ...baseFilter, ...buildCriteriaFilter(query, criteriaFields) }
+    const matches = await Product.find(filter).populate('category', 'name slug').lean()
+    for (const product of matches) {
+      const id = getId(product)
+      if (seen.has(id)) continue
+      seen.add(id)
+      products.push({ product, fallbackLevel })
+    }
+  }
+
+  await mergeQuery(COMBO_CRITERIA_FIELDS, 0)
+  if (products.length >= minPoolSize) return products
+
+  if (query.colorTone) {
+    await mergeQuery(['style', 'roomType'], 1)
+    if (products.length >= minPoolSize) return products
+  }
+
+  if (query.style) {
+    await mergeQuery(['roomType'], 2)
+    if (products.length >= minPoolSize) return products
+  }
+
+  await mergeQuery([], 3)
+  return products
+}
+
+const sortAlternativeCandidates = (candidates, criteria) =>
+  [...candidates].sort((left, right) => {
+    const leftPriorityBucket = Math.min(left.fallbackLevel, 2)
+    const rightPriorityBucket = Math.min(right.fallbackLevel, 2)
+    const fallbackDifference = leftPriorityBucket - rightPriorityBucket
+    if (fallbackDifference) return fallbackDifference
+
+    const scoreDifference = getMatchScore(right.product, criteria) - getMatchScore(left.product, criteria)
+    if (scoreDifference) return scoreDifference
+
+    const priceDifference = left.product.price - right.product.price
+    if (priceDifference) return priceDifference
+
+    return getId(left.product).localeCompare(getId(right.product))
+  })
 
 export const generateCombos = async (criteria, { seed: inputSeed, page = 1, pageSize = 3 } = {}) => {
   const seed = inputSeed || Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -254,22 +338,10 @@ export const generateCombos = async (criteria, { seed: inputSeed, page = 1, page
 }
 
 export const getAlternatives = async (query) => {
-  const excludeProductIds = (query.excludeProductIds || '')
-    .split(',')
-    .map((id) => id.trim())
-    .filter((id) => mongoose.isValidObjectId(id))
+  const excludeProductIds = parseExcludeProductIds(query.excludeProductIds)
+  const candidates = await fetchAlternativePool(query, excludeProductIds)
 
-  const filter = {
-    isActive: true,
-    status: 'available',
-    stock: { $gt: 0 },
-    decorRole: query.decorRole,
-  }
-  if (query.maxPrice) filter.price = { $lte: query.maxPrice }
-  if (excludeProductIds.length) filter._id = { $nin: excludeProductIds }
-
-  const products = await Product.find(filter).populate('category', 'name slug').lean()
-  return sortProducts(products, query)
+  return sortAlternativeCandidates(candidates, query)
     .slice(0, query.limit)
-    .map((product) => formatProduct(product))
+    .map(({ product }) => formatProduct(product))
 }
