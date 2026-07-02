@@ -11,7 +11,7 @@ export const findOrCreateByShop = (shopId) =>
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   )
 
-export const incrementBalance = (shopId, amount) =>
+export const incrementBalance = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -20,7 +20,19 @@ export const incrementBalance = (shopId, amount) =>
         totalEarned: amount,
       },
     },
-    { returnDocument: 'after', upsert: true }
+    { returnDocument: 'after', upsert: true, ...options }
+  )
+
+export const decrementBalance = (shopId, amount, options = {}) =>
+  Wallet.findOneAndUpdate(
+    { shop: shopId, balance: { $gte: amount } },
+    {
+      $inc: {
+        balance: -amount,
+        totalEarned: -amount,
+      },
+    },
+    { returnDocument: 'after', ...options }
   )
 
 export const deductForWithdrawal = (shopId, amount) =>
@@ -35,7 +47,7 @@ export const deductForWithdrawal = (shopId, amount) =>
     { returnDocument: 'after' }
   )
 
-export const completeWithdrawal = (shopId, amount) =>
+export const completeWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -44,10 +56,10 @@ export const completeWithdrawal = (shopId, amount) =>
         totalWithdrawn: amount,
       },
     },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
-export const revertWithdrawal = (shopId, amount) =>
+export const revertWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId },
     {
@@ -56,10 +68,11 @@ export const revertWithdrawal = (shopId, amount) =>
         pendingBalance: -amount,
       },
     },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
-export const createTransaction = (data) => WalletTransaction.create(data)
+export const createTransaction = (data, options = {}) =>
+  WalletTransaction.create([data], options).then((docs) => docs[0])
 
 export const findTransactionByOrder = (orderId) =>
   WalletTransaction.findOne({ order: orderId })

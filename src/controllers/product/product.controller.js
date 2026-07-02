@@ -40,6 +40,11 @@ export const getProductById = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.PRODUCT.DETAIL_FETCHED, data: { product } })
 })
 
+export const getAdminProductById = asyncHandler(async (req, res) => {
+  const product = await productService.getAdminProductById(req.params.productId)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.DETAIL_FETCHED, data: { product } })
+})
+
 
 export const createProduct = asyncHandler(async (req, res) => {
   const product = await productService.createProduct(req.user, req.body, req.files ?? [])
@@ -62,6 +67,21 @@ export const deleteProduct = asyncHandler(async (req, res) => {
 
 export const updateProductStatus = asyncHandler(async (req, res) => {
   const product = await productService.updateProductStatus(req.params.id, req.user, req.body.status)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.STATUS_UPDATED, data: { product } })
+})
+
+export const updateAdminProductStatus = asyncHandler(async (req, res) => {
+  const product = await productService.updateAdminProductStatus(req.params.productId, req.user, req.body)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.STATUS_UPDATED, data: { product } })
+})
+
+export const hideAdminProduct = asyncHandler(async (req, res) => {
+  const product = await productService.hideAdminProduct(req.params.productId, req.user, req.body)
+  sendSuccess(res, { message: MESSAGES.PRODUCT.STATUS_UPDATED, data: { product } })
+})
+
+export const restoreAdminProduct = asyncHandler(async (req, res) => {
+  const product = await productService.restoreAdminProduct(req.params.productId, req.user, req.body)
   sendSuccess(res, { message: MESSAGES.PRODUCT.STATUS_UPDATED, data: { product } })
 })
 

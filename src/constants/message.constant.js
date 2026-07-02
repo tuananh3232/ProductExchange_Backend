@@ -159,6 +159,14 @@ const MESSAGES = {
     REJECTED: 'Từ chối hồ sơ xác minh danh tính thành công',
   },
 
+  REVIEW: {
+    CREATED: 'Đánh giá sản phẩm thành công',
+    FETCHED: 'Lấy danh sách đánh giá thành công',
+    UPDATED: 'Cập nhật đánh giá thành công',
+    DELETED: 'Xóa đánh giá thành công',
+    REPLIED: 'Phản hồi đánh giá thành công',
+  },
+
   CATEGORY: {
     CREATED: 'Tạo danh mục thành công',
     FETCHED: 'Lấy danh sách danh mục thành công',
@@ -166,6 +174,15 @@ const MESSAGES = {
     UPDATED: 'Cập nhật danh mục thành công',
     DELETED: 'Xóa danh mục thành công',
   },
-};
+  FEE_POLICY: {
+    CREATED: 'Tạo fee policy thành công',
+    FETCHED: 'Lấy danh sách fee policy thành công',
+    DETAIL_FETCHED: 'Lấy chi tiết fee policy thành công',
+    UPDATED: 'Cập nhật fee policy thành công',
+    DISABLED: 'Vô hiệu hóa fee policy thành công',
+    PREVIEWED: 'Tính preview phí thành công',
+    SEEDED: 'Seed fee policy mặc định thành công',
+  },
+}
 
-export default MESSAGES;
+export default MESSAGES

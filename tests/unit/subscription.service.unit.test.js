@@ -26,6 +26,9 @@ jest.unstable_mockModule('@payos/node', () => ({ PayOS: PayOSCtor }))
 jest.unstable_mockModule('../../src/models/user.model.js', () => ({ default: userModel }))
 jest.unstable_mockModule('../../src/models/subscription-order.model.js', () => ({ default: subOrderModel }))
 jest.unstable_mockModule('../../src/repositories/role/role.repository.js', () => roleRepo)
+jest.unstable_mockModule('../../src/services/shop/shop.service.js', () => ({
+  reconcileOwnerShopQuota: jest.fn().mockResolvedValue({ allowedCount: 1, totalShops: 0, changed: false }),
+}))
 
 const {
   createSubscriptionCheckout,
@@ -176,7 +179,8 @@ describe('handleSubscriptionWebhook', () => {
     expect(sub.paidAt).toBeInstanceOf(Date)
     expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
       userId,
-      expect.objectContaining({ 'vip.plan': 'monthly', 'vip.expiresAt': expect.any(Date) })
+      expect.objectContaining({ 'vip.plan': 'monthly', 'vip.expiresAt': expect.any(Date) }),
+      { new: true }
     )
     expect(sub.save).toHaveBeenCalled()
   })

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as categoryController from '../../controllers/category/category.controller.js'
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
+import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import { createCategorySchema, updateCategorySchema } from '../../validations/category/category.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
 
@@ -127,8 +128,8 @@ router.post('/', authenticate, requireAdmin, validate(createCategorySchema), cat
  *       200:
  *         description: Xóa category thành công
  */
-router.get('/:id', categoryController.getCategoryById)
-router.patch('/:id', authenticate, requireAdmin, validate(updateCategorySchema), categoryController.updateCategory)
-router.delete('/:id', authenticate, requireAdmin, categoryController.deleteCategory)
+router.get('/:id', validateObjectId('id'), categoryController.getCategoryById)
+router.patch('/:id', authenticate, requireAdmin, validateObjectId('id'), validate(updateCategorySchema), categoryController.updateCategory)
+router.delete('/:id', authenticate, requireAdmin, validateObjectId('id'), categoryController.deleteCategory)
 
 export default router

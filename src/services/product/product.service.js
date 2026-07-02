@@ -8,10 +8,14 @@ import Shop from '../../models/shop.model.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import { SHOP_STATUS } from '../../constants/status.constant.js'
 import { ROLES } from '../../constants/role.constant.js'
-import { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import { EXCHANGE_STATUS } from '../../constants/status.constant.js'
+import RentalListing from '../../models/rental-listing.model.js'
+import ExchangeOffer from '../../models/exchange-offer.model.js'
+import { PRODUCT_OWNER_TYPES, PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const PRODUCT_STATUS_TRANSITIONS = {
   available: ['hidden', 'pending', 'sold'],
@@ -20,12 +24,150 @@ const PRODUCT_STATUS_TRANSITIONS = {
   sold: [],
 }
 
+const OPEN_EXCHANGE_STATUSES = [
+  EXCHANGE_STATUS.PENDING_ACCEPTANCE,
+  EXCHANGE_STATUS.ACCEPTED,
+  EXCHANGE_STATUS.PAID,
+  EXCHANGE_STATUS.SHIPPED,
+  EXCHANGE_STATUS.DISPUTED,
+]
+
 const normalizeImages = (images = []) => {
   const hasPrimary = images.some((image) => image?.isPrimary)
   return images.map((image, index) => ({
     ...image,
     isPrimary: hasPrimary ? Boolean(image.isPrimary) : index === 0,
   }))
+}
+
+const toRentalInfo = (listing) => {
+  if (!listing) return null
+
+  return {
+    listingId: listing._id?.toString?.() || listing._id || null,
+    dailyRate: Number(listing.dailyRate || 0),
+    depositAmount: Number(listing.depositAmount || 0),
+    lateFeePerDay: Number(listing.lateFeePerDay || 0),
+    minRentalDays: Math.max(1, Number(listing.minRentalDays || 1)),
+    maxRentalDays: Math.min(30, Number(listing.maxRentalDays || 30)),
+    isActive: Boolean(listing.isActive),
+  }
+}
+
+const normalizeProductDocument = (product) => (typeof product?.toObject === 'function' ? product.toObject() : { ...product })
+
+const getOwnerKycStatus = (product) => {
+  const sellerKycStatus = product?.seller && typeof product.seller === 'object' ? product.seller.kyc?.status : null
+  const ownerKycStatus = product?.owner && typeof product.owner === 'object' ? product.owner.kyc?.status : null
+
+  return sellerKycStatus || ownerKycStatus || 'none'
+}
+
+const buildExchangeInfo = (product, openExchangeCount = 0) => {
+  if (product.transactionMode !== PRODUCT_TRANSACTION_MODES.EXCHANGE) {
+    return null
+  }
+
+  const ownerSellerId =
+    product?.seller && typeof product.seller === 'object'
+      ? product.seller._id?.toString?.() || product.seller._id || null
+      : product?.seller?.toString?.() || product?.owner?.toString?.() || null
+  const ownerKycStatus = getOwnerKycStatus(product)
+  const isExchangeEligible =
+    product.isActive &&
+    product.status === 'available' &&
+    product.ownerType === PRODUCT_OWNER_TYPES.SELLER &&
+    !product.shop &&
+    ownerKycStatus === 'approved' &&
+    openExchangeCount === 0
+
+  return {
+    isExchangeEligible,
+    exchangeableBySellerOnly: true,
+    ownerSellerId,
+    ownerKycStatus,
+    activeExchangeOfferCount: openExchangeCount,
+    hasOpenExchange: openExchangeCount > 0,
+  }
+}
+
+const getOpenExchangeCountMap = async (productIds = []) => {
+  if (!productIds.length) {
+    return new Map()
+  }
+
+  const exchangeOffers = await ExchangeOffer.find({
+    isActive: true,
+    status: { $in: OPEN_EXCHANGE_STATUSES },
+    $or: [
+      { requesterProduct: { $in: productIds } },
+      { receiverProduct: { $in: productIds } },
+    ],
+  })
+    .select('requesterProduct receiverProduct')
+    .lean()
+
+  const countMap = new Map(productIds.map((productId) => [String(productId), 0]))
+
+  exchangeOffers.forEach((offer) => {
+    const requesterProductId = String(offer.requesterProduct)
+    const receiverProductId = String(offer.receiverProduct)
+
+    if (countMap.has(requesterProductId)) {
+      countMap.set(requesterProductId, (countMap.get(requesterProductId) || 0) + 1)
+    }
+
+    if (countMap.has(receiverProductId) && receiverProductId !== requesterProductId) {
+      countMap.set(receiverProductId, (countMap.get(receiverProductId) || 0) + 1)
+    }
+  })
+
+  return countMap
+}
+
+const attachProductReadModel = async (product, exchangeCountMap = new Map()) => {
+  if (!product) return product
+
+  const normalizedProduct = normalizeProductDocument(product)
+  const populatedRentalListing =
+    normalizedProduct.activeRentalListing && typeof normalizedProduct.activeRentalListing === 'object'
+      ? normalizedProduct.activeRentalListing
+      : null
+  const activeRentalListing = populatedRentalListing || await RentalListing.findOne({ product: normalizedProduct._id, isActive: true }).lean()
+
+  if (
+    activeRentalListing &&
+    (String(normalizedProduct.activeRentalListing?._id || normalizedProduct.activeRentalListing || '') !== String(activeRentalListing._id) ||
+      normalizedProduct.transactionMode !== PRODUCT_TRANSACTION_MODES.RENTAL)
+  ) {
+    await productRepo.updateById(normalizedProduct._id, {
+      transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL,
+      activeRentalListing: activeRentalListing._id,
+    })
+  }
+
+  if (!activeRentalListing && normalizedProduct.activeRentalListing) {
+    await productRepo.updateById(normalizedProduct._id, {
+      activeRentalListing: null,
+    })
+  }
+
+  const transactionMode = activeRentalListing
+    ? PRODUCT_TRANSACTION_MODES.RENTAL
+    : (normalizedProduct.transactionMode || PRODUCT_TRANSACTION_MODES.SELL)
+  const openExchangeCount = exchangeCountMap.get(String(normalizedProduct._id)) || 0
+
+  return {
+    ...normalizedProduct,
+    transactionMode,
+    rentalInfo: toRentalInfo(activeRentalListing),
+    exchangeInfo: buildExchangeInfo({ ...normalizedProduct, transactionMode }, openExchangeCount),
+  }
+}
+
+const attachProductReadModelList = async (products = []) => {
+  const exchangeCountMap = await getOpenExchangeCountMap(products.map((product) => product?._id).filter(Boolean))
+  return Promise.all(products.map((product) => attachProductReadModel(product, exchangeCountMap)))
 }
 
 // Khi có $text, ưu tiên điểm liên quan trước rồi mới sort theo tiêu chí người dùng chọn
@@ -250,18 +392,58 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
   return filter
 }
 
+const applyTransactionModeFilter = async (query, filter) => {
+  if (!query.transactionMode) return filter
+
+  const activeRentalProductIds = await RentalListing.distinct('product', { isActive: true })
+
+  if (query.transactionMode === PRODUCT_TRANSACTION_MODES.RENTAL) {
+    return {
+      ...filter,
+      $or: [
+        { _id: { $in: activeRentalProductIds } },
+        { transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL },
+      ],
+    }
+  }
+
+  if (query.transactionMode === PRODUCT_TRANSACTION_MODES.EXCHANGE) {
+    return {
+      ...filter,
+      _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
+      transactionMode: PRODUCT_TRANSACTION_MODES.EXCHANGE,
+    }
+  }
+
+  return {
+    ...filter,
+    _id: { ...(filter._id || {}), $nin: activeRentalProductIds },
+    $or: [
+      { transactionMode: PRODUCT_TRANSACTION_MODES.SELL },
+      { transactionMode: { $exists: false } },
+      { transactionMode: null },
+    ],
+  }
+}
+
+const assertTransactionModeForOwnership = (transactionMode, ownerType) => {
+  if (transactionMode === PRODUCT_TRANSACTION_MODES.EXCHANGE && ownerType !== PRODUCT_OWNER_TYPES.SELLER) {
+    throw new AppError('Chỉ sản phẩm của seller cá nhân mới được đăng ở chế độ trao đổi', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+}
+
 export const getProducts = async (query, pagination) => {
   const pag = normalizeProductSort(pagination)
-  const filter = buildFilter(query)
+  const filter = await applyTransactionModeFilter(query, buildFilter(query))
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getAdminProducts = async (query, pagination) => {
-  const filter = buildFilter(query, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter(query, { publicOnly: false }))
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getShopProducts = async (shopId, userContext, query, pagination) => {
@@ -273,14 +455,14 @@ export const getShopProducts = async (shopId, userContext, query, pagination) =>
     errorCode: ERRORS.AUTH.FORBIDDEN,
   })
 
-  const filter = buildFilter({ ...query, shopId }, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter({ ...query, shopId }, { publicOnly: false }))
   if (query.isActive === undefined) {
     filter.isActive = true
   }
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getSellerProducts = async (userContext, query, pagination) => {
@@ -288,7 +470,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
     throw new AppError('Bạn cần có role seller để xem sản phẩm cá nhân', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
-  const filter = buildFilter(query, { publicOnly: false })
+  const filter = await applyTransactionModeFilter(query, buildFilter(query, { publicOnly: false }))
   filter.ownerType = PRODUCT_OWNER_TYPES.SELLER
   filter.seller = userContext._id
   filter.isActive = true
@@ -298,7 +480,7 @@ export const getSellerProducts = async (userContext, query, pagination) => {
 
   const pag = normalizeProductSort(pagination)
   const { items: products, meta } = await paginate(productRepo, filter, pag, textSearchOptions(filter, pag))
-  return { products, meta }
+  return { products: await attachProductReadModelList(products), meta }
 }
 
 export const getProductById = async (id) => {
@@ -306,19 +488,29 @@ export const getProductById = async (id) => {
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-  return product
+  return attachProductReadModel(product, await getOpenExchangeCountMap([product._id]))
+}
+
+export const getAdminProductById = async (id) => {
+  const product = await productRepo.findById(id)
+  if (!product) {
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+  return attachProductReadModel(product, await getOpenExchangeCountMap([product._id]))
 }
 
 export const createProduct = async (userContext, productData, files = []) => {
   const ownership = await resolveCreateOwnership(productData, userContext)
   const safeProductData = { ...productData }
   delete safeProductData.ownerType
+  assertTransactionModeForOwnership(safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL, ownership.ownerType)
 
   const uploadedImages = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
   const images = normalizeImages(uploadedImages)
 
   return productRepo.create({
     ...safeProductData,
+    transactionMode: safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL,
     ...ownership,
     images,
   })
@@ -333,6 +525,9 @@ export const updateProduct = async (productId, userContext, updateData) => {
   await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_UPDATE, 'Bạn không có quyền chỉnh sửa sản phẩm này')
 
   const nextUpdateData = await normalizeUpdateOwnership(product, updateData, userContext)
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'transactionMode')) {
+    assertTransactionModeForOwnership(nextUpdateData.transactionMode, product.ownerType)
+  }
   if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
     nextUpdateData.location = {
       ...(product.location || {}),
@@ -397,6 +592,113 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
       data: { productId: product._id },
     })
   }
+  return updatedProduct
+}
+
+export const updateAdminProductStatus = async (productId, userContext, { status, reason = '', adminNote = '' }) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  if (status === 'inactive') {
+    return hideAdminProduct(productId, userContext, { reason, adminNote })
+  }
+
+  if (status === 'active') {
+    return restoreAdminProduct(productId, userContext, { reason, adminNote })
+  }
+
+  if (product.status !== status) {
+    const allowedStatuses = PRODUCT_STATUS_TRANSITIONS[product.status] || []
+    if (!allowedStatuses.includes(status)) {
+      throw new AppError(
+        'Không thể chuyển trạng thái sản phẩm theo vòng đời hiện tại',
+        HTTP_STATUS.BAD_REQUEST,
+        ERRORS.PRODUCT.INVALID_STATUS_TRANSITION
+      )
+    }
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    status,
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_STATUS_CHANGED',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.status,
+    newStatus: status,
+    reason,
+    adminNote,
+  })
+
+  return updatedProduct
+}
+
+export const hideAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    isActive: false,
+    hiddenBy: userContext._id,
+    hiddenAt: new Date(),
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_HIDDEN',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.isActive ? 'active' : 'inactive',
+    newStatus: 'inactive',
+    reason,
+    adminNote,
+  })
+
+  return updatedProduct
+}
+
+export const restoreAdminProduct = async (productId, userContext, { reason = '', adminNote = '' } = {}) => {
+  const product = await productRepo.findById(productId)
+  if (!product) {
+    throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
+  }
+
+  const updatedProduct = await productRepo.updateById(productId, {
+    isActive: true,
+    restoredBy: userContext._id,
+    restoredAt: new Date(),
+    moderationBy: userContext._id,
+    moderationAt: new Date(),
+    moderationReason: reason,
+    adminNote,
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'PRODUCT_RESTORED',
+    targetType: 'product',
+    targetId: product._id,
+    previousStatus: product.isActive ? 'active' : 'inactive',
+    newStatus: 'active',
+    reason,
+    adminNote,
+  })
+
   return updatedProduct
 }
 

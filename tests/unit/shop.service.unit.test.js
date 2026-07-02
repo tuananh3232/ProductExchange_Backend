@@ -30,6 +30,7 @@ const dataScopeUtil = {
 }
 
 const notifySafely = jest.fn()
+const writeAuditLog = jest.fn()
 
 jest.unstable_mockModule('../../src/repositories/shop/shop.repository.js', () => shopRepo)
 jest.unstable_mockModule('../../src/repositories/permission/permission.repository.js', () => permissionRepo)
@@ -37,6 +38,7 @@ jest.unstable_mockModule('../../src/models/user.model.js', () => ({ default: use
 jest.unstable_mockModule('../../src/models/shop.model.js', () => ({ default: shopModel }))
 jest.unstable_mockModule('../../src/utils/data-scope.util.js', () => dataScopeUtil)
 jest.unstable_mockModule('../../src/services/notification/notification.service.js', () => ({ notifySafely }))
+jest.unstable_mockModule('../../src/services/audit/audit-log.service.js', () => ({ writeAuditLog }))
 
 const shopService = await import('../../src/services/shop/shop.service.js')
 
@@ -136,10 +138,17 @@ describe('shop service unit', () => {
     const result = await shopService.approveShop(shopId)
 
     expect(save).toHaveBeenCalled()
-    expect(shopRepo.updateById).toHaveBeenCalledWith(shopId, {
+    expect(shopRepo.updateById).toHaveBeenCalledWith(shopId, expect.objectContaining({
       status: SHOP_STATUS.ACTIVE,
       rejectionReason: '',
-    })
+      reviewMeta: expect.objectContaining({ reviewedBy: null, adminNote: '' }),
+      approvalMeta: expect.objectContaining({ approvedBy: null, adminNote: '' }),
+    }))
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'SHOP_APPROVED',
+      targetType: 'shop',
+      targetId: shopId,
+    }))
     expect(notifySafely).toHaveBeenCalled()
     expect(result.status).toBe(SHOP_STATUS.ACTIVE)
   })
@@ -151,10 +160,18 @@ describe('shop service unit', () => {
 
     const result = await shopService.rejectShop(shopId, 'Missing documents')
 
-    expect(shopRepo.updateById).toHaveBeenCalledWith(shopId, {
+    expect(shopRepo.updateById).toHaveBeenCalledWith(shopId, expect.objectContaining({
       status: SHOP_STATUS.REJECTED,
       rejectionReason: 'Missing documents',
-    })
+      reviewMeta: expect.objectContaining({ reviewedBy: null, adminNote: '' }),
+      rejectionMeta: expect.objectContaining({ rejectedBy: null, reason: 'Missing documents', adminNote: '' }),
+    }))
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'SHOP_REJECTED',
+      targetType: 'shop',
+      targetId: shopId,
+      reason: 'Missing documents',
+    }))
     expect(result.status).toBe(SHOP_STATUS.REJECTED)
   })
 

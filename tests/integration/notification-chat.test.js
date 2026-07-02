@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { loginMember, loginShopOwner } from '../setup/auth.js'
 import { createSampleShop } from '../setup/factories.js'
 import Notification from '../../src/models/notification.model.js'
@@ -159,6 +158,22 @@ const navigationCases = [
     path: 'combos'
   },
   {
+    types: [
+      NOTIFICATION_TYPES.EXCHANGE_OFFER_CREATED,
+      NOTIFICATION_TYPES.EXCHANGE_COUNTERED,
+      NOTIFICATION_TYPES.EXCHANGE_ACCEPTED,
+      NOTIFICATION_TYPES.EXCHANGE_PAID,
+      NOTIFICATION_TYPES.EXCHANGE_SHIPPED,
+      NOTIFICATION_TYPES.EXCHANGE_COMPLETED,
+      NOTIFICATION_TYPES.EXCHANGE_CANCELLED,
+      NOTIFICATION_TYPES.EXCHANGE_DISPUTED,
+      NOTIFICATION_TYPES.EXCHANGE_RESOLVED
+    ],
+    field: 'exchangeOfferId',
+    targetType: NOTIFICATION_TARGET_TYPES.EXCHANGE,
+    path: 'seller/exchanges'
+  },
+  {
     types: [NOTIFICATION_TYPES.SYSTEM_MAINTENANCE, NOTIFICATION_TYPES.SYSTEM_POLICY_UPDATED, NOTIFICATION_TYPES.SYSTEM],
     targetType: NOTIFICATION_TARGET_TYPES.NOTIFICATION,
     targetUrl: '/notifications'
@@ -180,7 +195,6 @@ const createNotification = (recipient, overrides = {}) =>
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('notification and chat integration', () => {

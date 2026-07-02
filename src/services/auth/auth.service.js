@@ -14,6 +14,15 @@ import { SHOP_STATUS } from '../../constants/status.constant.js'
 import Shop from '../../models/shop.model.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import Order from '../../models/order.model.js'
+import UserWallet from '../../models/user-wallet.model.js'
+import Wallet from '../../models/wallet.model.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
+import {
+  escapeRegex,
+  sanitizeAdminKycListItem,
+  sanitizeAdminUserListItem,
+} from '../../utils/security.util.js'
 
 const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
@@ -356,13 +365,26 @@ export const updateAvatar = async (userId, { file, avatarUrl, removeAvatar = fal
   return user.toPublicJSON()
 }
 
-export const banUser = async (userId, reason = '') => {
+export const banUser = async (userId, reason = '', actor = null) => {
   const user = await userRepo.findById(userId)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
+  if (actor?._id?.toString() === user._id.toString()) {
+    throw new AppError('Quản trị viên không thể tự khóa tài khoản của chính mình', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if ((user.roles || []).includes(ROLES.ADMIN)) {
+    throw new AppError('Không thể khóa tài khoản quản trị viên', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
   user.isActive = false
+  user.banReason = reason || ''
+  user.bannedBy = actor?._id || null
+  user.bannedAt = new Date()
+  user.unbannedBy = null
+  user.unbannedAt = null
   await user.save()
   await notifySafely({
     recipient: user._id,
@@ -374,16 +396,28 @@ export const banUser = async (userId, reason = '') => {
     actionUrl: '/profile',
     data: { reason },
   })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'USER_BANNED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus: 'active',
+    newStatus: 'inactive',
+    reason,
+  })
   return user.toPublicJSON()
 }
 
-export const unbanUser = async (userId) => {
+export const unbanUser = async (userId, actor = null) => {
   const user = await userRepo.findById(userId)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
   user.isActive = true
+  user.banReason = ''
+  user.unbannedBy = actor?._id || null
+  user.unbannedAt = new Date()
   await user.save()
   await notifySafely({
     recipient: user._id,
@@ -394,6 +428,14 @@ export const unbanUser = async (userId) => {
     targetId: user._id,
     actionUrl: '/profile',
   })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'USER_UNBANNED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus: 'inactive',
+    newStatus: 'active',
+  })
   return user.toPublicJSON()
 }
 
@@ -401,9 +443,10 @@ export const getAdminUsers = async (query, pagination) => {
   const filter = {}
 
   if (query.search) {
+    const escapedSearch = escapeRegex(query.search)
     filter.$or = [
-      { name: { $regex: query.search, $options: 'i' } },
-      { email: { $regex: query.search, $options: 'i' } },
+      { name: { $regex: escapedSearch, $options: 'i' } },
+      { email: { $regex: escapedSearch, $options: 'i' } },
     ]
   }
 
@@ -419,9 +462,125 @@ export const getAdminUsers = async (query, pagination) => {
   const { items: users, meta } = await paginate(userRepo, filter, pagination)
 
   return {
-    users: users.map((user) => user.toPublicJSON()),
+    users: users.map(sanitizeAdminUserListItem),
     meta,
   }
+}
+
+const sanitizeAdminUserDetail = (user) => {
+  const value = typeof user.toObject === 'function' ? user.toObject() : { ...user }
+  delete value.password
+  delete value.refreshToken
+  delete value.resetPasswordToken
+  delete value.resetPasswordExpires
+  delete value.emailVerificationToken
+  delete value.emailVerificationExpires
+  return value
+}
+
+export const getAdminUserById = async (userId) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  const [shops, userWallet, orderSummary] = await Promise.all([
+    Shop.find({ owner: userId, isActive: true })
+      .select('_id name slug status isActive createdAt updatedAt')
+      .lean(),
+    UserWallet.findOne({ user: userId }).select('balance pendingBalance totalTopUp totalSpent totalWithdrawn isActive updatedAt').lean(),
+    Order.aggregate([
+      { $match: { buyer: user._id, isActive: true } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$totalAmount' },
+        },
+      },
+    ]),
+  ])
+
+  const shopIds = shops.map((shop) => shop._id)
+  const shopWallets = shopIds.length
+    ? await Wallet.find({ shop: { $in: shopIds } }).select('shop balance pendingBalance totalEarned totalWithdrawn isActive').lean()
+    : []
+
+  return {
+    user: sanitizeAdminUserDetail(user),
+    roles: user.roles || [],
+    accountStatus: {
+      isActive: user.isActive,
+      isVerified: user.isVerified,
+      banReason: user.banReason || '',
+      bannedBy: user.bannedBy || null,
+      bannedAt: user.bannedAt || null,
+      unbannedBy: user.unbannedBy || null,
+      unbannedAt: user.unbannedAt || null,
+    },
+    kycSummary: user.kyc || { status: 'none' },
+    shopSummary: {
+      total: shops.length,
+      shops,
+    },
+    walletSummary: {
+      userWallet: userWallet || { balance: 0, pendingBalance: 0, totalTopUp: 0, totalSpent: 0, totalWithdrawn: 0 },
+      shopWallets,
+    },
+    orderSummary: {
+      totalOrders: orderSummary.reduce((sum, row) => sum + row.count, 0),
+      totalAmount: orderSummary.reduce((sum, row) => sum + row.totalAmount, 0),
+      byStatus: orderSummary.reduce((acc, row) => {
+        acc[row._id] = { count: row.count, totalAmount: row.totalAmount }
+        return acc
+      }, {}),
+    },
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  }
+}
+
+export const updateAdminUserStatus = async (userId, { isActive, reason = '', adminNote = '' }, actor) => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  if (actor?._id?.toString() === user._id.toString()) {
+    throw new AppError('Quản trị viên không thể tự cập nhật trạng thái tài khoản của chính mình', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if ((user.roles || []).includes(ROLES.ADMIN) && isActive === false) {
+    throw new AppError('Không thể khóa tài khoản quản trị viên', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  const previousStatus = user.isActive ? 'active' : 'inactive'
+  user.isActive = isActive
+  if (isActive) {
+    user.banReason = ''
+    user.unbannedBy = actor?._id || null
+    user.unbannedAt = new Date()
+  } else {
+    user.banReason = reason
+    user.bannedBy = actor?._id || null
+    user.bannedAt = new Date()
+    user.unbannedBy = null
+    user.unbannedAt = null
+  }
+  await user.save()
+
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus,
+    newStatus: isActive ? 'active' : 'inactive',
+    reason,
+    adminNote,
+  })
+
+  return sanitizeAdminUserDetail(user)
 }
 
 export const forgotPassword = async ({ email }) => {
@@ -604,25 +763,23 @@ export const getAdminKycs = async (query, pagination) => {
   }
 
   if (query.search) {
+    const escapedSearch = escapeRegex(query.search)
     filter.$or = [
-      { name: { $regex: query.search, $options: 'i' } },
-      { email: { $regex: query.search, $options: 'i' } },
-      { 'kyc.fullName': { $regex: query.search, $options: 'i' } },
+      { name: { $regex: escapedSearch, $options: 'i' } },
+      { email: { $regex: escapedSearch, $options: 'i' } },
+      { 'kyc.fullName': { $regex: escapedSearch, $options: 'i' } },
     ]
   }
 
   const { items: users, meta } = await paginate(userRepo, filter, pagination)
 
   return {
-    kycs: users.map((user) => ({
-      user: user.toPublicJSON(),
-      kyc: user.kyc || { status: 'none' },
-    })),
+    kycs: users.map(sanitizeAdminKycListItem),
     meta,
   }
 }
 
-export const adminApproveKyc = async (userId) => {
+export const adminApproveKyc = async (userId, actor = null) => {
   const user = await userRepo.findById(userId)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
@@ -633,9 +790,22 @@ export const adminApproveKyc = async (userId) => {
 
   user.kyc.status = 'approved'
   user.kyc.reviewedAt = new Date()
+  user.kyc.reviewedBy = actor?._id || null
   user.kyc.rejectionReason = ''
+  user.kyc.reviewHistory = [
+    ...(user.kyc.reviewHistory || []),
+    { status: 'approved', reason: '', reviewedBy: actor?._id || null, reviewedAt: user.kyc.reviewedAt },
+  ]
   user.roles = [...new Set([...(user.roles || []), ROLES.SELLER])]
   await user.save()
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'KYC_APPROVED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus: 'pending',
+    newStatus: 'approved',
+  })
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_APPROVED,
@@ -648,7 +818,7 @@ export const adminApproveKyc = async (userId) => {
   return user.toPublicJSON()
 }
 
-export const adminRejectKyc = async (userId, rejectionReason) => {
+export const adminRejectKyc = async (userId, rejectionReason, actor = null) => {
   const user = await userRepo.findById(userId)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
@@ -659,8 +829,22 @@ export const adminRejectKyc = async (userId, rejectionReason) => {
 
   user.kyc.status = 'rejected'
   user.kyc.reviewedAt = new Date()
+  user.kyc.reviewedBy = actor?._id || null
   user.kyc.rejectionReason = rejectionReason
+  user.kyc.reviewHistory = [
+    ...(user.kyc.reviewHistory || []),
+    { status: 'rejected', reason: rejectionReason, reviewedBy: actor?._id || null, reviewedAt: user.kyc.reviewedAt },
+  ]
   await user.save()
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'KYC_REJECTED',
+    targetType: 'user',
+    targetId: user._id,
+    previousStatus: 'pending',
+    newStatus: 'rejected',
+    reason: rejectionReason,
+  })
   await notifySafely({
     recipient: user._id,
     type: NOTIFICATION_TYPES.KYC_REJECTED,

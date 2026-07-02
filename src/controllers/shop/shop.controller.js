@@ -98,17 +98,17 @@ export const getAdminShopById = asyncHandler(async (req, res) => {
 })
 
 export const approveShop = asyncHandler(async (req, res) => {
-  const shop = await shopService.approveShop(req.params.id)
+  const shop = await shopService.approveShop(req.params.id, req.user)
   sendSuccess(res, { message: MESSAGES.SHOP.APPROVED, data: { shop } })
 })
 
 export const rejectShop = asyncHandler(async (req, res) => {
-  const shop = await shopService.rejectShop(req.params.id, req.body.rejectionReason)
+  const shop = await shopService.rejectShop(req.params.id, req.body.rejectionReason, req.user)
   sendSuccess(res, { message: MESSAGES.SHOP.REJECTED, data: { shop } })
 })
 
 export const suspendShop = asyncHandler(async (req, res) => {
-  const shop = await shopService.suspendShop(req.params.id, req.body.reason)
+  const shop = await shopService.suspendShop(req.params.id, req.body.reason, req.user)
   sendSuccess(res, { message: MESSAGES.SHOP.SUSPENDED, data: { shop } })
 })
 
@@ -118,7 +118,7 @@ export const resubmitForReview = asyncHandler(async (req, res) => {
 })
 
 export const unsuspendShop = asyncHandler(async (req, res) => {
-  const shop = await shopService.unsuspendShop(req.params.id)
+  const shop = await shopService.unsuspendShop(req.params.id, req.user)
   sendSuccess(res, { message: MESSAGES.SHOP.UNSUSPENDED, data: { shop } })
 })
 

@@ -10,6 +10,8 @@ const notificationSchema = new mongoose.Schema(
   {
     recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    recipientCount: { type: Number, default: 1, min: 0 },
     type: { type: String, enum: Object.values(NOTIFICATION_TYPES), required: true },
     title: { type: String, required: true, maxlength: 150 },
     message: { type: String, required: true, maxlength: 1000 },

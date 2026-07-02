@@ -10,7 +10,7 @@ import {
 import * as categoryRepo from '../../repositories/category/category.repository.js'
 
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair', 'poor']
-const PRODUCT_LISTING_TYPES = ['sell']
+const PRODUCT_LISTING_TYPES = ['sell', 'rental', 'exchange']
 const PRODUCT_OWNER_TYPES = ['SHOP', 'SELLER']
 const USER_STATUSES = ['active', 'inactive']
 const KYC_STATUSES = ['none', 'pending', 'approved', 'rejected']
@@ -19,6 +19,8 @@ const PAYMENT_METHODS = ['PAYOS', 'VNPAY', 'WALLET']
 const LABELS = {
   ...COMBO_LABELS,
   sell: 'Sell',
+  rental: 'Rental',
+  exchange: 'Trao đổi',
   new: 'New',
   like_new: 'Like New',
   good: 'Good',
@@ -79,6 +81,7 @@ export const getProductFilterOptions = async () => {
   const rawCategories = await categoryRepo.findMany({ filter: { isActive: true }, limit: 200, sortBy: 'name', sortOrder: 1 })
   return {
     listingTypes: toOptions(PRODUCT_LISTING_TYPES),
+    transactionModes: toOptions(PRODUCT_LISTING_TYPES),
     conditions: toOptions(PRODUCT_CONDITIONS),
     statuses: toOptions(PRODUCT_STATUS_ENUM),
     ownerTypes: toOptions(PRODUCT_OWNER_TYPES),
@@ -113,6 +116,11 @@ export const getWithdrawalFilterOptions = () => ({
 export const getPaymentOptions = () => ({
   methods: toOptions(PAYMENT_METHODS),
   statuses: toOptions(PAYMENT_STATUS_ENUM),
+})
+
+export const getCategoryFilterOptions = () => ({
+  statuses: toOptions(['active', 'inactive', 'disabled']),
+  sortOptions: toOptions(['newest', 'oldest', 'name']),
 })
 
 // periods: giá trị thực từ stats.service.js — normalizePeriod chỉ nhận 'day' | 'month'

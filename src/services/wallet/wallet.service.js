@@ -5,10 +5,13 @@ import { WALLET_TRANSACTION_TYPE, WITHDRAWAL_STATUS } from '../../constants/stat
 import { WALLET_CONSTANTS } from '../../constants/wallet.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { isAdmin, assertShopPermission } from '../../utils/data-scope.util.js'
+import { sanitizeWithdrawalListItem } from '../../utils/security.util.js'
+import { runMongoTransaction } from '../../utils/mongo-transaction.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
 import * as walletRepo from '../../repositories/wallet/wallet.repository.js'
 import * as withdrawalRepo from '../../repositories/withdrawal-request/withdrawal-request.repository.js'
 import Shop from '../../models/shop.model.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const PLATFORM_FEE_RATE = WALLET_CONSTANTS.PLATFORM_FEE_RATE
 
@@ -150,7 +153,16 @@ export const getWithdrawals = async (shopId, userContext, pagination, statusFilt
 export const adminGetWithdrawals = async (pagination, statusFilter) => {
   const filter = {}
   if (statusFilter) filter.status = statusFilter
-  return queryWithdrawals(filter, pagination)
+  const result = await queryWithdrawals(filter, pagination)
+  return {
+    ...result,
+    withdrawals: result.withdrawals.map(sanitizeWithdrawalListItem),
+  }
+}
+
+export const adminGetWithdrawalById = async (withdrawalId) => {
+  const request = await getWithdrawalOrThrow(withdrawalId)
+  return request
 }
 
 export const approveWithdrawal = async (withdrawalId, userContext) => {
@@ -159,11 +171,23 @@ export const approveWithdrawal = async (withdrawalId, userContext) => {
     throw new AppError('Lệnh rút tiền không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.WITHDRAWAL.INVALID_STATUS)
   }
 
-  return withdrawalRepo.updateById(withdrawalId, {
+  const updated = await withdrawalRepo.updateById(withdrawalId, {
     status: WITHDRAWAL_STATUS.APPROVED,
     approvedBy: userContext._id,
     approvedAt: new Date(),
   })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'SHOP_WITHDRAWAL_APPROVED',
+    targetType: 'withdrawal',
+    targetId: request._id,
+    previousStatus: request.status,
+    newStatus: WITHDRAWAL_STATUS.APPROVED,
+    metadata: { shopId: request.shop?._id || request.shop, amount: request.amount },
+  })
+
+  return updated
 }
 
 export const rejectWithdrawal = async (withdrawalId, userContext, rejectionReason, adminNote = '') => {
@@ -173,17 +197,31 @@ export const rejectWithdrawal = async (withdrawalId, userContext, rejectionReaso
   }
 
   const shopId = request.shop?._id || request.shop
+  const updated = await runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const updated = await withdrawalRepo.updateById(withdrawalId, {
+      status: WITHDRAWAL_STATUS.REJECTED,
+      rejectionReason,
+      adminNote,
+      approvedBy: userContext._id,
+      approvedAt: new Date(),
+    }, options)
 
-  // Đánh dấu REJECTED trước → tránh admin reject 2 lần gây double revert balance
-  const updated = await withdrawalRepo.updateById(withdrawalId, {
-    status: WITHDRAWAL_STATUS.REJECTED,
-    rejectionReason,
-    adminNote,
-    approvedBy: userContext._id,
-    approvedAt: new Date(),
+    await walletRepo.revertWithdrawal(shopId, request.amount, options)
+    return updated
   })
 
-  await walletRepo.revertWithdrawal(shopId, request.amount)
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'SHOP_WITHDRAWAL_REJECTED',
+    targetType: 'withdrawal',
+    targetId: request._id,
+    previousStatus: request.status,
+    newStatus: WITHDRAWAL_STATUS.REJECTED,
+    reason: rejectionReason,
+    adminNote,
+    metadata: { shopId, amount: request.amount },
+  })
 
   return updated
 }
@@ -205,19 +243,34 @@ export const completeWithdrawal = async (withdrawalId, userContext, adminNote = 
   }
   if (transferProof) update.transferProof = transferProof
 
-  const updated = await withdrawalRepo.updateById(withdrawalId, update)
+  const updated = await runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const updated = await withdrawalRepo.updateById(withdrawalId, update, options)
 
-  await walletRepo.completeWithdrawal(shopId, request.amount)
+    await walletRepo.completeWithdrawal(shopId, request.amount, options)
 
-  await walletRepo.createTransaction({
-    wallet: request.wallet,
-    shop: shopId,
-    type: WALLET_TRANSACTION_TYPE.DEBIT,
-    grossAmount: request.amount,
-    platformFee: 0,
-    netAmount: request.amount,
-    description: `Rút tiền lệnh #${withdrawalId}`,
-    metadata: { withdrawalId },
+    await walletRepo.createTransaction({
+      wallet: request.wallet,
+      shop: shopId,
+      type: WALLET_TRANSACTION_TYPE.DEBIT,
+      grossAmount: request.amount,
+      platformFee: 0,
+      netAmount: request.amount,
+      metadata: { withdrawalId },
+    }, options)
+
+    return updated
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'SHOP_WITHDRAWAL_COMPLETED',
+    targetType: 'withdrawal',
+    targetId: request._id,
+    previousStatus: request.status,
+    newStatus: WITHDRAWAL_STATUS.COMPLETED,
+    adminNote,
+    metadata: { shopId, amount: request.amount, transferProof },
   })
 
   return updated

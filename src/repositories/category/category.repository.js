@@ -13,4 +13,5 @@ export const findBySlug = (slug) => Category.findOne({ slug })
 
 export const updateById = (id, data) => Category.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
 
-export const deleteById = (id) => Category.findByIdAndDelete(id)
+export const deleteById = (id) =>
+  Category.findByIdAndUpdate(id, { isActive: false, deletedAt: new Date() }, { returnDocument: 'after', runValidators: true })

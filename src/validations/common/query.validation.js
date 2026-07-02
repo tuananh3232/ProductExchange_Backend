@@ -41,6 +41,7 @@ export const productQuerySchema = paginationQuerySchema.keys({
   maxPrice: Joi.number().min(0),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
   listingType: Joi.string().valid('sell'),
+  transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   status: Joi.string().valid('available', 'hidden', 'pending', 'sold'),
   visualizerReady: Joi.boolean(),
 })

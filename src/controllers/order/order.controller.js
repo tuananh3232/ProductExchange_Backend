@@ -25,6 +25,17 @@ export const getOrders = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.ORDER.FETCHED, data: { orders }, meta })
 })
 
+export const getAdminOrders = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { orders, meta } = await orderService.getAdminOrders(req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.ORDER.FETCHED, data: { orders }, meta })
+})
+
+export const getAdminOrderById = asyncHandler(async (req, res) => {
+  const result = await orderService.getAdminOrderById(req.params.orderId)
+  sendSuccess(res, { message: MESSAGES.ORDER.DETAIL_FETCHED, data: result })
+})
+
 export const confirmOrder = asyncHandler(async (req, res) => {
   const order = await orderService.confirmOrder(req.params.id, req.user)
   sendSuccess(res, { message: MESSAGES.ORDER.CONFIRMED, data: { order } })
@@ -37,5 +48,20 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 
 export const updateOrderStatus = asyncHandler(async (req, res) => {
   const order = await orderService.updateOrderStatus(req.params.id, req.user, req.body.status, req.body.note)
+  sendSuccess(res, { message: MESSAGES.ORDER.STATUS_UPDATED, data: { order } })
+})
+
+export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
+  const order = await orderService.updateAdminOrderStatus(req.params.orderId, req.user, req.body)
+  sendSuccess(res, { message: MESSAGES.ORDER.STATUS_UPDATED, data: { order } })
+})
+
+export const cancelAdminOrder = asyncHandler(async (req, res) => {
+  const order = await orderService.cancelAdminOrder(req.params.orderId, req.user, req.body)
+  sendSuccess(res, { message: MESSAGES.ORDER.CANCELLED, data: { order } })
+})
+
+export const refundAdminOrder = asyncHandler(async (req, res) => {
+  const order = await orderService.refundAdminOrder(req.params.orderId, req.user, req.body)
   sendSuccess(res, { message: MESSAGES.ORDER.STATUS_UPDATED, data: { order } })
 })

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { ORDER_STATUS, ORDER_STATUS_ENUM, PAYMENT_STATUS, PAYMENT_STATUS_ENUM } from '../constants/status.constant.js'
+import { ORDER_STATUS, ORDER_STATUS_ENUM, PAYMENT_STATUS, PAYMENT_STATUS_ENUM, SETTLEMENT_STATUS, SETTLEMENT_STATUS_ENUM } from '../constants/status.constant.js'
 
 const orderHistorySchema = new mongoose.Schema(
   {
@@ -67,6 +67,37 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+    grossAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalPlatformFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    netSettlementAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    settlementStatus: {
+      type: String,
+      enum: SETTLEMENT_STATUS_ENUM,
+      default: SETTLEMENT_STATUS.PENDING,
+      index: true,
+    },
+    feeSnapshotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FeeSnapshot',
+      default: null,
+    },
+    feePolicyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FeePolicy',
+      default: null,
     },
     status: {
       type: String,

@@ -20,6 +20,9 @@ import subscriptionRoutes from './subscription/subscription.route.js'
 import kycOptionsRoutes from './options/kyc.route.js'
 import withdrawalOptionsRoutes from './options/withdrawal.route.js'
 import analyticsRoutes from './analytics/analytics.route.js'
+import exchangeRoutes from './exchange/exchange.route.js'
+import rentalRoutes from './rental/rental.route.js'
+import reviewRoutes from './review/review.route.js'
 
 const router = Router()
 
@@ -53,5 +56,8 @@ router.use('/subscriptions', subscriptionRoutes)
 router.use('/kyc', kycOptionsRoutes)
 router.use('/withdrawals', withdrawalOptionsRoutes)
 router.use('/analytics', analyticsRoutes)
+router.use('/exchanges', exchangeRoutes)
+router.use('/rentals', rentalRoutes)
+router.use('/reviews', reviewRoutes)
 
 export default router

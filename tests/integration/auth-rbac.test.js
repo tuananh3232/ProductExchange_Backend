@@ -3,7 +3,6 @@ import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { ROLES } from '../../src/constants/role.constant.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createTestUser, loginAdmin, loginMember } from '../setup/auth.js'
 
 const api = env.apiPrefix
@@ -13,7 +12,6 @@ const uniqueEmail = (prefix) => `${prefix}-${Date.now()}-${Math.random().toStrin
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('auth and RBAC integration', () => {

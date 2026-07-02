@@ -14,6 +14,7 @@ import '../src/models/order.model.js';
 import '../src/models/payment.model.js';
 import '../src/models/permission.model.js';
 import '../src/models/product.model.js';
+import '../src/models/review.model.js';
 import '../src/models/role.model.js';
 import '../src/models/room-project.model.js';
 import '../src/models/room-scene.model.js';

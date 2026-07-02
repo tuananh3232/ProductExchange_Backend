@@ -17,6 +17,12 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null);
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
+const INVITE_DEBUG_ENABLED = process.env.DEBUG_SHOP_STAFF_INVITE === 'true';
+
+const logInviteDebug = (stage, payload = {}) => {
+  if (!INVITE_DEBUG_ENABLED) return;
+  console.log(`[shop-staff-invite] ${stage}`, payload);
+};
 
 const buildStaffInvitationUrl = ({ invitationId, shopId }) => {
   if (env.staffInvitation.urlTemplate) {
@@ -37,6 +43,13 @@ const buildStaffInvitationUrl = ({ invitationId, shopId }) => {
 
 const notifyStaffInvitation = async ({ invitation, shop, invitee, inviterContext }) => {
   try {
+    logInviteDebug('service.sendInvitation.email.start', {
+      invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+      shopId: shop?._id?.toString?.() || shop?._id || null,
+      inviteeId: invitee?._id?.toString?.() || invitee?._id || null,
+      email: invitee?.email || null,
+    });
+
     const invitationUrl = buildStaffInvitationUrl({
       invitationId: invitation._id.toString(),
       shopId: shop._id.toString(),
@@ -49,7 +62,17 @@ const notifyStaffInvitation = async ({ invitation, shop, invitee, inviterContext
       inviterName: inviterContext?.name || shop.owner?.name || '',
       invitationUrl,
     });
+
+    logInviteDebug('service.sendInvitation.email.done', {
+      invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+      email: invitee?.email || null,
+    });
   } catch (error) {
+    logInviteDebug('service.sendInvitation.email.error', {
+      invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+      email: invitee?.email || null,
+      error: error.message,
+    });
     console.warn('Failed to send staff invitation email:', error.message);
   }
 };
@@ -70,6 +93,13 @@ const ensureStaffInviteeRole = (user) => {
  * Send invitation to user to join shop as staff
  */
 export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permissions = []) => {
+  logInviteDebug('service.sendInvitation.start', {
+    shopId,
+    inviterId: inviterContext?._id?.toString?.() || inviterContext?._id || null,
+    email: inviteeEmail || null,
+    permissionCount: Array.isArray(permissions) ? permissions.length : 0,
+  });
+
   // Verify shop exists and inviter has access
   const shop = await shopRepo.findById(shopId);
   if (!shop || !shop.isActive) {
@@ -79,12 +109,23 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
   const userId = inviterContext?._id?.toString();
   const ownerId = shop.owner?._id?.toString() || shop.owner?.toString();
 
+  logInviteDebug('service.sendInvitation.shop.loaded', {
+    shopId,
+    ownerId,
+    staffCount: Array.isArray(shop.staff) ? shop.staff.length : 0,
+  });
+
   await assertShopPermission({
     user: inviterContext,
     shopId,
     permissionKey: PERMISSIONS.SHOP_STAFF_INVITE,
     message: 'Bạn không có quyền gửi lời mời staff',
     errorCode: ERRORS.AUTH.FORBIDDEN,
+  });
+
+  logInviteDebug('service.sendInvitation.permission.checked', {
+    shopId,
+    inviterId: userId,
   });
 
   const uniquePermissions = [...new Set(permissions || [])];
@@ -111,6 +152,12 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     throw new AppError('Account is inactive', HTTP_STATUS.BAD_REQUEST, ERRORS.AUTH.ACCOUNT_INACTIVE);
   }
   const inviteeIdString = invitee._id.toString();
+
+  logInviteDebug('service.sendInvitation.invitee.loaded', {
+    inviteeId: inviteeIdString,
+    email,
+    roles: invitee.roles || [],
+  });
 
   ensureStaffInviteeRole(invitee);
 
@@ -145,6 +192,11 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     throw new AppError('Đã có lời mời chưa được xử lý từ trước', HTTP_STATUS.CONFLICT, ERRORS.SHOP.INVITATION_NOT_FOUND);
   }
 
+  logInviteDebug('service.sendInvitation.pending.checked', {
+    shopId,
+    inviteeId: inviteeIdString,
+  });
+
   // Create invitation
   const invitation = await shopInvitationRepo.create({
     shop: shopId,
@@ -156,17 +208,28 @@ export const sendInvitation = async (shopId, inviterContext, inviteeEmail, permi
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
   });
 
-  await notifyStaffInvitation({ invitation, shop, invitee, inviterContext });
+  logInviteDebug('service.sendInvitation.invitation.created', {
+    invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+    shopId,
+    inviteeId: inviteeIdString,
+  });
+
+  void notifyStaffInvitation({ invitation, shop, invitee, inviterContext });
   await notifySafely({
     recipient: invitee._id,
     sender: inviterContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_INVITED,
-    title: 'Lời mời tham gia shop',
-    message: `Bạn được mời tham gia shop ${shop.name}`,
+    title: 'Lời mời tham gia cửa hàng',
+    message: `Bạn được mời tham gia cửa hàng ${shop.name}`,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
     actionUrl: '',
     data: { shopId: shop._id, invitationId: invitation._id },
+  });
+
+  logInviteDebug('service.sendInvitation.beforeReturn', {
+    invitationId: invitation?._id?.toString?.() || invitation?._id || null,
+    shopId,
   });
 
   return shopInvitationRepo.findById(invitation._id);
@@ -251,7 +314,7 @@ export const acceptInvitation = async (invitationId, userContext) => {
     sender: userContext._id,
     type: NOTIFICATION_TYPES.SHOP_STAFF_ACCEPTED,
     title: 'Nhân viên đã chấp nhận lời mời',
-    message: 'Lời mời tham gia shop đã được chấp nhận',
+    message: 'Lời mời tham gia cửa hàng đã được chấp nhận',
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
     actionUrl: '/profile',

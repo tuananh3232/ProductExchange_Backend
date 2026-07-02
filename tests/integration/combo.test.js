@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createSampleProduct } from '../setup/factories.js'
 
 const api = env.apiPrefix
@@ -21,7 +20,6 @@ const createComboProduct = (overrides = {}) =>
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 describe('POST /combos/generate', () => {
@@ -201,6 +199,61 @@ describe('GET /combos/alternatives', () => {
     expect(titles).not.toContain('Expensive')
   })
 
+  it('prioritizes strict style, roomType, and colorTone matches before fallback results', async () => {
+    await Promise.all([
+      createComboProduct({
+        title: 'Strict match',
+        decorRole: 'lighting',
+        style: 'minimalist',
+        roomType: 'living_room',
+        colorTone: 'neutral',
+        comboPriority: 1,
+      }),
+      createComboProduct({
+        title: 'Wrong tone',
+        decorRole: 'lighting',
+        style: 'minimalist',
+        roomType: 'living_room',
+        colorTone: 'warm',
+        comboPriority: 10,
+      }),
+      createComboProduct({
+        title: 'Wrong room',
+        decorRole: 'lighting',
+        style: 'minimalist',
+        roomType: 'bedroom',
+        colorTone: 'neutral',
+        comboPriority: 10,
+      }),
+      createComboProduct({
+        title: 'Wrong style',
+        decorRole: 'lighting',
+        style: 'modern',
+        roomType: 'living_room',
+        colorTone: 'neutral',
+        comboPriority: 10,
+      }),
+    ])
+
+    const res = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({
+        decorRole: 'lighting',
+        style: 'minimalist',
+        roomType: 'living_room',
+        colorTone: 'neutral',
+        limit: 4,
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.alternatives.map((p) => p.title)).toEqual([
+      'Strict match',
+      'Wrong tone',
+      'Wrong room',
+      'Wrong style',
+    ])
+  })
+
   it('excludes specified product IDs', async () => {
     const excluded = await createComboProduct({ title: 'Excluded', decorRole: 'lighting' })
     await createComboProduct({ title: 'Included', decorRole: 'lighting' })
@@ -213,6 +266,25 @@ describe('GET /combos/alternatives', () => {
     const ids = res.body.data.alternatives.map((p) => p._id)
     expect(ids).not.toContain(excluded._id.toString())
     expect(res.body.data.alternatives.some((p) => p.title === 'Included')).toBe(true)
+  })
+
+  it('excludes multiple IDs, ignores duplicates, invalid IDs, and blank values', async () => {
+    const firstExcluded = await createComboProduct({ title: 'First excluded', decorRole: 'lighting' })
+    const secondExcluded = await createComboProduct({ title: 'Second excluded', decorRole: 'lighting' })
+    await createComboProduct({ title: 'Still included', decorRole: 'lighting' })
+
+    const res = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({
+        decorRole: 'lighting',
+        excludeProductIds: ` ${firstExcluded._id},invalid-id,${secondExcluded._id},${firstExcluded._id}, `,
+      })
+
+    expect(res.status).toBe(200)
+    const titles = res.body.data.alternatives.map((p) => p.title)
+    expect(titles).not.toContain('First excluded')
+    expect(titles).not.toContain('Second excluded')
+    expect(titles).toContain('Still included')
   })
 
   it('excludes inactive and out-of-stock products', async () => {
@@ -248,6 +320,18 @@ describe('GET /combos/alternatives', () => {
     expect(res.body.data.alternatives).toHaveLength(3)
   })
 
+  it('returns the single remaining product when the pool is nearly exhausted', async () => {
+    await createComboProduct({ title: 'Only option left', decorRole: 'lighting' })
+
+    const res = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({ decorRole: 'lighting' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.alternatives).toHaveLength(1)
+    expect(res.body.data.alternatives[0].title).toBe('Only option left')
+  })
+
   it('returns empty list when no alternatives exist', async () => {
     const res = await request(app)
       .get(`${api}/combos/alternatives`)
@@ -255,6 +339,59 @@ describe('GET /combos/alternatives', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.data.alternatives).toEqual([])
+  })
+
+  it('supports repeated alternative requests without backend state', async () => {
+    const first = await createComboProduct({ title: 'First', decorRole: 'lighting' })
+    const second = await createComboProduct({ title: 'Second', decorRole: 'lighting' })
+    const third = await createComboProduct({ title: 'Third', decorRole: 'lighting' })
+
+    const res1 = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({ decorRole: 'lighting', limit: 2 })
+
+    const res2 = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({
+        decorRole: 'lighting',
+        excludeProductIds: `${first._id},${second._id}`,
+        limit: 2,
+      })
+
+    const res3 = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({
+        decorRole: 'lighting',
+        excludeProductIds: `${first._id},${second._id},${third._id}`,
+        limit: 2,
+      })
+
+    expect(res1.status).toBe(200)
+    expect(res2.status).toBe(200)
+    expect(res3.status).toBe(200)
+    expect(res1.body.data.alternatives).toHaveLength(2)
+    expect(res2.body.data.alternatives.map((p) => p.title)).toEqual(['Third'])
+    expect(res3.body.data.alternatives).toEqual([])
+  })
+
+  it('returns the expected response format', async () => {
+    await createComboProduct({ title: 'Formatted', decorRole: 'lighting' })
+
+    const res = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query({ decorRole: 'lighting', limit: 1 })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(Array.isArray(res.body.data.alternatives)).toBe(true)
+    expect(res.body.data.alternatives[0]).toMatchObject({
+      title: 'Formatted',
+      decorRole: 'lighting',
+      style: 'minimalist',
+      roomType: 'living_room',
+      colorTone: 'neutral',
+    })
+    expect(res.body.data.alternatives[0]).not.toHaveProperty('canReplace')
   })
 
   it('returns 422 for invalid decorRole', async () => {
@@ -271,6 +408,24 @@ describe('GET /combos/alternatives', () => {
       .query({ style: 'minimalist' })
 
     expect(res.status).toBe(422)
+  })
+
+  it.each([
+    [{ decorRole: 'lighting', limit: 0 }, 'limit'],
+    [{ decorRole: 'lighting', limit: -1 }, 'limit'],
+    [{ decorRole: 'lighting', limit: 51 }, 'limit'],
+    [{ decorRole: 'lighting', maxPrice: 0 }, 'maxPrice'],
+    [{ decorRole: 'lighting', maxPrice: -1 }, 'maxPrice'],
+    [{ decorRole: 'lighting', style: 'industrial' }, 'style'],
+    [{ decorRole: 'lighting', roomType: 'garage' }, 'roomType'],
+    [{ decorRole: 'lighting', colorTone: 'rainbow' }, 'colorTone'],
+  ])('returns 422 for invalid alternatives query %o (field: %s)', async (query, field) => {
+    const res = await request(app)
+      .get(`${api}/combos/alternatives`)
+      .query(query)
+
+    expect(res.status).toBe(422)
+    expect(res.body.details.some((d) => d.field === field)).toBe(true)
   })
 })
 

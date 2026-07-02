@@ -2,7 +2,7 @@ import * as optionsService from '../../services/options/options.service.js'
 import { asyncHandler } from '../../utils/async-handler.util.js'
 import { sendSuccess } from '../../utils/response.util.js'
 
-const sendOptions = (res, data) => sendSuccess(res, { message: 'Options fetched successfully', data })
+const sendOptions = (res, data) => sendSuccess(res, { message: 'Lấy danh sách tùy chọn thành công', data })
 
 export const getComboOptions = asyncHandler(async (req, res) => {
   sendOptions(res, optionsService.getComboOptions())
@@ -34,6 +34,10 @@ export const getWithdrawalFilterOptions = asyncHandler(async (req, res) => {
 
 export const getPaymentOptions = asyncHandler(async (req, res) => {
   sendOptions(res, optionsService.getPaymentOptions())
+})
+
+export const getCategoryFilterOptions = asyncHandler(async (req, res) => {
+  sendOptions(res, optionsService.getCategoryFilterOptions())
 })
 
 export const getAnalyticsFilterOptions = asyncHandler(async (req, res) => {

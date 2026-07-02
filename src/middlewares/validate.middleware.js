@@ -4,7 +4,7 @@ import HTTP_STATUS from '../constants/http-status.constant.js';
  * Middleware validate Joi schema
  * Trả về lỗi tiếng Anh trong details, thông báo tiếng Việt ở message
  */
-export const validate = (schema, source = 'body') => {
+export const validate = (schema, source = 'body', statusCode = HTTP_STATUS.UNPROCESSABLE_ENTITY) => {
   return (req, res, next) => {
     const { error, value } = schema.validate(req[source], {
       abortEarly: false, // Lấy tất cả lỗi cùng lúc
@@ -17,7 +17,7 @@ export const validate = (schema, source = 'body') => {
         message: d.message,
       }));
 
-      return res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
+      return res.status(statusCode).json({
         success: false,
         message: 'Dữ liệu đầu vào không hợp lệ',
         error: 'Validation failed',

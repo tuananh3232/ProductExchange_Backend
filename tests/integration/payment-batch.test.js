@@ -2,7 +2,6 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { ensureRbacSeedData } from '../../src/services/rbac/rbac-seed.service.js'
 import { createUserWithToken } from '../setup/auth.js'
 import { createSampleOrder } from '../setup/factories.js'
 import { PAYMENT_STATUS, ORDER_STATUS } from '../../src/constants/status.constant.js'
@@ -14,7 +13,6 @@ const api = env.apiPrefix
 
 beforeEach(async () => {
   await resetTestDatabase()
-  await ensureRbacSeedData()
 })
 
 // ─────────────────────────────────────────────
@@ -124,17 +122,36 @@ describe('POST /user-wallet/me/pay-orders — business logic', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 400 when an order is already being processed by another payment method', async () => {
+  it('returns 400 when an order is locked from payment (refund_pending)', async () => {
     const { user, token } = await createUserWithToken()
     await fundWallet(user._id, 500000)
     const ok = await createSampleOrder({ buyer: user._id, totalAmount: 100000 })
-    const processing = await createSampleOrder({
+    const refunding = await createSampleOrder({
+      buyer: user._id,
+      totalAmount: 100000,
+      paymentStatus: PAYMENT_STATUS.REFUND_PENDING,
+    })
+    const res = await postPayOrders(token, [ok._id.toString(), refunding._id.toString()])
+    expect(res.status).toBe(400)
+  })
+
+  it('allows paying an order left in pending_payment by an abandoned gateway attempt', async () => {
+    const { user, token } = await createUserWithToken()
+    await fundWallet(user._id, 500000)
+    const ok = await createSampleOrder({ buyer: user._id, totalAmount: 100000 })
+    const stale = await createSampleOrder({
       buyer: user._id,
       totalAmount: 100000,
       paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
     })
-    const res = await postPayOrders(token, [ok._id.toString(), processing._id.toString()])
-    expect(res.status).toBe(400)
+    const res = await postPayOrders(token, [ok._id.toString(), stale._id.toString()])
+    expect(res.status).toBe(200)
+
+    const updated = await Order.find({ _id: { $in: [ok._id, stale._id] } })
+    for (const o of updated) {
+      expect(o.paymentStatus).toBe(PAYMENT_STATUS.PAID)
+      expect(o.paymentMethod).toBe('wallet')
+    }
   })
 })
 

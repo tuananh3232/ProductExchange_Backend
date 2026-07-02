@@ -7,6 +7,12 @@ export const PRODUCT_OWNER_TYPES = {
   SELLER: 'SELLER',
 }
 
+export const PRODUCT_TRANSACTION_MODES = {
+  SELL: 'sell',
+  RENTAL: 'rental',
+  EXCHANGE: 'exchange',
+}
+
 const productSchema = new mongoose.Schema(
   {
     title: {
@@ -34,6 +40,17 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: ['sell'],
       required: [true, 'Listing type is required'],
+    },
+    transactionMode: {
+      type: String,
+      enum: Object.values(PRODUCT_TRANSACTION_MODES),
+      default: PRODUCT_TRANSACTION_MODES.SELL,
+      index: true,
+    },
+    activeRentalListing: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'RentalListing',
+      default: null,
     },
     condition: {
       type: String,
@@ -84,7 +101,31 @@ const productSchema = new mongoose.Schema(
       enum: PRODUCT_STATUS_ENUM,
       default: 'available',
     },
+    rating: {
+      average: { type: Number, default: 0, min: 0, max: 5 },
+      count: { type: Number, default: 0, min: 0 },
+    },
     isActive: { type: Boolean, default: true },
+    moderationBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    moderationAt: { type: Date, default: null },
+    moderationReason: { type: String, default: '', maxlength: 500 },
+    adminNote: { type: String, default: '', maxlength: 1000 },
+    hiddenBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    hiddenAt: { type: Date, default: null },
+    restoredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    restoredAt: { type: Date, default: null },
     style: { type: String, enum: PRODUCT_STYLES, default: null },
     roomType: { type: String, enum: ROOM_TYPES, default: null },
     colorTone: { type: String, enum: COLOR_TONES, default: null },
@@ -173,7 +214,9 @@ productSchema.index({ shop: 1, status: 1 })
 productSchema.index({ seller: 1, status: 1 })
 productSchema.index({ ownerType: 1, status: 1 })
 productSchema.index({ listingType: 1, status: 1 })
+productSchema.index({ transactionMode: 1, status: 1 })
 productSchema.index({ createdAt: -1 })
+productSchema.index({ 'rating.average': -1 })
 productSchema.index({ isActive: 1, status: 1, stock: 1, decorRole: 1, price: 1 })
 
 export default mongoose.model('Product', productSchema)

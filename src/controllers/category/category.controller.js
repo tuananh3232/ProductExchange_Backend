@@ -20,13 +20,29 @@ export const getCategories = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.CATEGORY.FETCHED, data: { categories }, meta })
 })
 
+export const getAdminCategories = asyncHandler(async (req, res) => {
+  const pagination = getPaginationParams(req.query)
+  const { categories, meta } = await categoryService.getAdminCategories(req.query, pagination)
+  sendSuccess(res, { message: MESSAGES.CATEGORY.FETCHED, data: { categories }, meta })
+})
+
 export const getCategoryById = asyncHandler(async (req, res) => {
   const category = await categoryService.getCategoryById(req.params.id)
   sendSuccess(res, { message: MESSAGES.CATEGORY.DETAIL_FETCHED, data: { category } })
 })
 
+export const getAdminCategoryById = asyncHandler(async (req, res) => {
+  const category = await categoryService.getAdminCategoryById(req.params.categoryId)
+  sendSuccess(res, { message: MESSAGES.CATEGORY.DETAIL_FETCHED, data: { category } })
+})
+
 export const updateCategory = asyncHandler(async (req, res) => {
-  const category = await categoryService.updateCategory(req.params.id, req.body)
+  const category = await categoryService.updateCategory(req.params.id || req.params.categoryId, req.body)
+  sendSuccess(res, { message: MESSAGES.CATEGORY.UPDATED, data: { category } })
+})
+
+export const updateAdminCategoryStatus = asyncHandler(async (req, res) => {
+  const category = await categoryService.updateAdminCategoryStatus(req.params.categoryId, req.body, req.user)
   sendSuccess(res, { message: MESSAGES.CATEGORY.UPDATED, data: { category } })
 })
 

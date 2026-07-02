@@ -13,6 +13,7 @@ import PERMISSIONS, { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
+import { writeAuditLog } from '../audit/audit-log.service.js'
 
 const toIdString = (value) => (value && value._id ? value._id.toString() : value ? value.toString() : null)
 const DELETABLE_SHOP_STATUSES = [SHOP_STATUS.REJECTED]
@@ -33,7 +34,7 @@ const notifyShopUser = (recipient, type, shop, message, sender = null, data = {}
     recipient,
     sender,
     type,
-    title: 'Cập nhật shop',
+    title: 'Cập nhật cửa hàng',
     message,
     targetType: NOTIFICATION_TARGET_TYPES.SHOP,
     targetId: shop._id,
@@ -720,7 +721,7 @@ export const resubmitShop = async (shopId, userContext) => {
   return shopRepo.updateById(shopId, { status: SHOP_STATUS.PENDING_REVIEW, rejectionReason: '' })
 }
 
-export const unsuspendShop = async (shopId) => {
+export const unsuspendShop = async (shopId, actor = null) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
@@ -735,8 +736,21 @@ export const unsuspendShop = async (shopId) => {
     suspensionMeta: {
       reason: null,
       previousStatus: null,
-      suspendedAt: null
+      suspendedAt: null,
+      suspendedBy: shop.suspensionMeta?.suspendedBy || null,
+      reasonText: shop.suspensionMeta?.reasonText || '',
+      adminNote: shop.suspensionMeta?.adminNote || '',
+      unsuspendedBy: actor?._id || null,
+      unsuspendedAt: new Date()
     }
+  })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'SHOP_UNSUSPENDED',
+    targetType: 'shop',
+    targetId: shop._id,
+    previousStatus: shop.status,
+    newStatus: updatedShop.status,
   })
   await notifyShopUser(
     shop.owner?._id || shop.owner,
@@ -747,7 +761,7 @@ export const unsuspendShop = async (shopId) => {
   return updatedShop
 }
 
-export const approveShop = async (shopId) => {
+export const approveShop = async (shopId, actor = null) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
@@ -772,7 +786,21 @@ export const approveShop = async (shopId) => {
     await shopOwner.save()
   }
 
-  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.ACTIVE, rejectionReason: '' })
+  const now = new Date()
+  const updatedShop = await shopRepo.updateById(shopId, {
+    status: SHOP_STATUS.ACTIVE,
+    rejectionReason: '',
+    reviewMeta: { reviewedBy: actor?._id || null, reviewedAt: now, adminNote: '' },
+    approvalMeta: { approvedBy: actor?._id || null, approvedAt: now, adminNote: '' },
+  })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'SHOP_APPROVED',
+    targetType: 'shop',
+    targetId: shop._id,
+    previousStatus: shop.status,
+    newStatus: SHOP_STATUS.ACTIVE,
+  })
   await notifyShopUser(
     shop.owner?._id || shop.owner,
     NOTIFICATION_TYPES.SHOP_APPROVED,
@@ -782,7 +810,7 @@ export const approveShop = async (shopId) => {
   return updatedShop
 }
 
-export const rejectShop = async (shopId, rejectionReason) => {
+export const rejectShop = async (shopId, rejectionReason, actor = null) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
@@ -790,7 +818,22 @@ export const rejectShop = async (shopId, rejectionReason) => {
   if (shop.status !== SHOP_STATUS.PENDING_REVIEW) {
     throw new AppError('Shop phải ở trạng thái chờ xét duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.SHOP.NOT_PENDING)
   }
-  const updatedShop = await shopRepo.updateById(shopId, { status: SHOP_STATUS.REJECTED, rejectionReason })
+  const now = new Date()
+  const updatedShop = await shopRepo.updateById(shopId, {
+    status: SHOP_STATUS.REJECTED,
+    rejectionReason,
+    reviewMeta: { reviewedBy: actor?._id || null, reviewedAt: now, adminNote: '' },
+    rejectionMeta: { rejectedBy: actor?._id || null, rejectedAt: now, reason: rejectionReason, adminNote: '' },
+  })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'SHOP_REJECTED',
+    targetType: 'shop',
+    targetId: shop._id,
+    previousStatus: shop.status,
+    newStatus: SHOP_STATUS.REJECTED,
+    reason: rejectionReason,
+  })
   await notifyShopUser(
     shop.owner?._id || shop.owner,
     NOTIFICATION_TYPES.SHOP_REJECTED,
@@ -802,7 +845,7 @@ export const rejectShop = async (shopId, rejectionReason) => {
   return updatedShop
 }
 
-export const suspendShop = async (shopId, reason) => {
+export const suspendShop = async (shopId, reason, actor = null) => {
   const shop = await shopRepo.findById(shopId)
   if (!shop || !shop.isActive) {
     throw new AppError('Không tìm thấy shop', HTTP_STATUS.NOT_FOUND, ERRORS.SHOP.NOT_FOUND)
@@ -812,12 +855,25 @@ export const suspendShop = async (shopId, reason) => {
   }
   const updatedShop = await shopRepo.updateById(shopId, {
     status: SHOP_STATUS.SUSPENDED,
-    rejectionReason: reason,
     suspensionMeta: {
       reason: SHOP_SUSPENSION_REASONS.ADMIN,
       previousStatus: shop.status,
-      suspendedAt: new Date()
+      suspendedAt: new Date(),
+      suspendedBy: actor?._id || null,
+      reasonText: reason,
+      adminNote: '',
+      unsuspendedBy: null,
+      unsuspendedAt: null
     }
+  })
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'SHOP_SUSPENDED',
+    targetType: 'shop',
+    targetId: shop._id,
+    previousStatus: shop.status,
+    newStatus: SHOP_STATUS.SUSPENDED,
+    reason,
   })
   await notifyShopUser(
     shop.owner?._id || shop.owner,
