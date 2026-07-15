@@ -23,6 +23,7 @@ import analyticsRoutes from './analytics/analytics.route.js'
 import exchangeRoutes from './exchange/exchange.route.js'
 import rentalRoutes from './rental/rental.route.js'
 import reviewRoutes from './review/review.route.js'
+import platformRoutes from './platform/platform.route.js'
 import { requireFeature } from '../middlewares/feature.middleware.js'
 import checkoutRoutes from './checkout/checkout.route.js'
 import commerceAdminRoutes from './admin/commerce-admin.route.js'
@@ -39,6 +40,7 @@ router.get('/health', (req, res) => {
 })
 
 router.use('/auth', authRoutes)
+router.use('/platform', platformRoutes)
 router.use('/users', userRoutes)
 router.use('/products', productRoutes)
 router.use('/categories', categoryRoutes)

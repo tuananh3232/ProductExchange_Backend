@@ -17,6 +17,10 @@ import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
 import { createCheckout } from '../checkout/checkout.service.js'
+import Shipment from '../../models/shipment.model.js'
+import OrderCase from '../../models/order-case.model.js'
+import Refund from '../../models/refund.model.js'
+import PaymentAttempt from '../../models/payment-attempt.model.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -180,7 +184,13 @@ export const getOrderById = async (orderId, userContext) => {
   }
 
   await ensureOrderReadable(order, userContext)
-  return order
+  const [shipment, orderCases, refunds, paymentAttempt] = await Promise.all([
+    Shipment.findOne({ order: order._id }).lean(),
+    OrderCase.find({ order: order._id }).sort({ createdAt: -1 }).lean(),
+    Refund.find({ order: order._id }).sort({ createdAt: -1 }).lean(),
+    PaymentAttempt.findOne({ orders: order._id }).sort({ createdAt: -1 }).lean(),
+  ])
+  return { ...order.toObject(), shipment, orderCases, refunds, paymentAttempt }
 }
 
 export const getOrders = async (userContext, query, { page, limit, skip, sortBy, sortOrder }) => {
@@ -200,6 +210,7 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
   if (query.status) {
     filter.status = query.status
   }
+  if (query.commerceStatus) filter.commerceStatus = query.commerceStatus
 
   if (adminRequest && query.shopId) {
     filter.shop = query.shopId
@@ -234,6 +245,7 @@ export const getAdminOrders = async (query, { page, limit, skip, sortBy, sortOrd
   if (query.shopId) filter.shop = query.shopId
   if (query.sellerId) filter.seller = query.sellerId
   if (query.status) filter.status = query.status
+  if (query.commerceStatus) filter.commerceStatus = query.commerceStatus
   if (query.paymentStatus) filter.paymentStatus = query.paymentStatus
   if (query.paymentMethod) filter.paymentMethod = query.paymentMethod
   if (query.createdFrom || query.createdTo) {

@@ -14,8 +14,9 @@ import {
 import * as commerceController from '../../controllers/order/commerce-order.controller.js'
 import * as refundController from '../../controllers/refund/refund.controller.js'
 import { shipOrderSchema } from '../../validations/order/commerce-order.validation.js'
-import { createCaseSchema } from '../../validations/refund/refund.validation.js'
+import { createCaseSchema, respondCaseSchema } from '../../validations/refund/refund.validation.js'
 import { requireFeature } from '../../middlewares/feature.middleware.js'
+import { uploadOrderCaseImages } from '../../middlewares/upload.middleware.js'
 const router = Router()
 
 router.use(authenticate)
@@ -45,7 +46,8 @@ router.post('/:orderId/ship', requireFeature('commerce'), validateObjectId('orde
 router.post('/:orderId/delivered', requireFeature('commerce'), validateObjectId('orderId'), commerceController.delivered)
 router.post('/:orderId/confirm-received', requireFeature('commerce'), validateObjectId('orderId'), commerceController.confirmReceived)
 router.post('/:orderId/cancel', requireFeature('commerce'), validateObjectId('orderId'), commerceController.cancel)
-router.post('/:orderId/cases', requireFeature('commerce'), validateObjectId('orderId'), validate(createCaseSchema), refundController.createCase)
+router.post('/:orderId/cases', requireFeature('commerce'), validateObjectId('orderId'), uploadOrderCaseImages, validate(createCaseSchema), refundController.createCase)
+router.post('/:orderId/cases/:caseId/respond', requireFeature('commerce'), validateObjectId('orderId', 'caseId'), validate(respondCaseSchema), refundController.respondCase)
 
 export default router
 

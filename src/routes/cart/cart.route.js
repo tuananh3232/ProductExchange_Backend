@@ -7,6 +7,7 @@ import PERMISSIONS from '../../constants/permission.constant.js'
 import {
   addComboSchema,
   checkoutCartSchema,
+  removeCartItemSchema,
   updateCartItemSchema,
 } from '../../validations/cart/cart.validation.js'
 
@@ -75,6 +76,7 @@ router.delete(
   authenticate,
   requirePermissions(PERMISSIONS.USER_CART_UPDATE),
   validateObjectId('productId'),
+  validate(removeCartItemSchema, 'query'),
   cartController.removeCartItem
 )
 router.delete('/', authenticate, requirePermissions(PERMISSIONS.USER_CART_CLEAR), cartController.clearCart)

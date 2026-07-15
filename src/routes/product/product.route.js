@@ -174,7 +174,7 @@ router.post(
   '/',
   authenticate,
   uploadProductImages,
-  parseJsonFields(['location']),
+  parseJsonFields(['location', 'variants']),
   validate(createProductSchema),
   productController.createProduct
 )

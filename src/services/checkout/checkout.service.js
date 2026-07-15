@@ -73,7 +73,7 @@ const groupItemsByMerchant = (items) => {
   return [...groups.values()]
 }
 
-const createCheckoutCommand = async ({ buyerId, idempotencyKey, items, shippingAddress, cartId = null, cartProductIds = [] }) => {
+const createCheckoutCommand = async ({ buyerId, idempotencyKey, items, shippingAddress, cartId = null, cartProductIds = [], cartItemsToRemove = [] }) => {
   const existing = await Checkout.findOne({ buyer: buyerId, idempotencyKey }).populate('orders')
   if (existing) return existing
 
@@ -147,7 +147,13 @@ const createCheckoutCommand = async ({ buyerId, idempotencyKey, items, shippingA
       payload: { checkoutId: checkout._id },
       runAt: expiresAt,
     }], { session })
-    if (cartId && cartProductIds.length) {
+    if (cartId && cartItemsToRemove.length) {
+      await Cart.updateOne(
+        { _id: cartId, user: buyerId },
+        { $pull: { items: { $or: cartItemsToRemove.map((item) => ({ product: item.product, variantId: item.variantId })) } } },
+        { session }
+      )
+    } else if (cartId && cartProductIds.length) {
       await Cart.updateOne(
         { _id: cartId, user: buyerId },
         { $pull: { items: { product: { $in: cartProductIds } } } },

@@ -8,6 +8,7 @@ import {
   SHOP_STATUS_ENUM,
   WITHDRAWAL_STATUS_ENUM,
 } from '../../constants/status.constant.js'
+import { COMMERCE_ORDER_STATUS_ENUM } from '../../constants/commerce.constant.js'
 import {
   FEE_BASE_AMOUNT_TYPE_ENUM,
   FEE_OWNER_TYPE_ENUM,
@@ -94,12 +95,13 @@ export const adminWithdrawalsQuerySchema = Joi.object({
 })
 
 export const adminOrdersQuerySchema = Joi.object({
-  ...pagination(['createdAt', 'updatedAt', 'status', 'paymentStatus', 'totalAmount']),
+  ...pagination(['createdAt', 'updatedAt', 'status', 'commerceStatus', 'paymentStatus', 'totalAmount']),
   orderCode: search,
   buyerId: objectId,
   shopId: objectId,
   sellerId: objectId,
   status: Joi.string().valid(...ORDER_STATUS_ENUM),
+  commerceStatus: Joi.string().valid(...COMMERCE_ORDER_STATUS_ENUM),
   paymentStatus: Joi.string().valid(...PAYMENT_STATUS_ENUM),
   paymentMethod: Joi.string().trim().max(50),
   minTotal: Joi.number().min(0),
@@ -305,6 +307,7 @@ export const orderQuerySchema = Joi.object({
   sortOrder,
   scope: Joi.string().valid('buyer', 'shop', 'seller').default('buyer'),
   status: Joi.string().valid(...ORDER_STATUS_ENUM),
+  commerceStatus: Joi.string().valid(...COMMERCE_ORDER_STATUS_ENUM),
   shopId: objectId,
   sellerId: objectId,
   userId: objectId,

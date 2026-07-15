@@ -12,6 +12,7 @@ const orderCaseSchema = new mongoose.Schema(
     resolution: { type: String, enum: ['none', 'complete', 'full_refund', 'partial_refund', 'reject'], default: 'none' },
     resolutionAmount: { type: Number, default: 0, min: 0 },
     resolutionNote: { type: String, default: '', maxlength: 2000 },
+    resolutionIdempotencyKey: { type: String, default: undefined },
     resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     resolvedAt: { type: Date, default: null },
   },
@@ -19,5 +20,6 @@ const orderCaseSchema = new mongoose.Schema(
 )
 
 orderCaseSchema.index({ order: 1, status: 1 })
+orderCaseSchema.index({ resolutionIdempotencyKey: 1 }, { unique: true, sparse: true })
 
 export default mongoose.model('OrderCase', orderCaseSchema)

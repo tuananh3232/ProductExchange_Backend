@@ -11,6 +11,8 @@ import { accountDefinitions, postBalancedTransaction } from '../accounting/accou
 import ReconciliationIssue from '../../models/reconciliation-issue.model.js'
 import { env } from '../../configs/env.config.js'
 import { vnpayProvider } from '../../providers/vnpay.provider.js'
+import Shop from '../../models/shop.model.js'
+import { buildPaginationMeta } from '../../utils/pagination.util.js'
 
 const refundableStatuses = [
   COMMERCE_ORDER_STATUS.PAID_HELD,
@@ -48,9 +50,73 @@ export const createOrderCase = async ({ orderId, buyerId, type, reason, evidence
   return orderCase
 })
 
+export const respondOrderCase = async ({ orderId, caseId, userId, response }) => runRequiredMongoTransaction(async (session) => {
+  const order = await Order.findById(orderId).session(session)
+  if (!order) throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, 'ORDER_NOT_FOUND')
+  const ownsSellerOrder = order.seller && String(order.seller) === String(userId)
+  const managesShop = order.shop && await Shop.exists({
+    _id: order.shop,
+    isActive: true,
+    $or: [{ owner: userId }, { staff: userId }],
+  }).session(session)
+  if (!ownsSellerOrder && !managesShop) {
+    throw new AppError('Bạn không có quyền phản hồi yêu cầu này', HTTP_STATUS.FORBIDDEN, 'ORDER_CASE_ACCESS_DENIED')
+  }
+  const orderCase = await OrderCase.findOneAndUpdate(
+    { _id: caseId, order: orderId, status: 'open' },
+    { sellerResponse: response, status: 'seller_responded' },
+    { returnDocument: 'after', session }
+  )
+  if (!orderCase) throw new AppError('Yêu cầu đã được phản hồi hoặc không tồn tại', HTTP_STATUS.CONFLICT, 'ORDER_CASE_NOT_OPEN')
+  return orderCase
+})
+
+const pageResult = async (Model, filter, query, populate = []) => {
+  const page = Math.max(1, Number(query.page) || 1)
+  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20))
+  let find = Model.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit)
+  for (const item of populate) find = find.populate(item)
+  const [items, total] = await Promise.all([find.lean(), Model.countDocuments(filter)])
+  return { items, meta: buildPaginationMeta(total, page, limit) }
+}
+
+export const listOrderCases = (query = {}) => pageResult(OrderCase, {
+  ...(query.status ? { status: query.status } : {}),
+  ...(query.type ? { type: query.type } : {}),
+  ...(query.orderId ? { order: query.orderId } : {}),
+}, query, ['order', 'openedBy', 'resolvedBy'])
+
+export const getOrderCase = (caseId) => OrderCase.findById(caseId)
+  .populate('order').populate('openedBy', 'name email').populate('resolvedBy', 'name email')
+
+export const listRefunds = (query = {}) => pageResult(Refund, {
+  ...(query.status ? { status: query.status } : {}),
+  ...(query.source ? { source: query.source } : {}),
+  ...(query.orderId ? { order: query.orderId } : {}),
+}, query, ['order', 'paymentAttempt', 'orderCase', 'buyer', 'processedBy'])
+
+export const getRefund = (refundId) => Refund.findById(refundId)
+  .populate('order').populate('paymentAttempt').populate('orderCase').populate('buyer', 'name email')
+
+export const listPaymentAttempts = (query = {}) => pageResult(PaymentAttempt, {
+  ...(query.status ? { status: query.status } : {}),
+  ...(query.provider ? { provider: query.provider } : {}),
+  ...(query.reconciliationState ? { reconciliationState: query.reconciliationState } : {}),
+}, query, ['checkout', 'orders', 'buyer'])
+
+export const getPaymentAttemptAdmin = (paymentId) => PaymentAttempt.findById(paymentId)
+  .populate('checkout').populate('orders').populate('buyer', 'name email')
+
 export const resolveOrderCase = async ({ caseId, adminId, resolution, amount = 0, note = '', idempotencyKey }) => runRequiredMongoTransaction(async (session) => {
-  const orderCase = await OrderCase.findOne({ _id: caseId, status: { $in: ['open', 'seller_responded', 'under_review'] } }).session(session)
-  if (!orderCase) throw new AppError('Case đã được xử lý hoặc không tồn tại', HTTP_STATUS.CONFLICT, 'ORDER_CASE_NOT_OPEN')
+  const orderCase = await OrderCase.findById(caseId).session(session)
+  if (!orderCase) throw new AppError('Case không tồn tại', HTTP_STATUS.NOT_FOUND, 'ORDER_CASE_NOT_FOUND')
+  if (!['open', 'seller_responded', 'under_review'].includes(orderCase.status)) {
+    if (orderCase.resolutionIdempotencyKey === idempotencyKey) {
+      const existingRefund = await Refund.findOne({ idempotencyKey }).session(session)
+      return { orderCase, refund: existingRefund }
+    }
+    throw new AppError('Case đã được xử lý', HTTP_STATUS.CONFLICT, 'ORDER_CASE_NOT_OPEN')
+  }
   const order = await Order.findById(orderCase.order).session(session)
   let refund = null
   if (['full_refund', 'partial_refund'].includes(resolution)) {
@@ -58,7 +124,7 @@ export const resolveOrderCase = async ({ caseId, adminId, resolution, amount = 0
     if (!payment) throw new AppError('Không tìm thấy thanh toán đã xác minh', HTTP_STATUS.CONFLICT, 'CAPTURED_PAYMENT_NOT_FOUND')
     const capturedForOrder = Number(order.amountBreakdown?.total || order.totalAmount)
     const refunded = await Refund.aggregate([
-      { $match: { order: order._id, status: { $in: [REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCEEDED, REFUND_STATUS.MANUAL_REQUIRED] } } },
+      { $match: { order: order._id, status: { $in: [REFUND_STATUS.REQUESTED, REFUND_STATUS.PROCESSING, REFUND_STATUS.SUCCEEDED, REFUND_STATUS.MANUAL_REQUIRED] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).session(session)
     const refundAmount = resolution === 'full_refund' ? capturedForOrder - (refunded[0]?.total || 0) : Number(amount)
@@ -85,6 +151,7 @@ export const resolveOrderCase = async ({ caseId, adminId, resolution, amount = 0
   orderCase.resolution = resolution
   orderCase.resolutionAmount = refund?.amount || 0
   orderCase.resolutionNote = note
+  orderCase.resolutionIdempotencyKey = idempotencyKey
   orderCase.resolvedBy = adminId
   orderCase.resolvedAt = new Date()
   await orderCase.save({ session })
@@ -105,8 +172,9 @@ const updateOrderRefundStatus = async (refund, session) => {
 
 const processVnpayRefund = async (refundId, adminId) => {
   const prepared = await runRequiredMongoTransaction(async (session) => {
-    const refund = await Refund.findOne({ _id: refundId, status: REFUND_STATUS.REQUESTED }).session(session)
-    if (!refund) throw new AppError('Yêu cầu hoàn tiền đã được xử lý', HTTP_STATUS.CONFLICT, 'REFUND_NOT_REQUESTED')
+    const refund = await Refund.findById(refundId).session(session)
+    if (!refund) throw new AppError('Không tìm thấy yêu cầu hoàn tiền', HTTP_STATUS.NOT_FOUND, 'REFUND_NOT_FOUND')
+    if (refund.status !== REFUND_STATUS.REQUESTED) return { alreadyProcessed: true, refundId: refund._id }
     const order = await Order.findById(refund.order).session(session)
     const payment = await PaymentAttempt.findById(refund.paymentAttempt).session(session)
     if (!payment?.providerReference || !payment.providerTransactionDate) {
@@ -134,6 +202,8 @@ const processVnpayRefund = async (refundId, adminId) => {
       transactionDate: payment.providerTransactionDate,
     }
   })
+
+  if (prepared.alreadyProcessed) return Refund.findById(prepared.refundId)
 
   let providerResult
   try {
@@ -219,8 +289,9 @@ export const processRefund = async (refundId, adminId) => {
   const source = await Refund.findById(refundId).select('source').lean()
   if (source?.source === 'vnpay') return processVnpayRefund(refundId, adminId)
   return runRequiredMongoTransaction(async (session) => {
-  const refund = await Refund.findOne({ _id: refundId, status: REFUND_STATUS.REQUESTED }).session(session)
-  if (!refund) throw new AppError('Yêu cầu hoàn tiền đã được xử lý', HTTP_STATUS.CONFLICT, 'REFUND_NOT_REQUESTED')
+  const refund = await Refund.findById(refundId).session(session)
+  if (!refund) throw new AppError('Không tìm thấy yêu cầu hoàn tiền', HTTP_STATUS.NOT_FOUND, 'REFUND_NOT_FOUND')
+  if (refund.status !== REFUND_STATUS.REQUESTED) return refund
   const order = await Order.findById(refund.order).session(session)
   if (refund.source === 'payos') {
     await postBalancedTransaction({
@@ -257,8 +328,10 @@ export const processRefund = async (refundId, adminId) => {
 }
 
 export const confirmManualRefund = async ({ refundId, adminId, evidence }) => runRequiredMongoTransaction(async (session) => {
-  const refund = await Refund.findOne({ _id: refundId, status: REFUND_STATUS.MANUAL_REQUIRED }).session(session)
-  if (!refund) throw new AppError('Yêu cầu không chờ xác nhận thủ công', HTTP_STATUS.CONFLICT, 'REFUND_NOT_MANUAL_REQUIRED')
+  const refund = await Refund.findById(refundId).session(session)
+  if (!refund) throw new AppError('Không tìm thấy yêu cầu hoàn tiền', HTTP_STATUS.NOT_FOUND, 'REFUND_NOT_FOUND')
+  if (refund.status === REFUND_STATUS.SUCCEEDED && refund.evidence?.bankTransferRef === evidence.bankTransferRef) return refund
+  if (refund.status !== REFUND_STATUS.MANUAL_REQUIRED) throw new AppError('Yêu cầu không chờ xác nhận thủ công', HTTP_STATUS.CONFLICT, 'REFUND_NOT_MANUAL_REQUIRED')
   await postBalancedTransaction({
     commandKey: `refund_manual_complete:${refund._id}`,
     transactionType: 'manual_provider_refund',

@@ -119,3 +119,10 @@ Migration dry-run và reconciliation:
 * Task: COMPLETED
 * Sẵn sàng sang phase tiếp theo: YES
 * Lý do: Toàn bộ implementation trong kế hoạch đã được đưa về API `/api/v1` và qua quality gate cuối. Có thể bắt đầu phase FE/API integration; riêng production enablement vẫn phải qua backup, manual reconciliation, sandbox E2E và rollout checklist nêu trên.
+
+## 5. Nghiệm thu bổ sung ngày 2026-07-15
+
+* Đã bổ sung idempotency cho resolution/refund và test concurrent partial refund/withdrawal completion.
+* Đã bổ sung multipart upload ảnh bằng chứng cho order case với kiểm tra nội dung ảnh và cleanup khi transaction thất bại.
+* Hậu kiểm `marketplace-v1` và `commerce-refund-withdrawal`: PASS — 2 suite, 11 test.
+* Báo cáo chi tiết: `Note/upgrade/phase-reports/phase-9-final-acceptance.md`.

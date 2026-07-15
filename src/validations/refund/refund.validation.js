@@ -20,3 +20,33 @@ export const manualRefundSchema = Joi.object({ evidence: Joi.object({
   transferredAt: Joi.date().required(),
   note: Joi.string().allow('').default(''),
 }).required() })
+
+export const respondCaseSchema = Joi.object({
+  response: Joi.string().trim().min(10).max(2000).required(),
+})
+
+const pagination = {
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+}
+
+export const listOrderCasesSchema = Joi.object({
+  ...pagination,
+  status: Joi.string().valid('open', 'seller_responded', 'under_review', 'resolved', 'rejected'),
+  type: Joi.string().valid('return', 'dispute'),
+  orderId: Joi.string().hex().length(24),
+})
+
+export const listRefundsSchema = Joi.object({
+  ...pagination,
+  status: Joi.string().valid('requested', 'processing', 'succeeded', 'failed', 'manual_required'),
+  source: Joi.string().valid('wallet', 'payos', 'vnpay'),
+  orderId: Joi.string().hex().length(24),
+})
+
+export const listPaymentAttemptsSchema = Joi.object({
+  ...pagination,
+  status: Joi.string().valid('created', 'pending', 'succeeded', 'failed', 'cancelled', 'expired'),
+  provider: Joi.string().valid('wallet', 'payos', 'vnpay'),
+  reconciliationState: Joi.string().valid('none', 'matched', 'issue'),
+})

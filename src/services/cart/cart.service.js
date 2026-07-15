@@ -148,9 +148,18 @@ export const getCart = async (userId) => {
   return formatCart(cart)
 }
 
-export const updateCartItem = async (userId, productId, quantity) => {
+const findCartLine = (cart, productId, variantId = null) => {
+  const matches = cart.items.filter((cartItem) => cartItem.product.toString() === productId)
+  if (variantId) return matches.find((cartItem) => String(cartItem.variantId || '') === String(variantId)) || null
+  if (matches.length > 1) {
+    throw new AppError('Vui lòng chọn đúng phiên bản sản phẩm', HTTP_STATUS.BAD_REQUEST, 'VARIANT_REQUIRED')
+  }
+  return matches[0] || null
+}
+
+export const updateCartItem = async (userId, productId, quantity, variantId = null) => {
   const cart = await getOrCreateCart(userId)
-  const item = cart.items.find((cartItem) => cartItem.product.toString() === productId)
+  const item = findCartLine(cart, productId, variantId)
   if (!item) {
     throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
@@ -165,10 +174,16 @@ export const updateCartItem = async (userId, productId, quantity) => {
   return formatCart(cart)
 }
 
-export const removeCartItem = async (userId, productId) => {
+export const removeCartItem = async (userId, productId, variantId = null) => {
   const cart = await getOrCreateCart(userId)
   const originalLength = cart.items.length
-  cart.items = cart.items.filter((item) => item.product.toString() !== productId)
+  if (!findCartLine(cart, productId, variantId)) {
+    throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+  cart.items = cart.items.filter((item) => !(
+    item.product.toString() === productId &&
+    (!variantId || String(item.variantId || '') === String(variantId))
+  ))
   if (cart.items.length === originalLength) {
     throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
@@ -185,9 +200,16 @@ export const clearCart = async (userId) => {
   return formatCart(cart)
 }
 
-const getCheckoutItems = (cart, selectedProductIds) => {
+const getCheckoutItems = (cart, selectedProductIds, selectedItems) => {
   const selectedSet = selectedProductIds?.length ? new Set(selectedProductIds.map(String)) : null
-  const items = (cart.items || []).filter((item) => !selectedSet || selectedSet.has(item.product.toString()))
+  const selectedLineSet = selectedItems?.length
+    ? new Set(selectedItems.map((item) => `${item.productId}:${item.variantId}`))
+    : null
+  const items = (cart.items || []).filter((item) => {
+    const productId = item.product.toString()
+    const lineKey = `${productId}:${String(item.variantId || '')}`
+    return (!selectedSet && !selectedLineSet) || selectedSet?.has(productId) || selectedLineSet?.has(lineKey)
+  })
 
   if (!items.length) {
     throw new AppError('Giỏ hàng không có sản phẩm phù hợp để checkout', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
@@ -221,7 +243,7 @@ export const checkoutCart = async (userId, payload = {}, _userContext, req) => {
     throw new AppError('Giỏ hàng đang trống', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
-  const checkoutItems = getCheckoutItems(cart, payload.selectedProductIds)
+  const checkoutItems = getCheckoutItems(cart, payload.selectedProductIds, payload.selectedItems)
   const productIds = checkoutItems.map((item) => item.product.toString())
   const products = await Product.find({ _id: { $in: productIds } }).select('_id price stock variants status isActive owner ownerType shop seller listingType transactionMode')
   const productById = new Map(products.map((product) => [product._id.toString(), product]))
@@ -231,7 +253,7 @@ export const checkoutCart = async (userId, payload = {}, _userContext, req) => {
     assertProductCheckoutable(product, item.quantity, userId, item.variantId)
   }
 
-  const shippingAddress = await getShippingAddress(userId)
+  const shippingAddress = payload.shippingAddress || await getShippingAddress(userId)
   const idempotencyKey = req.get('idempotency-key')
   const checkout = await createCheckout({
     buyerId: userId,
@@ -244,6 +266,7 @@ export const checkoutCart = async (userId, payload = {}, _userContext, req) => {
     shippingAddress,
     cartId: cart._id,
     cartProductIds: productIds,
+    cartItemsToRemove: checkoutItems.map((item) => ({ product: item.product, variantId: item.variantId })),
   })
 
   const provider = payload.paymentMethod?.toLowerCase?.()
