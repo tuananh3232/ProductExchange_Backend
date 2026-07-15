@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { env } from '../configs/env.config.js'
 
 const isTransactionUnsupported = (error) => {
   const message = error?.message || ''
@@ -19,12 +20,25 @@ export const runMongoTransaction = async (operation) => {
     })
     return result
   } catch (error) {
-    if (!isTransactionUnsupported(error)) {
+    if (!isTransactionUnsupported(error) || env.features.requireMongoTransactions) {
       throw error
     }
 
     console.warn('MongoDB transactions are not supported by this deployment; running operation without a session.')
     return operation(null)
+  } finally {
+    await session.endSession()
+  }
+}
+
+export const runRequiredMongoTransaction = async (operation) => {
+  const session = await mongoose.startSession()
+  try {
+    let result
+    await session.withTransaction(async () => {
+      result = await operation(session)
+    })
+    return result
   } finally {
     await session.endSession()
   }

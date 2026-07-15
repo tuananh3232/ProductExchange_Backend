@@ -1,5 +1,5 @@
 import * as userRepo from '../../repositories/user/user.repository.js'
-import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
+import { uploadBuffer, deleteImage, createPrivateImageUrl } from '../../utils/cloudinary.util.js'
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../providers/jwt.provider.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
@@ -18,6 +18,7 @@ import Order from '../../models/order.model.js'
 import UserWallet from '../../models/user-wallet.model.js'
 import Wallet from '../../models/wallet.model.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
+import User from '../../models/user.model.js'
 import {
   escapeRegex,
   sanitizeAdminKycListItem,
@@ -28,7 +29,6 @@ const RESET_PASSWORD_EXPIRES_IN_MS = 15 * 60 * 1000
 const VERIFY_EMAIL_EXPIRES_IN_MS = 24 * 60 * 60 * 1000
 const VERIFY_EMAIL_RESEND_COOLDOWN_MS = 60 * 1000
 
-const createRawToken = () => crypto.randomBytes(32).toString('hex')
 const createVerificationOtp = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0')
 const hashToken = (rawToken) => crypto.createHash('sha256').update(rawToken).digest('hex')
 const googleClient = new OAuth2Client()
@@ -680,8 +680,8 @@ export const submitKyc = async (userId, { fullName, idNumber }, files) => {
   if (user.kyc?.backImage?.publicId) await deleteImage(user.kyc.backImage.publicId)
 
   const [frontImage, backImage] = await Promise.all([
-    uploadBuffer(frontBuffer, 'kyc'),
-    uploadBuffer(backBuffer, 'kyc'),
+    uploadBuffer(frontBuffer, 'kyc', { type: 'authenticated' }),
+    uploadBuffer(backBuffer, 'kyc', { type: 'authenticated' }),
   ])
 
   user.kyc = {
@@ -713,7 +713,10 @@ export const getMyKyc = async (userId) => {
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
-  return { kyc: user.kyc || { status: 'none' } }
+  const kyc = user.kyc?.toObject?.() || user.kyc || { status: 'none' }
+  if (kyc.frontImage?.publicId) kyc.frontImage.url = createPrivateImageUrl(kyc.frontImage.publicId)
+  if (kyc.backImage?.publicId) kyc.backImage.url = createPrivateImageUrl(kyc.backImage.publicId)
+  return { kyc }
 }
 
 export const adminGetAllKyc = async (query, pagination) => {
@@ -741,12 +744,21 @@ export const adminGetAllKyc = async (query, pagination) => {
   }
 }
 
-export const adminGetUserKyc = async (userId) => {
+export const adminGetUserKyc = async (userId, actor = null) => {
   const user = await userRepo.findById(userId)
   if (!user) {
     throw new AppError('Người dùng không tồn tại', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
-  return { user: user.toPublicJSON() }
+  const value = user.toPublicJSON()
+  if (value.kyc?.frontImage?.publicId) value.kyc.frontImage.url = createPrivateImageUrl(value.kyc.frontImage.publicId)
+  if (value.kyc?.backImage?.publicId) value.kyc.backImage.url = createPrivateImageUrl(value.kyc.backImage.publicId)
+  await writeAuditLog({
+    adminId: actor?._id,
+    action: 'KYC_PRIVATE_DATA_VIEWED',
+    targetType: 'user',
+    targetId: user._id,
+  })
+  return { user: value }
 }
 
 export const getAdminKycs = async (query, pagination) => {
@@ -856,6 +868,29 @@ export const adminRejectKyc = async (userId, rejectionReason, actor = null) => {
     data: { rejectionReason },
   })
   return user.toPublicJSON()
+}
+
+export const purgeExpiredRejectedKyc = async () => {
+  const cutoff = new Date(Date.now() - env.dataRetention.rejectedKycDays * 24 * 60 * 60 * 1000)
+  const users = await User.find({
+    'kyc.status': 'rejected',
+    'kyc.reviewedAt': { $lte: cutoff },
+    'kyc.purgedAt': null,
+  }).select('kyc').limit(100)
+  let purgedCount = 0
+  for (const user of users) {
+    await Promise.all([
+      deleteImage(user.kyc?.frontImage?.publicId),
+      deleteImage(user.kyc?.backImage?.publicId),
+    ])
+    user.kyc.idNumber = ''
+    user.kyc.frontImage = { url: '', publicId: '' }
+    user.kyc.backImage = { url: '', publicId: '' }
+    user.kyc.purgedAt = new Date()
+    await user.save()
+    purgedCount += 1
+  }
+  return { purgedCount }
 }
 
 export const verifyEmail = async ({ token, otp }) => {

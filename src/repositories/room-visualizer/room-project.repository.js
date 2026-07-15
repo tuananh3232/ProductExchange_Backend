@@ -26,7 +26,7 @@ export const findByIdAndOwner = async (projectId, ownerId) => {
 export const create = (payload) => new RoomProject(payload).save()
 
 export const updateById = (projectId, updateData) =>
-  RoomProject.findByIdAndUpdate(projectId, updateData, { new: true })
+  RoomProject.findByIdAndUpdate(projectId, updateData, { returnDocument: 'after' })
 
 export const countByOwner = (ownerId) =>
   RoomProject.countDocuments({ owner: ownerId, status: { $ne: 'archived' } })

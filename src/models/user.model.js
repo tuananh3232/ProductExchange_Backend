@@ -119,6 +119,7 @@ const userSchema = new mongoose.Schema(
       rejectionReason: { type: String, default: '' },
       submittedAt: { type: Date, default: null },
       reviewedAt: { type: Date, default: null },
+      purgedAt: { type: Date, default: null },
       reviewedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

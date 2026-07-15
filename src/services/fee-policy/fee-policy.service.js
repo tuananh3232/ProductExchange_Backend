@@ -254,7 +254,7 @@ export const updateFeePolicy = async (feePolicyId, payload, adminId) => {
   await assertNoRangeConflict({ payload, ignoreId: feePolicyId })
 
   const nextPayload = buildFeePolicyPayload(payload, adminId, { isUpdate: true })
-  const updated = await FeePolicy.findByIdAndUpdate(feePolicyId, nextPayload, { new: true, runValidators: true })
+  const updated = await FeePolicy.findByIdAndUpdate(feePolicyId, nextPayload, { returnDocument: 'after', runValidators: true })
 
   await writeAuditLog({
     adminId,
@@ -287,7 +287,7 @@ export const disableFeePolicy = async (feePolicyId, adminId) => {
       updatedByAdminId: adminId,
       disabledAt: new Date(),
     },
-    { new: true }
+    { returnDocument: 'after' }
   )
 
   await writeAuditLog({

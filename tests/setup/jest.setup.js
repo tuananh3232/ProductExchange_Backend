@@ -28,6 +28,21 @@ process.env.NODE_ENV = 'test'
 process.env.DB_NAME = dbName
 process.env.TEST_DB_NAME = dbName
 
+for (const key of [
+  'COMMERCE_ENABLED',
+  'PAYOS_PAYMENTS_ENABLED',
+  'VNPAY_PAYMENTS_ENABLED',
+  'WALLET_PAYMENTS_ENABLED',
+  'WITHDRAWALS_ENABLED',
+  'EXCHANGE_ENABLED',
+  'RENTAL_ENABLED',
+  'SUBSCRIPTION_PAYMENT_ENABLED',
+  'ROOM_VISUALIZER_ENABLED',
+]) {
+  process.env[key] = 'true'
+}
+process.env.REQUIRE_MONGO_TRANSACTIONS = 'false'
+
 process.env.PAYOS_CLIENT_ID = process.env.PAYOS_CLIENT_ID || 'test-payos-client-id'
 process.env.PAYOS_API_KEY = process.env.PAYOS_API_KEY || 'test-payos-api-key'
 process.env.PAYOS_CHECKSUM_KEY = process.env.PAYOS_CHECKSUM_KEY || 'test-payos-checksum-key'

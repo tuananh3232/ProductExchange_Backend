@@ -151,7 +151,7 @@ const getPlatformWallet = async (walletKey, session = null) =>
   PlatformWallet.findOneAndUpdate(
     { walletKey },
     {},
-    { upsert: true, new: true, setDefaultsOnInsert: true, ...(session ? { session } : {}) }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, ...(session ? { session } : {}) }
   )
 
 const mutatePlatformWallet = async (walletKey, direction, amount, session = null) => {
@@ -163,7 +163,7 @@ const mutatePlatformWallet = async (walletKey, direction, amount, session = null
   return PlatformWallet.findOneAndUpdate(
     { walletKey },
     { $inc: inc },
-    { upsert: true, new: true, setDefaultsOnInsert: true, ...(session ? { session } : {}) }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, ...(session ? { session } : {}) }
   )
 }
 

@@ -29,4 +29,4 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'updatedA
 export const countMany = (filter = {}) => Conversation.countDocuments(filter)
 
 export const updateById = (id, data) =>
-  populateConversation(Conversation.findByIdAndUpdate(id, data, { new: true, runValidators: true }))
+  populateConversation(Conversation.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true }))

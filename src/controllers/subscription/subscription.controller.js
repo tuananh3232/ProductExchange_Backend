@@ -4,7 +4,7 @@ import { sendSuccess } from '../../utils/response.util.js'
 
 export const checkout = asyncHandler(async (req, res) => {
   const { plan, paymentMethod = 'payos' } = req.body
-  const result = await subscriptionService.createSubscriptionCheckout(plan, req.user, paymentMethod)
+  const result = await subscriptionService.createSubscriptionCheckout(plan, req.user, paymentMethod, req.get('idempotency-key'))
   sendSuccess(res, { message: 'Tạo thanh toán gói VIP thành công', data: result })
 })
 

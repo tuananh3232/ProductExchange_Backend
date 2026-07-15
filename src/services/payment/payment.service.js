@@ -337,6 +337,10 @@ export const handleVnpayCallback = async (callbackPayload) => {
     throw new AppError('Số tiền thanh toán không khớp', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
   }
 
+  if (payment.status === PAYMENT_STATUS.PAID) {
+    return { payment, orderId: payment.order, status: payment.status }
+  }
+
   const nextStatus = resolvePaymentStatus(payload.vnp_ResponseCode, payload.vnp_TransactionStatus)
 
   const updatedPayment = await paymentRepo.updateById(payment._id, {
@@ -373,8 +377,21 @@ export const handleVnpayCallback = async (callbackPayload) => {
 }
 
 export const buildReturnResponse = async (query) => {
-  const result = await handleVnpayCallback(query)
-  return result
+  const payload = normalizeCallbackPayload(query)
+  if (!verifyVnpaySignature(payload)) {
+    throw new AppError('Chữ ký VNPay không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.INVALID_SIGNATURE)
+  }
+
+  const payment = await paymentRepo.findByTransactionRef(payload.vnp_TxnRef)
+  if (!payment) {
+    throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+
+  return {
+    paymentId: payment._id,
+    orderIds: payment.orders?.length ? payment.orders : [payment.order],
+    status: payment.status,
+  }
 }
 
 const validateOrderForPayment = async (orderId, userContext) => {
@@ -462,6 +479,15 @@ export const handlePayosWebhook = async (webhookData) => {
 
   if (verifiedData.amount !== Number(payment.amount)) {
     throw new AppError('Số tiền thanh toán không khớp', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
+  }
+
+  if (payment.status === PAYMENT_STATUS.PAID) {
+    const isBatch = payment.orders?.length > 0
+    return {
+      payment,
+      orderIds: isBatch ? payment.orders : [payment.order],
+      status: payment.status,
+    }
   }
 
   const nextStatus = webhookData.code === '00' ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.FAILED
@@ -622,16 +648,16 @@ export const handleTopupWebhook = async (webhookData) => {
 
   const nextStatus = webhookData.code === '00' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.FAILED
 
+  if (nextStatus === TOPUP_STATUS.COMPLETED) {
+    await userWalletService.creditWalletFromTopup(topup, webhookData)
+    const updatedTopup = await userWalletRepo.findTopupByOrderCode(verifiedData.orderCode)
+    return { topup: updatedTopup, status: nextStatus }
+  }
   const updatedTopup = await userWalletRepo.updateTopup(topup._id, {
     status: nextStatus,
     rawCallbackData: webhookData,
-    completedAt: nextStatus === TOPUP_STATUS.COMPLETED ? new Date() : null,
+    completedAt: null,
   })
-
-  if (nextStatus === TOPUP_STATUS.COMPLETED) {
-    await userWalletService.creditWalletFromTopup(updatedTopup)
-  }
-
   return { topup: updatedTopup, status: nextStatus }
 }
 
@@ -680,20 +706,16 @@ export const handleTopupReturn = async (query, callerId = null) => {
 
   const nextStatus = paymentStatus === 'PAID' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.CANCELLED
 
-  const updatedTopup = await userWalletRepo.updateTopup(topup._id, {
-    status: nextStatus,
-    completedAt: nextStatus === TOPUP_STATUS.COMPLETED ? new Date() : null,
-  })
-
   if (nextStatus === TOPUP_STATUS.COMPLETED) {
-    await userWalletService.creditWalletFromTopup(updatedTopup)
+    await userWalletService.creditWalletFromTopup(topup)
+    return { topupId: topup._id, status: nextStatus }
   }
-
+  await userWalletRepo.updateTopup(topup._id, { status: nextStatus, completedAt: null })
   return { topupId: topup._id, status: nextStatus }
 }
 
 export const handlePayosReturn = async (query) => {
-  const { orderCode, cancel, code } = query
+  const { orderCode } = query
   if (!orderCode) {
     throw new AppError('Thiếu thông tin callback PayOS', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
   }
@@ -704,46 +726,22 @@ export const handlePayosReturn = async (query) => {
     throw new AppError('Không tìm thấy giao dịch thanh toán', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
   }
 
-  // Chỉ cập nhật nếu vẫn đang pending (tránh ghi đè kết quả từ webhook)
-  if (payment.status === PAYMENT_STATUS.PENDING_PAYMENT) {
-    const isCancelled = cancel === 'true' || cancel === true
-    const nextStatus = isCancelled
-      ? PAYMENT_STATUS.CANCELLED
-      : code === '00'
-        ? PAYMENT_STATUS.PAID
-        : PAYMENT_STATUS.FAILED
-
-    const updatedPayment = await paymentRepo.updateById(payment._id, {
-      status: nextStatus,
-      responseCode: code || '',
-      paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
-    })
-
-    const orderUpdate = { paymentStatus: nextStatus }
-    if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
-    const isBatchReturn = updatedPayment.orders?.length > 0
-    if (isBatchReturn) {
-      await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
-        await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
-      }
-    } else {
-      await Order.findByIdAndUpdate(payment.order, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
-        await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
-      }
-    }
-    await notifyPaymentResult(updatedPayment, nextStatus)
-
-    return {
-      orderIds: isBatchReturn ? updatedPayment.orders : [payment.order],
-      status: nextStatus,
-    }
-  }
-
   const isBatch = payment.orders?.length > 0
   return {
+    paymentId: payment._id,
     orderIds: isBatch ? payment.orders : [payment.order],
     status: payment.status,
   }
+}
+
+export const getTopupReturnResult = async (query) => {
+  const orderCode = Number(query.orderCode)
+  if (!orderCode) {
+    throw new AppError('Thiếu thông tin điều hướng PayOS', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
+  }
+  const topup = await userWalletRepo.findTopupByOrderCode(orderCode)
+  if (!topup) {
+    throw new AppError('Không tìm thấy giao dịch nạp tiền', HTTP_STATUS.NOT_FOUND, ERRORS.PAYMENT.NOT_FOUND)
+  }
+  return { topupId: topup._id, status: topup.status }
 }

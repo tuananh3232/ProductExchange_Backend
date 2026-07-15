@@ -11,8 +11,9 @@ import UserWallet from '../../src/models/user-wallet.model.js'
 import UserWalletTransaction from '../../src/models/user-wallet-transaction.model.js'
 import RentalBooking from '../../src/models/rental-booking.model.js'
 import RentalClaim from '../../src/models/rental-claim.model.js'
-import PlatformWallet from '../../src/models/platform-wallet.model.js'
-import LedgerTransaction from '../../src/models/ledger-transaction.model.js'
+import RentalSlot from '../../src/models/rental-slot.model.js'
+import AccountingAccount from '../../src/models/accounting-account.model.js'
+import AccountingTransaction from '../../src/models/accounting-transaction.model.js'
 import FeePolicy from '../../src/models/fee-policy.model.js'
 import {
   FEE_POLICY_STATUS,
@@ -21,11 +22,6 @@ import {
   RENTAL_CLAIM_STATUS,
   USER_WALLET_TRANSACTION_TYPE,
 } from '../../src/constants/status.constant.js'
-import {
-  LEDGER_REFERENCE_TYPE,
-  LEDGER_TRANSACTION_TYPE,
-  PLATFORM_WALLET_KEYS,
-} from '../../src/constants/ledger.constant.js'
 
 const api = env.apiPrefix
 
@@ -138,7 +134,13 @@ const createAndPayBooking = async ({ renterToken, listingId, startDate, endDate 
   return bookingId
 }
 
-const formatDateOnly = (value) => value.toISOString().slice(0, 10)
+const formatDateOnly = (value) => {
+  const date = new Date(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 const addDays = (value, amount) => {
   const next = new Date(value)
   next.setDate(next.getDate() + amount)
@@ -151,6 +153,35 @@ const atHour = (value, hour) => {
 }
 
 describe('rental integration', () => {
+  it('prevents concurrent bookings from reserving the same rental dates', async () => {
+    const [{ user: seller, token: sellerToken }, firstRenter, secondRenter] = await Promise.all([
+      createApprovedSeller(),
+      loginMember(),
+      loginMember(),
+    ])
+    const category = await createSampleCategory()
+    const product = await createSellerProduct(seller._id, { categoryId: category._id })
+    const listing = await createRentalListing({
+      ownerToken: sellerToken,
+      productId: product._id.toString(),
+      dailyRate: 100000,
+      depositAmount: 200000,
+      lateFeePerDay: 25000,
+    })
+    const start = addDays(new Date(), 5)
+    const end = addDays(start, 2)
+    const create = (token) => request(app)
+      .post(`${api}/rentals/bookings`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ listingId: listing._id, startDate: formatDateOnly(start), endDate: formatDateOnly(end) })
+
+    const responses = await Promise.all([create(firstRenter.token), create(secondRenter.token)])
+
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 409])
+    expect(await RentalBooking.countDocuments()).toBe(1)
+    expect(await RentalSlot.countDocuments()).toBe(3)
+  })
+
   it('allows renter to view detail, update, and cancel a payment-pending booking before the rental start date', async () => {
     const [{ user: seller, token: sellerToken }, { user: renter, token: renterToken }] = await Promise.all([
       createApprovedSeller(),
@@ -331,18 +362,14 @@ describe('rental integration', () => {
     expect(confirmResponse.status).toBe(200)
     expect(confirmResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.COMPLETED)
 
-    const [booking, renterWallet, sellerWallet, revenueWallet, clearingWallet, walletTransactions, settlementTx] = await Promise.all([
+    const [booking, renterWallet, sellerWallet, revenueAccount, escrowAccount, walletTransactions, settlementTx] = await Promise.all([
       RentalBooking.findById(bookingId).lean(),
       UserWallet.findOne({ user: renter._id }).lean(),
       UserWallet.findOne({ user: seller._id }).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
+      AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
+      AccountingAccount.findOne({ key: `rental_escrow:${bookingId}` }).lean(),
       UserWalletTransaction.find({ user: { $in: [renter._id, seller._id] } }).sort({ createdAt: 1 }).lean(),
-      LedgerTransaction.findOne({
-        referenceType: LEDGER_REFERENCE_TYPE.RENTAL_BOOKING,
-        referenceId: bookingId,
-        transactionType: LEDGER_TRANSACTION_TYPE.RENTAL_RETURN_SETTLEMENT,
-      }).lean(),
+      AccountingTransaction.findOne({ commandKey: `rental_settlement:${bookingId}` }).lean(),
     ])
 
     expect(booking.actualDays).toBe(3)
@@ -353,13 +380,12 @@ describe('rental integration', () => {
     expect(booking.depositReleasedAmount).toBe(300000)
     expect(renterWallet.balance).toBe(700000)
     expect(sellerWallet.balance).toBe(270000)
-    expect(revenueWallet.balance).toBe(30000)
-    expect(clearingWallet.balance).toBe(0)
-    expect(settlementTx?.platformFee).toBe(30000)
+    expect(revenueAccount.balance).toBe(30000)
+    expect(escrowAccount.balance).toBe(0)
+    expect(settlementTx?.amount).toBe(800000)
     expect(walletTransactions.map((item) => item.type)).toEqual([
       USER_WALLET_TRANSACTION_TYPE.RENTAL_PAYMENT,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_OWNER_SETTLEMENT,
-      USER_WALLET_TRANSACTION_TYPE.RENTAL_UNUSED_REFUND,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_DEPOSIT_RELEASE,
     ])
   })
@@ -414,12 +440,12 @@ describe('rental integration', () => {
 
     expect(confirmResponse.status).toBe(200)
 
-    const [booking, renterWallet, sellerWallet, revenueWallet, clearingWallet, walletTransactions] = await Promise.all([
+    const [booking, renterWallet, sellerWallet, revenueAccount, escrowAccount, walletTransactions] = await Promise.all([
       RentalBooking.findById(bookingId).lean(),
       UserWallet.findOne({ user: renter._id }).lean(),
       UserWallet.findOne({ user: seller._id }).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
+      AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
+      AccountingAccount.findOne({ key: `rental_escrow:${bookingId}` }).lean(),
       UserWalletTransaction.find({ user: { $in: [renter._id, seller._id] } }).sort({ createdAt: 1 }).lean(),
     ])
 
@@ -431,12 +457,11 @@ describe('rental integration', () => {
     expect(booking.ownerSettlementAmount).toBe(420000)
     expect(renterWallet.balance).toBe(560000)
     expect(sellerWallet.balance).toBe(420000)
-    expect(revenueWallet.balance).toBe(20000)
-    expect(clearingWallet.balance).toBe(0)
+    expect(revenueAccount.balance).toBe(20000)
+    expect(escrowAccount.balance).toBe(0)
     expect(walletTransactions.map((item) => item.type)).toEqual([
       USER_WALLET_TRANSACTION_TYPE.RENTAL_PAYMENT,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_ADDITIONAL_RENT,
-      USER_WALLET_TRANSACTION_TYPE.RENTAL_LATE_FEE,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_OWNER_SETTLEMENT,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_DEPOSIT_RELEASE,
     ])
@@ -504,14 +529,14 @@ describe('rental integration', () => {
     expect(confirmResponse.status).toBe(200)
     expect(confirmResponse.body.data.rentalBooking.status).toBe(RENTAL_BOOKING_STATUS.DISPUTED)
 
-    const [bookingAfterReturn, claimAfterReturn, renterWalletAfterReturn, sellerWalletAfterReturn, clearingWalletAfterReturn, revenueWalletAfterReturn] =
+    const [bookingAfterReturn, claimAfterReturn, renterWalletAfterReturn, sellerWalletAfterReturn, escrowAfterReturn, revenueAfterReturn] =
       await Promise.all([
         RentalBooking.findById(bookingId).lean(),
         RentalClaim.findById(claimId).lean(),
         UserWallet.findOne({ user: renter._id }).lean(),
         UserWallet.findOne({ user: seller._id }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
+        AccountingAccount.findOne({ key: `rental_escrow:${bookingId}` }).lean(),
+        AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
       ])
 
     expect(bookingAfterReturn.depositReleasedAmount).toBe(0)
@@ -519,8 +544,8 @@ describe('rental integration', () => {
     expect(claimAfterReturn.status).toBe(RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW)
     expect(renterWalletAfterReturn.balance).toBe(500000)
     expect(sellerWalletAfterReturn.balance).toBe(180000)
-    expect(revenueWalletAfterReturn.balance).toBe(20000)
-    expect(clearingWalletAfterReturn.balance).toBe(300000)
+    expect(revenueAfterReturn.balance).toBe(20000)
+    expect(escrowAfterReturn.balance).toBe(300000)
 
     const resolveResponse = await request(app)
       .post(`${api}/admin/rental-claims/${claimId}/resolve`)
@@ -532,13 +557,13 @@ describe('rental integration', () => {
 
     expect(resolveResponse.status).toBe(200)
 
-    const [bookingAfterResolve, claimAfterResolve, renterWalletAfterResolve, sellerWalletAfterResolve, clearingWalletAfterResolve, walletTransactions] =
+    const [bookingAfterResolve, claimAfterResolve, renterWalletAfterResolve, sellerWalletAfterResolve, escrowAfterResolve, walletTransactions] =
       await Promise.all([
         RentalBooking.findById(bookingId).lean(),
         RentalClaim.findById(claimId).lean(),
         UserWallet.findOne({ user: renter._id }).lean(),
         UserWallet.findOne({ user: seller._id }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
+        AccountingAccount.findOne({ key: `rental_escrow:${bookingId}` }).lean(),
         UserWalletTransaction.find({ user: { $in: [renter._id, seller._id] } }).sort({ createdAt: 1 }).lean(),
       ])
 
@@ -548,7 +573,7 @@ describe('rental integration', () => {
     expect(claimAfterResolve.status).toBe(RENTAL_CLAIM_STATUS.APPROVED)
     expect(renterWalletAfterResolve.balance).toBe(750000)
     expect(sellerWalletAfterResolve.balance).toBe(230000)
-    expect(clearingWalletAfterResolve.balance).toBe(0)
+    expect(escrowAfterResolve.balance).toBe(0)
     expect(walletTransactions.map((item) => item.type)).toEqual([
       USER_WALLET_TRANSACTION_TYPE.RENTAL_PAYMENT,
       USER_WALLET_TRANSACTION_TYPE.RENTAL_OWNER_SETTLEMENT,
@@ -651,16 +676,12 @@ describe('rental integration', () => {
     const [renterWallet, paymentTransactions, claimSettlementTx] = await Promise.all([
       UserWallet.findOne({ user: renter._id }).lean(),
       UserWalletTransaction.find({ user: renter._id, type: USER_WALLET_TRANSACTION_TYPE.RENTAL_PAYMENT }).lean(),
-      LedgerTransaction.findOne({
-        referenceType: LEDGER_REFERENCE_TYPE.RENTAL_CLAIM,
-        referenceId: claimId,
-        transactionType: LEDGER_TRANSACTION_TYPE.RENTAL_CLAIM_SETTLEMENT,
-      }).lean(),
+      AccountingTransaction.findOne({ commandKey: `rental_claim:${claimId}` }).lean(),
     ])
 
     expect(paymentTransactions).toHaveLength(1)
     expect(renterWallet.balance).toBe(730000)
-    expect(claimSettlementTx?.netSettlementAmount).toBe(70000)
+    expect(claimSettlementTx?.amount).toBe(300000)
   })
 
   it('allows shop owner to create a rental listing and read booking detail for a shop-owned product', async () => {

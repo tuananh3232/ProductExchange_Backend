@@ -37,16 +37,6 @@ const getMatchScore = (product, criteria) => {
   return score
 }
 
-// Dùng cho getAlternatives: ưu tiên khớp criteria cao, sau đó rẻ hơn trước
-const sortProducts = (products, criteria) =>
-  [...products].sort((left, right) => {
-    const scoreDifference = getMatchScore(right, criteria) - getMatchScore(left, criteria)
-    if (scoreDifference) return scoreDifference
-    const priceDifference = left.price - right.price
-    if (priceDifference) return priceDifference
-    return getId(left).localeCompare(getId(right))
-  })
-
 // [FIX 2] Sort GIẢM dần theo giá (đắt nhất trước) trong cùng score tier
 // → pickProduct sẽ lấy sản phẩm đắt nhất vừa túi → tận dụng ngân sách tối đa
 const sortProductsWithSeed = (products, criteria, seed) => {

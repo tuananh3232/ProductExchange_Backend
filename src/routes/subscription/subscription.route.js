@@ -3,6 +3,7 @@ import * as subscriptionController from '../../controllers/subscription/subscrip
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import Joi from 'joi'
+import { requireFeature } from '../../middlewares/feature.middleware.js'
 
 const router = Router()
 
@@ -87,7 +88,16 @@ router.get('/me', authenticate, subscriptionController.getMySubscription)
  *                 plan:
  *                   type: string
  */
-router.post('/checkout', authenticate, validate(checkoutSchema), subscriptionController.checkout)
+router.post(
+  '/checkout',
+  requireFeature('subscriptionPayment'),
+  authenticate,
+  (req, res, next) => req.get('idempotency-key')
+    ? next()
+    : res.status(400).json({ success: false, message: 'Thiếu Idempotency-Key', error: 'IDEMPOTENCY_KEY_REQUIRED' }),
+  validate(checkoutSchema),
+  subscriptionController.checkout
+)
 
 /**
  * @swagger
@@ -154,6 +164,6 @@ router.get('/payos/cancel', authenticate, subscriptionController.payosReturn)
  *       200:
  *         description: Xử lý webhook thành công
  */
-router.post('/payos/webhook', subscriptionController.webhook)
+router.post('/payos/webhook', requireFeature('subscriptionPayment'), subscriptionController.webhook)
 
 export default router

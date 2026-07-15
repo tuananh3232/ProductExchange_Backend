@@ -15,7 +15,7 @@ import * as adminExchangeController from '../../controllers/admin/admin-exchange
 import * as adminRentalController from '../../controllers/admin/admin-rental.controller.js'
 import * as adminReportController from '../../controllers/admin/admin-report.controller.js'
 import * as adminNotificationController from '../../controllers/admin/admin-notification.controller.js'
-import { authenticate, requireRoles } from '../../middlewares/auth.middleware.js'
+import { authenticate, requireExplicitPermissions, requireRoles } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import { banUserSchema, rejectKycSchema } from '../../validations/auth/auth.validation.js'
@@ -59,6 +59,7 @@ import {
   adminResolveRentalClaimSchema,
 } from '../../validations/rental/rental.validation.js'
 import { ROLES } from '../../constants/role.constant.js'
+import { PERMISSIONS } from '../../constants/permission.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import adminStatsRoutes from './stats.route.js'
 import Joi from 'joi'
@@ -699,6 +700,7 @@ router.get(
   '/users/:userId/kyc',
   authenticate,
   requireAdmin,
+  requireExplicitPermissions(PERMISSIONS.ADMIN_KYC_PRIVATE_READ),
   validateObjectId('userId'),
   authController.adminGetUserKyc
 )

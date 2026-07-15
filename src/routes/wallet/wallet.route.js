@@ -18,21 +18,6 @@ const requestWithdrawalSchema = Joi.object({
   note: Joi.string().allow('').optional(),
 })
 
-const rejectWithdrawalSchema = Joi.object({
-  rejectionReason: Joi.string().min(1).required(),
-  adminNote: Joi.string().allow('').optional(),
-})
-
-const completeWithdrawalSchema = Joi.object({
-  adminNote: Joi.string().allow('').optional(),
-  transferProof: Joi.object({
-    transactionId: Joi.string().max(100).optional(),
-    transferDate: Joi.date().optional(),
-    bankTransferRef: Joi.string().max(100).optional(),
-    note: Joi.string().max(500).allow('').optional(),
-  }).optional(),
-})
-
 /**
  * @swagger
  * tags:

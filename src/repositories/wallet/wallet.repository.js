@@ -35,7 +35,7 @@ export const decrementBalance = (shopId, amount, options = {}) =>
     { returnDocument: 'after', ...options }
   )
 
-export const deductForWithdrawal = (shopId, amount) =>
+export const deductForWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
     { shop: shopId, balance: { $gte: amount } },
     {
@@ -44,12 +44,12 @@ export const deductForWithdrawal = (shopId, amount) =>
         pendingBalance: amount,
       },
     },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
 export const completeWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
-    { shop: shopId },
+    { shop: shopId, pendingBalance: { $gte: amount } },
     {
       $inc: {
         pendingBalance: -amount,
@@ -61,7 +61,7 @@ export const completeWithdrawal = (shopId, amount, options = {}) =>
 
 export const revertWithdrawal = (shopId, amount, options = {}) =>
   Wallet.findOneAndUpdate(
-    { shop: shopId },
+    { shop: shopId, pendingBalance: { $gte: amount } },
     {
       $inc: {
         balance: amount,

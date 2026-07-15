@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { ORDER_STATUS, ORDER_STATUS_ENUM, PAYMENT_STATUS, PAYMENT_STATUS_ENUM, SETTLEMENT_STATUS, SETTLEMENT_STATUS_ENUM } from '../constants/status.constant.js'
+import { COMMERCE_ORDER_STATUS, COMMERCE_ORDER_STATUS_ENUM } from '../constants/commerce.constant.js'
 
 const orderHistorySchema = new mongoose.Schema(
   {
@@ -26,6 +27,21 @@ const orderHistorySchema = new mongoose.Schema(
   { _id: false }
 )
 
+const orderItemSchema = new mongoose.Schema(
+  {
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    variantId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    sku: { type: String, required: true },
+    title: { type: String, required: true },
+    image: { type: String, default: '' },
+    attributes: { type: Map, of: String, default: {} },
+    quantity: { type: Number, required: true, min: 1 },
+    unitPrice: { type: Number, required: true, min: 0 },
+    subtotal: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+)
+
 const orderSchema = new mongoose.Schema(
   {
     buyer: {
@@ -33,6 +49,29 @@ const orderSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
       index: true,
+    },
+    checkout: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Checkout',
+      default: null,
+      index: true,
+    },
+    items: {
+      type: [orderItemSchema],
+      default: [],
+    },
+    commerceStatus: {
+      type: String,
+      enum: COMMERCE_ORDER_STATUS_ENUM,
+      default: COMMERCE_ORDER_STATUS.PAYMENT_PENDING,
+      index: true,
+    },
+    amountBreakdown: {
+      subtotal: { type: Number, default: 0, min: 0 },
+      discount: { type: Number, default: 0, min: 0 },
+      shippingFee: { type: Number, default: 0, min: 0 },
+      tax: { type: Number, default: 0, min: 0 },
+      total: { type: Number, default: 0, min: 0 },
     },
     shop: {
       type: mongoose.Schema.Types.ObjectId,
@@ -106,6 +145,8 @@ const orderSchema = new mongoose.Schema(
       index: true,
     },
     shippingAddress: {
+      recipientName: { type: String, default: '' },
+      phone: { type: String, default: '' },
       province: { type: String, default: '' },
       district: { type: String, default: '' },
       detail: { type: String, default: '' },
@@ -138,6 +179,9 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    completedAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
+    settlementReleasedAt: { type: Date, default: null },
     history: {
       type: [orderHistorySchema],
       default: [],

@@ -22,6 +22,8 @@ import {
 import { RENTAL_BOOKING_STATUS, RENTAL_CLAIM_STATUS, USER_WALLET_TRANSACTION_TYPE } from '../../constants/status.constant.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import { assertRentalListingOwnerContext, assertRentalProductEligibility } from './rental-eligibility.service.js'
+import RentalSlot from '../../models/rental-slot.model.js'
+import { runRequiredMongoTransaction } from '../../utils/mongo-transaction.util.js'
 
 const ACTIVE_BOOKING_STATUSES = [
   RENTAL_BOOKING_STATUS.PAYMENT_PENDING,
@@ -132,6 +134,12 @@ const diffDaysInclusive = (start, end) => {
   return Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1)
 }
 
+const enumerateRentalDates = (start, days) => Array.from({ length: days }, (_, offset) => {
+  const date = startOfDay(start)
+  date.setDate(date.getDate() + offset)
+  return date
+})
+
 const resolveRentalDaysErrorMessage = (listing) => {
   const minDays = Math.max(1, Number(listing?.minRentalDays || 1))
   const maxDays = Math.min(30, Number(listing?.maxRentalDays || 30))
@@ -150,7 +158,7 @@ const mutatePlatformWallet = async (walletKey, direction, amount) => {
   return PlatformWallet.findOneAndUpdate(
     { walletKey },
     { $inc: inc },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   )
 }
 
@@ -230,7 +238,10 @@ const expireBookingIfNeeded = async (booking, note = 'Booking quá hạn thanh t
   booking.cancelledAt = new Date()
   booking.note = booking.note || note
   appendTimeline(booking, RENTAL_BOOKING_STATUS.CANCELLED, booking.renter?._id || booking.renter, note)
-  await booking.save()
+  await runRequiredMongoTransaction(async (session) => {
+    await booking.save({ session })
+    await RentalSlot.deleteMany({ booking: booking._id }, { session })
+  })
   return getBookingByIdOrThrow(booking._id)
 }
 
@@ -455,31 +466,46 @@ export const createRentalBooking = async (payload, user) => {
     throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
   }
 
-  const booking = await RentalBooking.create({
-    listing: listing._id,
-    product: listing.product._id,
-    ownerType: listing.ownerType,
-    seller: listing.seller?._id || listing.seller || null,
-    shop: listing.shop?._id || listing.shop || null,
-    renter: user._id,
-    startDate,
-    endDate,
-    plannedDays,
-    dailyRate: listing.dailyRate,
-    depositAmount: listing.depositAmount,
-    lateFeePerDay: listing.lateFeePerDay,
-    rentAmount: listing.dailyRate * plannedDays,
-    depositHeldAmount: listing.depositAmount,
-    status: RENTAL_BOOKING_STATUS.PAYMENT_PENDING,
-    note: payload.note || '',
-    timeline: [
-      {
+  let booking
+  try {
+    booking = await runRequiredMongoTransaction(async (session) => {
+      const bookingId = new RentalBooking()._id
+      await RentalSlot.insertMany(
+        enumerateRentalDates(startDate, plannedDays).map((date) => ({ listing: listing._id, booking: bookingId, date })),
+        { session, ordered: true }
+      )
+      const [created] = await RentalBooking.create([{
+        _id: bookingId,
+        listing: listing._id,
+        product: listing.product._id,
+        ownerType: listing.ownerType,
+        seller: listing.seller?._id || listing.seller || null,
+        shop: listing.shop?._id || listing.shop || null,
+        renter: user._id,
+        startDate,
+        endDate,
+        plannedDays,
+        dailyRate: listing.dailyRate,
+        depositAmount: listing.depositAmount,
+        lateFeePerDay: listing.lateFeePerDay,
+        rentAmount: listing.dailyRate * plannedDays,
+        depositHeldAmount: listing.depositAmount,
         status: RENTAL_BOOKING_STATUS.PAYMENT_PENDING,
-        note: payload.note || 'Tạo booking chờ thanh toán',
-        updatedBy: user._id,
-      },
-    ],
-  })
+        note: payload.note || '',
+        timeline: [{
+          status: RENTAL_BOOKING_STATUS.PAYMENT_PENDING,
+          note: payload.note || 'Tạo booking chờ thanh toán',
+          updatedBy: user._id,
+        }],
+      }], { session })
+      return created
+    })
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.CONFLICT, ERRORS.RENTAL.OVERLAPPING_BOOKING)
+    }
+    throw error
+  }
 
   return populateChain(RentalBooking.findById(booking._id), RENTAL_BOOKING_POPULATE)
 }
@@ -553,7 +579,21 @@ export const updateRentalBooking = async (bookingId, payload, user) => {
   booking.lateFeePerDay = listing.lateFeePerDay
   booking.note = payload.note || ''
   appendTimeline(booking, RENTAL_BOOKING_STATUS.PAYMENT_PENDING, user._id, payload.note || 'Cập nhật booking chờ thanh toán')
-  await booking.save()
+  try {
+    await runRequiredMongoTransaction(async (session) => {
+      await RentalSlot.deleteMany({ booking: booking._id }, { session })
+      await RentalSlot.insertMany(
+        enumerateRentalDates(booking.startDate, booking.plannedDays).map((date) => ({ listing: listingId, booking: booking._id, date })),
+        { session, ordered: true }
+      )
+      await booking.save({ session })
+    })
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.CONFLICT, ERRORS.RENTAL.OVERLAPPING_BOOKING)
+    }
+    throw error
+  }
 
   return getBookingByIdOrThrow(booking._id)
 }
@@ -578,6 +618,7 @@ export const cancelRentalBooking = async (bookingId, payload, user) => {
   booking.note = payload.note || booking.note || ''
   appendTimeline(booking, RENTAL_BOOKING_STATUS.CANCELLED, user._id, payload.note || 'Người thuê hủy booking trước khi thanh toán')
   await booking.save()
+  await RentalSlot.deleteMany({ booking: booking._id })
 
   return getBookingByIdOrThrow(booking._id)
 }

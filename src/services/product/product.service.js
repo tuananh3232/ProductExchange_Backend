@@ -507,9 +507,20 @@ export const createProduct = async (userContext, productData, files = []) => {
 
   const uploadedImages = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
   const images = normalizeImages(uploadedImages)
+  const variants = safeProductData.variants?.length
+    ? safeProductData.variants
+    : [{
+      sku: `PRODUCT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      attributes: { version: 'default' },
+      price: Math.round(Number(safeProductData.price)),
+      stockOnHand: Number(safeProductData.stock || 0),
+      reservedStock: 0,
+      isActive: true,
+    }]
 
   return productRepo.create({
     ...safeProductData,
+    variants,
     transactionMode: safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL,
     ...ownership,
     images,
@@ -536,6 +547,10 @@ export const updateProduct = async (productId, userContext, updateData) => {
   }
   if (Object.prototype.hasOwnProperty.call(updateData, 'images')) {
     nextUpdateData.images = normalizeImages(updateData.images || [])
+  }
+  if (nextUpdateData.variants?.length) {
+    nextUpdateData.price = Math.min(...nextUpdateData.variants.map((variant) => variant.price))
+    nextUpdateData.stock = nextUpdateData.variants.reduce((sum, variant) => sum + variant.stockOnHand, 0)
   }
 
   return productRepo.updateById(productId, nextUpdateData)

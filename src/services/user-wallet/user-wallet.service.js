@@ -5,13 +5,17 @@ import { USER_WALLET_TRANSACTION_TYPE, PAYMENT_STATUS, ORDER_STATUS, WITHDRAWAL_
 import { USER_WALLET_CONSTANTS } from '../../constants/wallet.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { sanitizeWithdrawalListItem } from '../../utils/security.util.js'
-import { runMongoTransaction } from '../../utils/mongo-transaction.util.js'
+import { runRequiredMongoTransaction } from '../../utils/mongo-transaction.util.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import Order from '../../models/order.model.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
+import UserWallet from '../../models/user-wallet.model.js'
+import UserWalletTransaction from '../../models/user-wallet-transaction.model.js'
+import UserWalletTopup from '../../models/user-wallet-topup.model.js'
+import { accountDefinitions, postBalancedTransaction } from '../accounting/accounting.service.js'
 
 // Trạng thái cho phép thanh toán lại bằng ví: chưa trả, hoặc lần thanh toán qua cổng
 // trước đó đã bị bỏ dở (đang chờ/thất bại/đã hủy). Chỉ chặn khi đơn đã PAID hoặc đang hoàn tiền.
@@ -285,19 +289,30 @@ export const requestWithdrawal = async (userContext, payload) => {
     throw new AppError('Bạn đang có yêu cầu rút tiền đang chờ xử lý', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_PENDING_EXISTS)
   }
 
-  const wallet = await userWalletRepo.findOrCreateByUser(userId)
-
-  const updatedWallet = await userWalletRepo.deductForWithdrawal(userId, payload.amount)
-  if (!updatedWallet) {
-    throw new AppError('Số dư ví không đủ để thực hiện yêu cầu rút tiền', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
-  }
-
-  return userWalletRepo.createWithdrawal({
-    user: userId,
-    wallet: wallet._id,
-    amount: payload.amount,
-    bankInfo: payload.bankInfo,
-    note: payload.note || '',
+  return runRequiredMongoTransaction(async (session) => {
+    const wallet = await userWalletRepo.findOrCreateByUser(userId).session(session)
+    const updatedWallet = await userWalletRepo.deductForWithdrawal(userId, payload.amount, { session })
+    if (!updatedWallet) {
+      throw new AppError('Số dư ví không đủ để thực hiện yêu cầu rút tiền', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
+    }
+    const withdrawal = await userWalletRepo.createWithdrawal({
+      user: userId,
+      wallet: wallet._id,
+      amount: payload.amount,
+      bankInfo: payload.bankInfo,
+      note: payload.note || '',
+    }, { session })
+    await postBalancedTransaction({
+      commandKey: `withdrawal_reserve:${withdrawal._id}`,
+      transactionType: 'withdrawal_reserve',
+      referenceType: 'UserWalletWithdrawal',
+      referenceId: withdrawal._id,
+      entries: [
+        { account: accountDefinitions.userWallet(userId), direction: 'debit', amount: payload.amount },
+        { account: accountDefinitions.withdrawalPending(withdrawal._id, 'user', userId), direction: 'credit', amount: payload.amount },
+      ],
+    }, session)
+    return withdrawal
   })
 }
 
@@ -336,11 +351,12 @@ export const approveUserWithdrawal = async (withdrawalId, userContext) => {
   if (withdrawal.status !== WITHDRAWAL_STATUS.PENDING) {
     throw new AppError('Yêu cầu rút tiền không ở trạng thái chờ duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
   }
-  const updated = await userWalletRepo.updateWithdrawalById(withdrawalId, {
+  const updated = await userWalletRepo.transitionWithdrawal(withdrawalId, [WITHDRAWAL_STATUS.PENDING], {
     status: WITHDRAWAL_STATUS.APPROVED,
     approvedBy: userContext._id,
     approvedAt: new Date(),
   })
+  if (!updated) throw new AppError('Yêu cầu rút tiền đã được xử lý', HTTP_STATUS.CONFLICT, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
 
   await writeAuditLog({
     adminId: userContext._id,
@@ -362,17 +378,29 @@ export const rejectUserWithdrawal = async (withdrawalId, userContext, rejectionR
   }
 
   const userId = withdrawal.user?._id || withdrawal.user
-  const updated = await runMongoTransaction(async (session) => {
-    const options = session ? { session } : {}
-    const updated = await userWalletRepo.updateWithdrawalById(withdrawalId, {
+  const updated = await runRequiredMongoTransaction(async (session) => {
+    const options = { session }
+    const updated = await userWalletRepo.transitionWithdrawal(withdrawalId, [WITHDRAWAL_STATUS.PENDING], {
       status: WITHDRAWAL_STATUS.REJECTED,
       rejectionReason,
       adminNote,
       approvedBy: userContext._id,
       approvedAt: new Date(),
     }, options)
+    if (!updated) throw new AppError('Yêu cầu rút tiền đã được xử lý', HTTP_STATUS.CONFLICT, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
 
-    await userWalletRepo.revertWithdrawal(userId, withdrawal.amount, options)
+    const wallet = await userWalletRepo.revertWithdrawal(userId, withdrawal.amount, options)
+    if (!wallet) throw new AppError('Số dư đang chờ không hợp lệ', HTTP_STATUS.CONFLICT, 'WITHDRAWAL_PENDING_BALANCE_MISMATCH')
+    await postBalancedTransaction({
+      commandKey: `withdrawal_reject:${withdrawal._id}`,
+      transactionType: 'withdrawal_reject',
+      referenceType: 'UserWalletWithdrawal',
+      referenceId: withdrawal._id,
+      entries: [
+        { account: accountDefinitions.withdrawalPending(withdrawal._id, 'user', userId), direction: 'debit', amount: withdrawal.amount },
+        { account: accountDefinitions.userWallet(userId), direction: 'credit', amount: withdrawal.amount },
+      ],
+    }, session)
     return updated
   })
 
@@ -396,6 +424,9 @@ export const completeUserWithdrawal = async (withdrawalId, userContext, adminNot
   if (withdrawal.status !== WITHDRAWAL_STATUS.APPROVED) {
     throw new AppError('Yêu cầu rút tiền chưa được duyệt', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
   }
+  if (String(withdrawal.approvedBy?._id || withdrawal.approvedBy) === String(userContext._id)) {
+    throw new AppError('Người duyệt không được tự xác nhận hoàn tất', HTTP_STATUS.FORBIDDEN, 'WITHDRAWAL_MAKER_CHECKER_REQUIRED')
+  }
 
   const userId = withdrawal.user?._id || withdrawal.user
 
@@ -406,11 +437,13 @@ export const completeUserWithdrawal = async (withdrawalId, userContext, adminNot
     completedAt: new Date(),
   }
   if (transferProof) update.transferProof = transferProof
-  const updated = await runMongoTransaction(async (session) => {
-    const options = session ? { session } : {}
-    const updated = await userWalletRepo.updateWithdrawalById(withdrawalId, update, options)
+  const updated = await runRequiredMongoTransaction(async (session) => {
+    const options = { session }
+    const updated = await userWalletRepo.transitionWithdrawal(withdrawalId, [WITHDRAWAL_STATUS.APPROVED], update, options)
+    if (!updated) throw new AppError('Yêu cầu rút tiền đã được xử lý', HTTP_STATUS.CONFLICT, ERRORS.USER_WALLET.WITHDRAWAL_INVALID_STATUS)
 
-    await userWalletRepo.completeWithdrawal(userId, withdrawal.amount, options)
+    const wallet = await userWalletRepo.completeWithdrawal(userId, withdrawal.amount, options)
+    if (!wallet) throw new AppError('Số dư đang chờ không hợp lệ', HTTP_STATUS.CONFLICT, 'WITHDRAWAL_PENDING_BALANCE_MISMATCH')
 
     const walletAfter = await userWalletRepo.findByUser(userId, options)
     await userWalletRepo.createTransaction({
@@ -423,6 +456,17 @@ export const completeUserWithdrawal = async (withdrawalId, userContext, adminNot
       description: `Withdrawal request #${withdrawalId.toString().slice(-8)}`,
       metadata: { withdrawalId },
     }, options)
+
+    await postBalancedTransaction({
+      commandKey: `withdrawal_payout:${withdrawal._id}`,
+      transactionType: 'withdrawal_payout',
+      referenceType: 'UserWalletWithdrawal',
+      referenceId: withdrawal._id,
+      entries: [
+        { account: accountDefinitions.withdrawalPending(withdrawal._id, 'user', userId), direction: 'debit', amount: withdrawal.amount },
+        { account: accountDefinitions.providerClearing('payout'), direction: 'credit', amount: withdrawal.amount },
+      ],
+    }, session)
 
     return updated
   })
@@ -443,27 +487,43 @@ export const completeUserWithdrawal = async (withdrawalId, userContext, adminNot
 
 // ─── Credit wallet after topup (called by payment service) ───────────────────
 
-export const creditWalletFromTopup = async (topup) => {
+export const creditWalletFromTopup = async (topup, rawCallbackData = null) => {
   const { user: userId, amount, _id: topupId } = topup
-
-  // idempotency
-  const existing = await userWalletRepo.findTransactionByTopup(topupId)
-  if (existing) return existing
-
-  const walletBefore = await userWalletRepo.findByUser(userId)
-  const balanceBefore = walletBefore?.balance || 0
-
-  const updatedWallet = await userWalletRepo.creditTopup(userId, amount)
-
-  return userWalletRepo.createTransaction({
-    wallet: updatedWallet._id,
-    user: userId,
-    topup: topupId,
-    type: USER_WALLET_TRANSACTION_TYPE.TOPUP,
-    amount,
-    balanceBefore,
-    balanceAfter: updatedWallet.balance,
-    description: `Nạp tiền vào ví ${amount.toLocaleString('vi-VN')} VNĐ`,
-    metadata: { topupId },
+  return runRequiredMongoTransaction(async (session) => {
+    const existing = await UserWalletTransaction.findOne({ topup: topupId }).session(session)
+    if (existing) return existing
+    const walletBefore = await UserWallet.findOne({ user: userId }).session(session)
+    const updatedWallet = await UserWallet.findOneAndUpdate(
+      { user: userId },
+      { $inc: { balance: amount, totalTopUp: amount } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, session }
+    )
+    const [activity] = await UserWalletTransaction.create([{
+      wallet: updatedWallet._id,
+      user: userId,
+      topup: topupId,
+      type: USER_WALLET_TRANSACTION_TYPE.TOPUP,
+      amount,
+      balanceBefore: walletBefore?.balance || 0,
+      balanceAfter: updatedWallet.balance,
+      description: `Nạp tiền vào ví ${amount.toLocaleString('vi-VN')} VNĐ`,
+      metadata: { topupId },
+    }], { session })
+    await postBalancedTransaction({
+      commandKey: `wallet_topup:${topupId}`,
+      transactionType: 'wallet_topup',
+      referenceType: 'UserWalletTopup',
+      referenceId: topupId,
+      entries: [
+        { account: accountDefinitions.providerClearing(topup.provider || 'payos'), direction: 'debit', amount },
+        { account: accountDefinitions.userWallet(userId), direction: 'credit', amount },
+      ],
+    }, session)
+    await UserWalletTopup.updateOne(
+      { _id: topupId },
+      { status: 'completed', completedAt: new Date(), ...(rawCallbackData ? { rawCallbackData } : {}) },
+      { session }
+    )
+    return activity
   })
 }

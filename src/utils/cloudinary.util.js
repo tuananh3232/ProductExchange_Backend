@@ -26,3 +26,14 @@ export const deleteImage = async (publicId) => {
   configure()
   await cloudinary.uploader.destroy(publicId)
 }
+
+export const createPrivateImageUrl = (publicId, expiresInSeconds = 300) => {
+  if (!publicId) return ''
+  configure()
+  return cloudinary.url(publicId, {
+    type: 'authenticated',
+    sign_url: true,
+    secure: true,
+    expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+  })
+}

@@ -11,6 +11,8 @@ import { ORDER_STATUS, PAYMENT_STATUS, PRODUCT_STATUS } from '../../src/constant
 const api = env.apiPrefix
 
 const shippingAddress = {
+  recipientName: 'Nguyen Van Test',
+  phone: '0901234567',
   province: 'Test Province',
   district: 'Test District',
   detail: '123 Test Street',
@@ -91,37 +93,32 @@ describe('cart, order, and payment integration', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ items: [{ productId: rentalProduct._id.toString(), quantity: 1 }] })
 
-    expect(addToCartResponse.status).toBe(200)
-
-    const checkoutResponse = await request(app)
-      .post(`${api}/cart/checkout`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ selectedProductIds: [rentalProduct._id.toString()] })
-
-    expect(checkoutResponse.status).toBe(400)
+    expect(addToCartResponse.status).toBe(400)
 
     const directOrderResponse = await request(app)
       .post(`${api}/orders`)
       .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'rental-direct-order')
       .send({ productId: rentalProduct._id.toString(), quantity: 1, shippingAddress })
 
     expect(directOrderResponse.status).toBe(400)
   })
 
-  it('creates an order for an available product and marks the product pending', async () => {
+  it('creates an order without locking the entire product', async () => {
     const { token } = await loginMember()
     const product = await createSampleProduct({ status: PRODUCT_STATUS.AVAILABLE })
 
     const response = await request(app)
       .post(`${api}/orders`)
       .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'direct-order-create')
       .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
 
     const updatedProduct = await Product.findById(product._id)
 
     expect(response.status).toBe(201)
     expect(response.body.data.order.status).toBe(ORDER_STATUS.PENDING)
-    expect(updatedProduct.status).toBe(PRODUCT_STATUS.PENDING)
+    expect(updatedProduct.status).toBe(PRODUCT_STATUS.AVAILABLE)
   })
 
   it('allows a buyer to cancel an order and restores the product availability', async () => {
@@ -130,6 +127,7 @@ describe('cart, order, and payment integration', () => {
     const orderResponse = await request(app)
       .post(`${api}/orders`)
       .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', 'direct-order-cancel')
       .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
 
     const response = await request(app)

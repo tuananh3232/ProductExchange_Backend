@@ -6,7 +6,7 @@ import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 export const createOrder = asyncHandler(async (req, res) => {
-  const order = await orderService.createOrder(req.user._id, req.body)
+  const order = await orderService.createOrder(req.user._id, req.body, req.get('idempotency-key'))
   sendSuccess(res, {
     message: MESSAGES.ORDER.CREATED,
     data: { order },

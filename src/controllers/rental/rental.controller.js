@@ -2,6 +2,7 @@ import { asyncHandler } from '../../utils/async-handler.util.js'
 import { getPaginationParams } from '../../utils/pagination.util.js'
 import { sendSuccess } from '../../utils/response.util.js'
 import * as rentalService from '../../services/rental/rental.service.js'
+import * as rentalMoneyService from '../../services/rental/rental-money.service.js'
 
 export const createRentalListing = asyncHandler(async (req, res) => {
   const rentalListing = await rentalService.createRentalListing(req.body, req.user)
@@ -91,7 +92,7 @@ export const cancelRentalBooking = asyncHandler(async (req, res) => {
 })
 
 export const payRentalBooking = asyncHandler(async (req, res) => {
-  const rentalBooking = await rentalService.payRentalBooking(req.params.rentalBookingId, req.user)
+  const rentalBooking = await rentalMoneyService.payRentalBooking(req.params.rentalBookingId, req.user)
 
   sendSuccess(res, {
     message: 'Thanh toán booking thuê thành công',
@@ -118,7 +119,7 @@ export const returnRentalBooking = asyncHandler(async (req, res) => {
 })
 
 export const confirmRentalReturn = asyncHandler(async (req, res) => {
-  const rentalBooking = await rentalService.confirmRentalReturn(req.params.rentalBookingId, req.body, req.user)
+  const rentalBooking = await rentalMoneyService.confirmRentalReturn(req.params.rentalBookingId, req.body, req.user)
 
   sendSuccess(res, {
     message: 'Xác nhận hoàn trả booking thuê thành công',

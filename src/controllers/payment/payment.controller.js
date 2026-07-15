@@ -4,6 +4,21 @@ import { asyncHandler } from '../../utils/async-handler.util.js'
 import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { getPaginationParams } from '../../utils/pagination.util.js'
+import Order from '../../models/order.model.js'
+import { createPaymentAttempt } from '../../services/payment/payment-attempt.service.js'
+
+const createCompatibleCommercePayment = async (req, provider) => {
+  const order = await Order.findOne({ _id: req.body.orderId, buyer: req.user._id }).select('checkout')
+  if (!order?.checkout) return null
+  const payment = await createPaymentAttempt({
+    checkoutId: order.checkout,
+    buyerId: req.user._id,
+    provider,
+    idempotencyKey: req.get('idempotency-key'),
+    clientIp: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip,
+  })
+  return { payment, paymentUrl: payment.checkoutUrl }
+}
 
 export const getAdminPayments = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
@@ -27,7 +42,8 @@ export const reconcileAdminPayment = asyncHandler(async (req, res) => {
 })
 
 export const createVnpayPayment = asyncHandler(async (req, res) => {
-  const result = await paymentService.createVnpayPayment(req.body.orderId, req.user, req)
+  const result = await createCompatibleCommercePayment(req, 'vnpay')
+    || await paymentService.createVnpayPayment(req.body.orderId, req.user, req)
   sendSuccess(res, {
     message: MESSAGES.PAYMENT.CREATED,
     data: result,
@@ -48,7 +64,8 @@ export const vnpayIpn = asyncHandler(async (req, res) => {
 })
 
 export const createPayosPayment = asyncHandler(async (req, res) => {
-  const result = await paymentService.createPayosPayment(req.body.orderId, req.user)
+  const result = await createCompatibleCommercePayment(req, 'payos')
+    || await paymentService.createPayosPayment(req.body.orderId, req.user)
   sendSuccess(res, {
     message: MESSAGES.PAYMENT.CREATED,
     data: result,
@@ -72,6 +89,6 @@ export const topupWebhook = asyncHandler(async (req, res) => {
 })
 
 export const topupReturn = asyncHandler(async (req, res) => {
-  const result = await paymentService.handleTopupReturn(req.query)
+  const result = await paymentService.getTopupReturnResult(req.query)
   sendSuccess(res, { message: MESSAGES.PAYMENT.CALLBACK_PROCESSED, data: result })
 })

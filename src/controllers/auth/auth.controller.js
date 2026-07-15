@@ -117,7 +117,7 @@ export const adminGetAllKyc = asyncHandler(async (req, res) => {
 })
 
 export const adminGetUserKyc = asyncHandler(async (req, res) => {
-  const result = await authService.adminGetUserKyc(req.params.userId)
+  const result = await authService.adminGetUserKyc(req.params.userId, req.user)
   sendSuccess(res, { message: MESSAGES.KYC.FETCHED, data: result })
 })
 

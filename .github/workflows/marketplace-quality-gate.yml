@@ -1,0 +1,37 @@
+name: Marketplace quality gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supercharge/mongodb-github-action@1.12.0
+        with:
+          mongodb-version: '7.0'
+          mongodb-replica-set: rs0
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit -- --runInBand
+      - run: npm run test:integration
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/productexchange_test?replicaSet=rs0
+          DB_NAME: productexchange_test
+          JWT_SECRET: ci-jwt-secret
+          JWT_REFRESH_SECRET: ci-refresh-secret
+      - run: npm run migrate:marketplace-v1 -- --dry-run
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/productexchange_test?replicaSet=rs0
+          DB_NAME: productexchange_test
+          JWT_SECRET: ci-jwt-secret
+          JWT_REFRESH_SECRET: ci-refresh-secret

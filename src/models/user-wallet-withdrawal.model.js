@@ -61,7 +61,7 @@ const userWalletWithdrawalSchema = new mongoose.Schema(
     transferProof: {
       transactionId: { type: String, default: '' },
       transferDate: { type: Date, default: null },
-      bankTransferRef: { type: String, default: '' },
+      bankTransferRef: { type: String, default: undefined },
       note: { type: String, default: '' },
     },
     rejectionReason: {
@@ -74,6 +74,8 @@ const userWalletWithdrawalSchema = new mongoose.Schema(
     versionKey: false,
   }
 )
+
+userWalletWithdrawalSchema.index({ 'transferProof.bankTransferRef': 1 }, { unique: true, sparse: true })
 
 const UserWalletWithdrawal = mongoose.model('UserWalletWithdrawal', userWalletWithdrawalSchema)
 

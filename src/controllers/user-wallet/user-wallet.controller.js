@@ -5,6 +5,40 @@ import { asyncHandler } from '../../utils/async-handler.util.js'
 import { getPaginationParams } from '../../utils/pagination.util.js'
 import MESSAGES from '../../constants/message.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
+import Order from '../../models/order.model.js'
+import AppError from '../../utils/app-error.util.js'
+import { createPaymentAttempt } from '../../services/payment/payment-attempt.service.js'
+
+const payCommerceCheckouts = async (orderIds, req) => {
+  const orders = await Order.find({ _id: { $in: orderIds }, buyer: req.user._id }).select('checkout totalAmount')
+  if (!orders.some((order) => order.checkout)) return null
+  if (orders.length !== [...new Set(orderIds.map(String))].length || orders.some((order) => !order.checkout)) {
+    throw new AppError('Không thể trộn đơn commerce và đơn legacy trong cùng lệnh thanh toán', HTTP_STATUS.BAD_REQUEST, 'MIXED_ORDER_CONTRACT')
+  }
+  const idempotencyKey = req.get('idempotency-key')
+  if (!idempotencyKey) {
+    throw new AppError('Thiếu Idempotency-Key', HTTP_STATUS.BAD_REQUEST, 'IDEMPOTENCY_KEY_REQUIRED')
+  }
+  const checkoutIds = [...new Set(orders.map((order) => String(order.checkout)))]
+  if (checkoutIds.length !== 1) {
+    throw new AppError('Mỗi lệnh thanh toán ví chỉ được chứa các đơn thuộc cùng một checkout', HTTP_STATUS.BAD_REQUEST, 'MULTIPLE_CHECKOUTS_NOT_ATOMIC')
+  }
+  const payments = []
+  for (const [index, checkoutId] of checkoutIds.entries()) {
+    payments.push(await createPaymentAttempt({
+      checkoutId,
+      buyerId: req.user._id,
+      provider: 'wallet',
+      idempotencyKey: `${idempotencyKey}:${index}`,
+      clientIp: req.ip,
+    }))
+  }
+  return {
+    payments,
+    orderCount: orders.length,
+    totalAmount: orders.reduce((sum, order) => sum + order.totalAmount, 0),
+  }
+}
 
 export const getMyWallet = asyncHandler(async (req, res) => {
   const result = await userWalletService.getMyWallet(req.user._id)
@@ -51,12 +85,14 @@ export const createTopup = asyncHandler(async (req, res) => {
 })
 
 export const payOrderWithWallet = asyncHandler(async (req, res) => {
-  const result = await userWalletService.payOrderWithWallet(req.body.orderId, req.user)
+  const result = await payCommerceCheckouts([req.body.orderId], req)
+    || await userWalletService.payOrderWithWallet(req.body.orderId, req.user)
   sendSuccess(res, { message: MESSAGES.USER_WALLET.ORDER_PAID, data: result })
 })
 
 export const payOrdersWithWallet = asyncHandler(async (req, res) => {
-  const result = await userWalletService.payOrdersWithWallet(req.body.orderIds, req.user)
+  const result = await payCommerceCheckouts(req.body.orderIds, req)
+    || await userWalletService.payOrdersWithWallet(req.body.orderIds, req.user)
   sendSuccess(res, { message: MESSAGES.USER_WALLET.ORDERS_PAID, data: result })
 })
 

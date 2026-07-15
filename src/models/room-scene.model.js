@@ -60,6 +60,8 @@ const roomSceneSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    quotaSlot: { type: Number, min: 0, default: null },
+    quotaActive: { type: Boolean, default: true },
   },
   {
     timestamps: true,
@@ -69,5 +71,6 @@ const roomSceneSchema = new mongoose.Schema(
 
 roomSceneSchema.index({ project: 1, createdAt: -1 })
 roomSceneSchema.index({ owner: 1, updatedAt: -1 })
+roomSceneSchema.index({ project: 1, quotaSlot: 1 }, { unique: true, partialFilterExpression: { quotaActive: true } })
 
 export default mongoose.model('RoomScene', roomSceneSchema)

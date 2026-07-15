@@ -8,9 +8,11 @@ import swaggerUi from 'swagger-ui-express'
 import { corsOptions } from './configs/cors.config.js'
 import { env } from './configs/env.config.js'
 import { swaggerSpec } from './configs/swagger.config.js'
-import { connectDB } from './configs/database.config.js'
-import { errorHandler } from './middlewares/error.middleware.js'
+import mongoose from 'mongoose'
+import { assertMongoTransactionSupport, connectDB } from './configs/database.config.js'
+import { errorHandler, notFoundHandler } from './middlewares/error.middleware.js'
 import { apiRateLimit } from './middlewares/rate-limit.middleware.js'
+import { requestContext } from './middlewares/request-context.middleware.js'
 import router from './routes/index.js'
 import { ensureRbacSeedData } from './services/rbac/rbac-seed.service.js'
 import { initChatSocket } from './sockets/chat.socket.js'
@@ -31,7 +33,8 @@ if (!isTestRuntime) {
 app.use(helmet({ contentSecurityPolicy: false }))
 app.use(compression())
 app.use(cors(corsOptions))
-app.use(morgan('dev'))
+app.use(requestContext)
+if (env.nodeEnv !== 'production') app.use(morgan('dev'))
 app.use(express.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true, limit: '5mb' }))
 
@@ -55,8 +58,20 @@ app.get('/health', (req, res) => {
   })
 })
 
+app.get('/ready', (req, res) => {
+  const databaseReady = mongoose.connection.readyState === 1
+  res.status(databaseReady ? 200 : 503).json({
+    success: databaseReady,
+    status: databaseReady ? 'ready' : 'not_ready',
+    checks: { database: databaseReady ? 'up' : 'down' },
+    timestamp: new Date().toISOString(),
+  })
+})
+
 // Routes
 app.use(env.apiPrefix, router)
+
+app.use(notFoundHandler)
 
 // Error handler
 app.use(errorHandler)
@@ -66,6 +81,7 @@ const PORT = env.port || 3000
 
 if (!isTestRuntime) {
   connectDB().then(async () => {
+    await assertMongoTransactionSupport()
     try {
       await ensureRbacSeedData()
     } catch (error) {

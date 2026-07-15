@@ -2,6 +2,7 @@ import { asyncHandler } from '../../utils/async-handler.util.js'
 import { getPaginationParams } from '../../utils/pagination.util.js'
 import { sendSuccess } from '../../utils/response.util.js'
 import * as rentalService from '../../services/rental/rental.service.js'
+import { resolveAdminRentalClaim as resolveAdminRentalClaimMoney } from '../../services/rental/rental-money.service.js'
 
 export const getAdminRentalBookings = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
@@ -35,7 +36,7 @@ export const getAdminRentalClaimById = asyncHandler(async (req, res) => {
 })
 
 export const resolveAdminRentalClaim = asyncHandler(async (req, res) => {
-  const rentalClaim = await rentalService.resolveAdminRentalClaim(req.params.rentalClaimId, req.body, req.user)
+  const rentalClaim = await resolveAdminRentalClaimMoney(req.params.rentalClaimId, req.body, req.user)
 
   sendSuccess(res, {
     message: 'Xử lý claim cho thuê thành công',

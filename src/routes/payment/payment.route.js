@@ -4,8 +4,15 @@ import * as optionsController from '../../controllers/options/options.controller
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import Joi from 'joi'
+import { requireFeature } from '../../middlewares/feature.middleware.js'
+import { validateObjectId } from '../../middlewares/object-id.middleware.js'
+import { createPaymentAttemptSchema } from '../../validations/payment/payment-attempt.validation.js'
+import * as paymentAttemptController from '../../controllers/payment/payment-attempt.controller.js'
 
 const router = Router()
+const requireIdempotencyKey = (req, res, next) => req.get('idempotency-key')
+	? next()
+	: res.status(400).json({ success: false, message: 'Thiếu Idempotency-Key', error: 'IDEMPOTENCY_KEY_REQUIRED' })
 
 router.get('/options', optionsController.getPaymentOptions)
 
@@ -41,7 +48,7 @@ const createPaymentSchema = Joi.object({
  *       201:
  *         description: Tạo payment URL thành công
  */
-router.post('/vnpay/create', authenticate, validate(createPaymentSchema), paymentController.createVnpayPayment)
+router.post('/vnpay/create', requireFeature('vnpayPayments'), authenticate, requireIdempotencyKey, validate(createPaymentSchema), paymentController.createVnpayPayment)
 
 /**
  * @swagger
@@ -53,7 +60,7 @@ router.post('/vnpay/create', authenticate, validate(createPaymentSchema), paymen
  *       200:
  *         description: Xử lý callback thành công
  */
-router.get('/vnpay/return', paymentController.vnpayReturn)
+router.get('/vnpay/return', paymentAttemptController.vnpayReturnCompatible)
 
 /**
  * @swagger
@@ -65,7 +72,7 @@ router.get('/vnpay/return', paymentController.vnpayReturn)
  *       200:
  *         description: Xử lý IPN thành công
  */
-router.post('/vnpay/ipn', paymentController.vnpayIpn)
+router.post('/vnpay/ipn', requireFeature('vnpayPayments'), paymentAttemptController.vnpayIpnCompatible)
 
 /**
  * @swagger
@@ -89,7 +96,7 @@ router.post('/vnpay/ipn', paymentController.vnpayIpn)
  *       201:
  *         description: Tạo payment URL thành công
  */
-router.post('/payos/create', authenticate, validate(createPaymentSchema), paymentController.createPayosPayment)
+router.post('/payos/create', requireFeature('payosPayments'), authenticate, requireIdempotencyKey, validate(createPaymentSchema), paymentController.createPayosPayment)
 
 /**
  * @swagger
@@ -101,7 +108,7 @@ router.post('/payos/create', authenticate, validate(createPaymentSchema), paymen
  *       200:
  *         description: Xử lý webhook thành công
  */
-router.post('/payos/webhook', paymentController.payosWebhook)
+router.post('/payos/webhook', requireFeature('payosPayments'), paymentAttemptController.payosWebhookCompatible)
 
 /**
  * @swagger
@@ -113,7 +120,7 @@ router.post('/payos/webhook', paymentController.payosWebhook)
  *       200:
  *         description: Xử lý callback thành công
  */
-router.get('/payos/return', paymentController.payosReturn)
+router.get('/payos/return', paymentAttemptController.payosReturnCompatible)
 
 /**
  * @swagger
@@ -125,7 +132,7 @@ router.get('/payos/return', paymentController.payosReturn)
  *       200:
  *         description: Xử lý huỷ thành công
  */
-router.get('/payos/cancel', paymentController.payosReturn)
+router.get('/payos/cancel', paymentAttemptController.payosReturnCompatible)
 
 /**
  * @swagger
@@ -137,7 +144,7 @@ router.get('/payos/cancel', paymentController.payosReturn)
  *       200:
  *         description: Xử lý webhook nạp tiền thành công
  */
-router.post('/payos/topup/webhook', paymentController.topupWebhook)
+router.post('/payos/topup/webhook', requireFeature('payosPayments'), paymentController.topupWebhook)
 
 /**
  * @swagger
@@ -162,5 +169,15 @@ router.get('/payos/topup/return', paymentController.topupReturn)
  *         description: Xử lý huỷ nạp tiền thành công
  */
 router.get('/payos/topup/cancel', paymentController.topupReturn)
+
+router.post(
+	'/',
+	requireFeature('commerce'),
+	authenticate,
+	requireIdempotencyKey,
+	validate(createPaymentAttemptSchema),
+	paymentAttemptController.create
+)
+router.get('/:paymentId', requireFeature('commerce'), authenticate, validateObjectId('paymentId'), paymentAttemptController.detail)
 
 export default router

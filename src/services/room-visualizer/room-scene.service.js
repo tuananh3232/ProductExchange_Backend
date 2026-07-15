@@ -1,4 +1,5 @@
 import RoomProject from '../../models/room-project.model.js'
+import RoomScene from '../../models/room-scene.model.js'
 import Product from '../../models/product.model.js'
 import * as roomSceneRepo from '../../repositories/room-visualizer/room-scene.repository.js'
 import { uploadBuffer, deleteImage } from '../../utils/cloudinary.util.js'
@@ -23,11 +24,14 @@ export const listScenes = async (projectId, userId) => {
 
 export const createScene = async (projectId, userId, { name }) => {
   await _verifyProject(projectId, userId)
-  const count = await roomSceneRepo.countByProject(projectId)
-  if (count >= MAX_SCENES) {
-    throw new AppError('Đã đạt giới hạn số scene', HTTP_STATUS.BAD_REQUEST, 'SCENE_LIMIT_EXCEEDED')
+  for (let quotaSlot = 0; quotaSlot < MAX_SCENES; quotaSlot += 1) {
+    try {
+      return await RoomScene.create({ project: projectId, owner: userId, name, quotaSlot, quotaActive: true })
+    } catch (error) {
+      if (error?.code !== 11000) throw error
+    }
   }
-  return roomSceneRepo.create({ project: projectId, owner: userId, name })
+  throw new AppError('Đã đạt giới hạn số scene', HTTP_STATUS.CONFLICT, 'SCENE_LIMIT_EXCEEDED')
 }
 
 export const getScene = async (projectId, sceneId, userId) => {
@@ -44,7 +48,7 @@ export const updateScene = async (projectId, sceneId, userId, { name }) => {
 export const deleteScene = async (projectId, sceneId, userId) => {
   await _verifyProject(projectId, userId)
   await roomSceneRepo.findByIdAndOwner(sceneId, userId)
-  return roomSceneRepo.updateById(sceneId, { isActive: false })
+  return roomSceneRepo.updateById(sceneId, { isActive: false, quotaActive: false })
 }
 
 export const uploadSceneImage = async (projectId, sceneId, userId, buffer) => {

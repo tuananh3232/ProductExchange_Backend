@@ -1,6 +1,5 @@
 import mongoose from 'mongoose'
 import {
-  USER_WALLET_TRANSACTION_TYPE,
   USER_WALLET_TRANSACTION_TYPE_ENUM,
   WALLET_TRANSACTION_STATUS,
   WALLET_TRANSACTION_STATUS_ENUM,
@@ -29,7 +28,7 @@ const userWalletTransactionSchema = new mongoose.Schema(
     topup: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'UserWalletTopup',
-      default: null,
+      default: undefined,
     },
     type: {
       type: String,
@@ -71,6 +70,11 @@ const userWalletTransactionSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
+)
+
+userWalletTransactionSchema.index(
+  { topup: 1 },
+  { unique: true, partialFilterExpression: { topup: { $type: 'objectId' } }, name: 'unique_topup_activity_v1' }
 )
 
 const UserWalletTransaction = mongoose.model('UserWalletTransaction', userWalletTransactionSchema)

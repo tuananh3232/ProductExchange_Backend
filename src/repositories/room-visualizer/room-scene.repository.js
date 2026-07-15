@@ -16,7 +16,7 @@ export const findByIdAndOwner = async (sceneId, ownerId) => {
 export const create = (payload) => new RoomScene(payload).save()
 
 export const updateById = (sceneId, updateData) =>
-  RoomScene.findByIdAndUpdate(sceneId, updateData, { new: true })
+  RoomScene.findByIdAndUpdate(sceneId, updateData, { returnDocument: 'after' })
 
 export const countByProject = (projectId) =>
   RoomScene.countDocuments({ project: projectId, isActive: true })

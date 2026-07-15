@@ -11,12 +11,24 @@ import {
   createOrderSchema,
   updateOrderStatusSchema,
 } from '../../validations/order/order.validation.js'
+import * as commerceController from '../../controllers/order/commerce-order.controller.js'
+import * as refundController from '../../controllers/refund/refund.controller.js'
+import { shipOrderSchema } from '../../validations/order/commerce-order.validation.js'
+import { createCaseSchema } from '../../validations/refund/refund.validation.js'
+import { requireFeature } from '../../middlewares/feature.middleware.js'
 const router = Router()
 
 router.use(authenticate)
 
 router.get('/filter-options', optionsController.getOrderFilterOptions)
-router.post('/', validate(createOrderSchema), orderController.createOrder)
+router.post(
+  '/',
+  (req, res, next) => req.get('idempotency-key')
+    ? next()
+    : res.status(400).json({ success: false, message: 'Thiếu Idempotency-Key', error: 'IDEMPOTENCY_KEY_REQUIRED' }),
+  validate(createOrderSchema),
+  orderController.createOrder
+)
 router.get('/', validate(orderQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST), orderController.getOrders)
 router.get('/:id', validateObjectId('id'), orderController.getOrderById)
 router.patch('/:id/confirm', validateObjectId('id'), orderController.confirmOrder)
@@ -27,6 +39,13 @@ router.patch(
   validate(updateOrderStatusSchema),
   orderController.updateOrderStatus
 )
+router.post('/:orderId/confirm', requireFeature('commerce'), validateObjectId('orderId'), commerceController.confirm)
+router.post('/:orderId/process', requireFeature('commerce'), validateObjectId('orderId'), commerceController.process)
+router.post('/:orderId/ship', requireFeature('commerce'), validateObjectId('orderId'), validate(shipOrderSchema), commerceController.ship)
+router.post('/:orderId/delivered', requireFeature('commerce'), validateObjectId('orderId'), commerceController.delivered)
+router.post('/:orderId/confirm-received', requireFeature('commerce'), validateObjectId('orderId'), commerceController.confirmReceived)
+router.post('/:orderId/cancel', requireFeature('commerce'), validateObjectId('orderId'), commerceController.cancel)
+router.post('/:orderId/cases', requireFeature('commerce'), validateObjectId('orderId'), validate(createCaseSchema), refundController.createCase)
 
 export default router
 

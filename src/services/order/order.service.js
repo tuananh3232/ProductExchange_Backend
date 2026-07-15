@@ -1,4 +1,4 @@
-import Product, { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -9,7 +9,6 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import * as orderRepo from '../../repositories/order/order.repository.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import PERMISSIONS from '../../constants/permission.constant.js'
-import * as walletService from '../wallet/wallet.service.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
@@ -17,6 +16,7 @@ import { ROLES } from '../../constants/role.constant.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
+import { createCheckout } from '../checkout/checkout.service.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -131,18 +131,6 @@ const ensureShopManageOrder = async (order, userContext, permissionKey) => {
   })
 }
 
-const pushOrderHistory = (order, status, updatedBy, note = '') => {
-  order.history = [
-    ...(order.history || []),
-    {
-      status,
-      updatedBy,
-      note,
-      updatedAt: new Date(),
-    },
-  ]
-}
-
 const ensureTransitionAllowed = (currentStatus, nextStatus) => {
   const allowed = ORDER_TRANSITIONS[currentStatus] || []
   if (!allowed.includes(nextStatus)) {
@@ -150,72 +138,37 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
   }
 }
 
-export const createOrder = async (buyerId, payload) => {
+export const createOrder = async (buyerId, payload, idempotencyKey) => {
   const productId = payload.productId || payload.product
-  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType transactionMode price isActive title')
+  const product = await Product.findById(productId).select('_id variants isActive')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
-
-  if ((product.transactionMode || 'sell') !== 'sell') {
-    throw new AppError('Sản phẩm này không hỗ trợ đặt đơn mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
+  const variant = payload.variantId
+    ? product.variants.find((item) => String(item._id) === String(payload.variantId))
+    : product.variants.length === 1 ? product.variants[0] : null
+  if (!variant) {
+    throw new AppError('Vui lòng chọn phiên bản sản phẩm', HTTP_STATUS.BAD_REQUEST, 'VARIANT_REQUIRED')
   }
-
-  if (product.status !== 'available') {
-    throw new AppError('Sản phẩm không còn khả dụng để đặt đơn', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
+  const buyer = await User.findById(buyerId).select('name phone address')
+  const requestedAddress = payload.shippingAddress || {}
+  const shippingAddress = {
+    recipientName: requestedAddress.recipientName || buyer?.name,
+    phone: requestedAddress.phone || buyer?.phone,
+    province: requestedAddress.province || buyer?.address?.province,
+    district: requestedAddress.district || buyer?.address?.district,
+    detail: requestedAddress.detail || buyer?.address?.detail,
   }
-
-  if (product.owner.toString() === buyerId.toString()) {
-    throw new AppError('Không thể tạo đơn cho sản phẩm của chính bạn', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.SELF_ORDER_NOT_ALLOWED)
+  if (Object.values(shippingAddress).some((value) => !String(value || '').trim())) {
+    throw new AppError('Thông tin giao hàng chưa đầy đủ', HTTP_STATUS.BAD_REQUEST, 'SHIPPING_ADDRESS_INCOMPLETE')
   }
-
-  if (product.ownerType === PRODUCT_OWNER_TYPES.SHOP && !product.shop) {
-    throw new AppError('Sản phẩm chưa gắn với shop', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
-  }
-
-  if (product.ownerType === PRODUCT_OWNER_TYPES.SELLER && !product.seller) {
-    throw new AppError('Sản phẩm chưa gắn với seller', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_MISSING_SHOP)
-  }
-
-  const quantity = payload.quantity || 1
-  const unitPrice = product.price
-  const totalAmount = unitPrice * quantity
-  // If shippingAddress is not provided or empty, use buyer's profile address
-  let shippingAddress = payload.shippingAddress || {}
-  const isEmptyAddress = !shippingAddress || (!shippingAddress.province && !shippingAddress.district && !shippingAddress.detail)
-  if (isEmptyAddress) {
-    const buyer = await User.findById(buyerId).select('address')
-    if (buyer && buyer.address) shippingAddress = buyer.address
-  }
-
-  const order = await orderRepo.create({
-    buyer: buyerId,
-    shop: product.ownerType === PRODUCT_OWNER_TYPES.SHOP ? product.shop : null,
-    seller: product.ownerType === PRODUCT_OWNER_TYPES.SELLER ? product.seller : null,
-    product: product._id,
-    quantity,
-    unitPrice,
-    totalAmount,
-    grossAmount: totalAmount,
-    totalPlatformFee: 0,
-    netSettlementAmount: totalAmount,
-    settlementStatus: 'pending',
-    status: ORDER_STATUS.PENDING,
+  const checkout = await createCheckout({
+    buyerId,
+    idempotencyKey,
+    items: [{ productId: product._id, variantId: variant._id, quantity: payload.quantity || 1 }],
     shippingAddress,
-    note: payload.note || '',
-    history: [
-      {
-        status: ORDER_STATUS.PENDING,
-        note: 'Tạo đơn hàng',
-        updatedBy: buyerId,
-        updatedAt: new Date(),
-      },
-    ],
   })
-
-  await Product.findByIdAndUpdate(product._id, { status: 'pending' })
-
-  const populatedOrder = await orderRepo.findById(order._id)
+  const populatedOrder = await orderRepo.findById(checkout.orders[0]._id || checkout.orders[0])
   await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Bạn có đơn hàng mới', buyerId)
   return populatedOrder
 }

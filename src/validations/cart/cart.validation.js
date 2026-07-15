@@ -7,6 +7,7 @@ export const addComboSchema = Joi.object({
     .items(
       Joi.object({
         productId: objectId.required(),
+        variantId: objectId.optional(),
         quantity: Joi.number().integer().positive().required(),
       })
     )

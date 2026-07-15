@@ -52,7 +52,16 @@ const router = Router()
  *         description: Dữ liệu gửi lên không hợp lệ
  */
 router.get('/', authenticate, requirePermissions(PERMISSIONS.USER_CART_READ), cartController.getCart)
-router.post('/checkout', authenticate, requirePermissions(PERMISSIONS.USER_CART_CHECKOUT), validate(checkoutCartSchema), cartController.checkoutCart)
+router.post(
+  '/checkout',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_CART_CHECKOUT),
+  (req, res, next) => req.get('idempotency-key')
+    ? next()
+    : res.status(400).json({ success: false, message: 'Thiếu Idempotency-Key', error: 'IDEMPOTENCY_KEY_REQUIRED' }),
+  validate(checkoutCartSchema),
+  cartController.checkoutCart
+)
 router.patch(
   '/items/:productId',
   authenticate,

@@ -120,6 +120,20 @@ export const requirePermissions = (...requiredPermissions) => {
   }
 }
 
+export const requireExplicitPermissions = (...requiredPermissions) => async (req, _res, next) => {
+  try {
+    const roles = await roleRepo.findByCodesWithPermissions(req.user?.roles || [])
+    const granted = new Set(roles.flatMap((role) => (role.permissions || []).map((permission) => permission.key)))
+    if (!requiredPermissions.every((permission) => granted.has(permission))) {
+      throw new AppError('Bạn không có quyền xem dữ liệu nhạy cảm', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    }
+    req.user.permissions = [...granted]
+    next()
+  } catch (error) {
+    next(error)
+  }
+}
+
 /**
  * Middleware phan quyen theo permission trong pham vi 1 shop cu the.
  * Owner cua shop luon duoc phep di tiep, staff can co permission tuong ung.

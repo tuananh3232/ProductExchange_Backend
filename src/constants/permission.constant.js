@@ -96,6 +96,7 @@ export const PERMISSIONS = {
   SHOP_WITHDRAWAL_READ: 'shop:withdrawal:read',
 
   ROOM_VISUALIZER_USE: 'room_visualizer:use',
+  ADMIN_KYC_PRIVATE_READ: 'admin:kyc_private:read',
 
   // Deprecated compatibility keys. Do not use in new route matrix.
   AUTH_REGISTER: 'auth:register',
@@ -314,6 +315,7 @@ export const ROLE_PERMISSION_MAP = {
   shop_owner: [...MEMBER_PERMISSIONS, ...SHOP_OWNER_PERMISSIONS],
   staff: MEMBER_PERMISSIONS,
   admin: [],
+  privacy_admin: [PERMISSIONS.ADMIN_KYC_PRIVATE_READ],
 }
 
 const label = (module, text) => ({ module, label: text, visibleInMatrix: true })
@@ -391,6 +393,7 @@ export const PERMISSION_METADATA = {
   [PERMISSIONS.SHOP_WITHDRAWAL_CREATE]: label('shop_wallet', 'Create shop withdrawal'),
   [PERMISSIONS.SHOP_WITHDRAWAL_READ]: label('shop_wallet', 'View shop withdrawals'),
   [PERMISSIONS.ROOM_VISUALIZER_USE]: label('room_visualizer', 'Use room visualizer'),
+  [PERMISSIONS.ADMIN_KYC_PRIVATE_READ]: label('admin_kyc', 'View private KYC documents'),
   [PERMISSIONS.ADMIN_FEE_POLICY_READ]: label('admin_fee_policy', 'View fee policies'),
   [PERMISSIONS.ADMIN_FEE_POLICY_WRITE]: label('admin_fee_policy', 'Manage fee policies'),
   [PERMISSIONS.ADMIN_PLATFORM_LEDGER_READ]: label('admin_platform_ledger', 'View platform ledger'),
@@ -405,6 +408,7 @@ export const ACTIVE_PERMISSION_KEYS = [
     ...SELLER_PERMISSIONS,
     ...SHOP_OWNER_PERMISSIONS,
     PERMISSIONS.ROOM_VISUALIZER_USE,
+    PERMISSIONS.ADMIN_KYC_PRIVATE_READ,
   ]),
 ]
 

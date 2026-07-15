@@ -8,6 +8,7 @@ export const ROLES = {
   SELLER: 'seller',
   SHOP_OWNER: 'shop_owner',
   STAFF: 'staff',
+  PRIVACY_ADMIN: 'privacy_admin',
 }
 
 export const ROLE_ENUM = Object.values(ROLES)
@@ -18,6 +19,7 @@ export const ROLE_DESCRIPTIONS = {
   [ROLES.SELLER]: 'Personal seller',
   [ROLES.SHOP_OWNER]: 'Shop Owner',
   [ROLES.STAFF]: 'Shop staff',
+  [ROLES.PRIVACY_ADMIN]: 'Sensitive data reviewer',
 }
 
 export const ROLE_PERMISSIONS = {

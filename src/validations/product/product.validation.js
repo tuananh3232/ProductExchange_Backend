@@ -9,12 +9,21 @@ const comboFields = {
   comboPriority: Joi.number().min(0),
 }
 
+const variantSchema = Joi.object({
+  sku: Joi.string().trim().uppercase().min(2).max(64).required(),
+  attributes: Joi.object().pattern(Joi.string().max(50), Joi.string().max(100)).default({}),
+  price: Joi.number().integer().min(0).required(),
+  stockOnHand: Joi.number().integer().min(0).required(),
+  isActive: Joi.boolean().default(true),
+})
+
 export const createProductSchema = Joi.object({
   ownerType: Joi.string().valid('SHOP', 'SELLER'),
   title: Joi.string().trim().min(5).max(200).required(),
   description: Joi.string().trim().min(20).max(3000).required(),
   price: Joi.number().min(0).required(),
   stock: Joi.number().integer().min(0),
+  variants: Joi.array().items(variantSchema).min(1).max(100).unique('sku'),
   listingType: Joi.string().valid('sell').required(),
   transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
@@ -37,6 +46,7 @@ export const updateProductSchema = Joi.object({
   description: Joi.string().trim().min(20).max(3000),
   price: Joi.number().min(0),
   stock: Joi.number().integer().min(0),
+  variants: Joi.array().items(variantSchema).min(1).max(100).unique('sku'),
   transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor'),
   category: Joi.string().hex().length(24),

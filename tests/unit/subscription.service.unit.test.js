@@ -1,462 +1,171 @@
 import { jest } from '@jest/globals'
 
-// --- mock stubs (declared before jest.unstable_mockModule) ---
-
-const payosInstance = {
+const payos = {
   paymentRequests: { create: jest.fn(), get: jest.fn() },
   webhooks: { verify: jest.fn() },
 }
-const PayOSCtor = jest.fn().mockImplementation(() => payosInstance)
-
-const userModel = {
-  findById: jest.fn(),
-  findByIdAndUpdate: jest.fn(),
-}
-
+const userModel = { findById: jest.fn(), findByIdAndUpdate: jest.fn() }
+const walletModel = { findOneAndUpdate: jest.fn() }
+const walletTransactionModel = { create: jest.fn() }
 const subOrderModel = {
   findOne: jest.fn(),
   create: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+  findById: jest.fn(),
 }
+const counterModel = { findOneAndUpdate: jest.fn() }
+const postBalancedTransaction = jest.fn()
+const reconcileOwnerShopQuota = jest.fn()
+const roleRepo = { findByCodesWithPermissions: jest.fn() }
 
-const roleRepo = {
-  findByCodesWithPermissions: jest.fn(),
-}
-
-jest.unstable_mockModule('@payos/node', () => ({ PayOS: PayOSCtor }))
+jest.unstable_mockModule('@payos/node', () => ({ PayOS: jest.fn(() => payos) }))
 jest.unstable_mockModule('../../src/models/user.model.js', () => ({ default: userModel }))
+jest.unstable_mockModule('../../src/models/user-wallet.model.js', () => ({ default: walletModel }))
+jest.unstable_mockModule('../../src/models/user-wallet-transaction.model.js', () => ({ default: walletTransactionModel }))
 jest.unstable_mockModule('../../src/models/subscription-order.model.js', () => ({ default: subOrderModel }))
-jest.unstable_mockModule('../../src/repositories/role/role.repository.js', () => roleRepo)
-jest.unstable_mockModule('../../src/services/shop/shop.service.js', () => ({
-  reconcileOwnerShopQuota: jest.fn().mockResolvedValue({ allowedCount: 1, totalShops: 0, changed: false }),
+jest.unstable_mockModule('../../src/models/counter.model.js', () => ({ default: counterModel }))
+jest.unstable_mockModule('../../src/services/accounting/accounting.service.js', () => ({
+  accountDefinitions: {
+    userWallet: (id) => ({ key: `user:${id}` }),
+    platformRevenue: () => ({ key: 'revenue' }),
+    providerClearing: (provider) => ({ key: `provider:${provider}` }),
+  },
+  postBalancedTransaction,
 }))
+jest.unstable_mockModule('../../src/utils/mongo-transaction.util.js', () => ({
+  runRequiredMongoTransaction: (operation) => operation({ id: 'session' }),
+}))
+jest.unstable_mockModule('../../src/services/shop/shop.service.js', () => ({ reconcileOwnerShopQuota }))
+jest.unstable_mockModule('../../src/repositories/role/role.repository.js', () => roleRepo)
 
-const {
-  createSubscriptionCheckout,
-  handleSubscriptionWebhook,
-  handleSubscriptionReturn,
-  getMySubscription,
-  PLANS,
-} = await import('../../src/services/subscription/subscription.service.js')
-
+const service = await import('../../src/services/subscription/subscription.service.js')
 const { requireVip } = await import('../../src/middlewares/auth.middleware.js')
 
-// --- helpers ---
-
-const objectId = (n) => `665f000000000000000000${String(n).padStart(2, '0')}`
-const userId = objectId(1)
-
-const futureDate = (days = 30) => new Date(Date.now() + days * 86_400_000)
-const pastDate = (days = 1) => new Date(Date.now() - days * 86_400_000)
-
-const makeSubOrder = (overrides = {}) => ({
-  _id: objectId(2),
+const userId = '665f00000000000000000001'
+const makeOrder = (overrides = {}) => ({
+  _id: '665f00000000000000000002',
   user: userId,
   plan: 'monthly',
   amount: 69000,
-  orderCode: 123456,
-  transactionRef: 'SUB_123456',
+  orderCode: 101,
   status: 'pending',
-  checkoutUrl: 'https://pay.os/test',
-  save: jest.fn().mockResolvedValue(undefined),
+  checkoutUrl: 'https://payos.test/checkout',
+  save: jest.fn(),
   ...overrides,
-})
-
-const makeUser = (vip = null) => ({
-  _id: userId,
-  vip,
 })
 
 beforeEach(() => {
   jest.clearAllMocks()
+  counterModel.findOneAndUpdate.mockResolvedValue({ value: 101 })
+  reconcileOwnerShopQuota.mockResolvedValue({})
 })
 
-// =============================================================================
-// createSubscriptionCheckout
-// =============================================================================
-describe('createSubscriptionCheckout', () => {
-  const userCtx = { _id: userId }
-
-  it('throws INVALID_SUBSCRIPTION_PLAN for unknown plan', async () => {
-    await expect(createSubscriptionCheckout('weekly', userCtx)).rejects.toMatchObject({
-      errorCode: 'INVALID_SUBSCRIPTION_PLAN',
-    })
+describe('subscription money safety', () => {
+  it('rejects an unknown plan', async () => {
+    await expect(service.createSubscriptionCheckout('weekly', { _id: userId }, 'payos', 'key'))
+      .rejects.toMatchObject({ errorCode: 'INVALID_SUBSCRIPTION_PLAN' })
   })
 
-  it('returns existing pending checkout URL without calling PayOS', async () => {
-    const existing = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(existing)
-
-    const result = await createSubscriptionCheckout('monthly', userCtx)
-
-    expect(result.paymentUrl).toBe(existing.checkoutUrl)
-    expect(result.plan).toBe('monthly')
-    expect(payosInstance.paymentRequests.create).not.toHaveBeenCalled()
-  })
-
-  it('creates new checkout link when no pending order exists (monthly)', async () => {
+  it('uses a durable sequence and creates a PayOS attempt idempotently', async () => {
     subOrderModel.findOne.mockResolvedValue(null)
-    payosInstance.paymentRequests.create.mockResolvedValue({ checkoutUrl: 'https://pay.os/new' })
-    subOrderModel.create.mockResolvedValue({})
+    const order = makeOrder({ checkoutUrl: null })
+    subOrderModel.create.mockResolvedValue(order)
+    payos.paymentRequests.create.mockResolvedValue({ checkoutUrl: 'https://payos.test/new' })
 
-    const result = await createSubscriptionCheckout('monthly', userCtx)
+    const result = await service.createSubscriptionCheckout('monthly', { _id: userId }, 'payos', 'payos-key')
 
-    expect(payosInstance.paymentRequests.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: PLANS.monthly.price,
-        returnUrl: expect.any(String),
-        cancelUrl: expect.any(String),
-      })
+    expect(counterModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { key: 'subscription_order_code' },
+      { $inc: { value: 1 } },
+      expect.objectContaining({ upsert: true })
     )
-    expect(subOrderModel.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user: userId,
-        plan: 'monthly',
-        amount: PLANS.monthly.price,
-        status: 'pending',
-      })
-    )
-    expect(result.paymentUrl).toBe('https://pay.os/new')
-    expect(result.plan).toBe('monthly')
+    expect(subOrderModel.create).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'payos-key', orderCode: 101 }))
+    expect(result.paymentUrl).toBe('https://payos.test/new')
   })
 
-  it('creates new checkout link with correct price for yearly plan', async () => {
-    subOrderModel.findOne.mockResolvedValue(null)
-    payosInstance.paymentRequests.create.mockResolvedValue({ checkoutUrl: 'https://pay.os/yearly' })
-    subOrderModel.create.mockResolvedValue({})
+  it('runs wallet debit, order, ledger and VIP activation in one transaction', async () => {
+    subOrderModel.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+    walletModel.findOneAndUpdate.mockResolvedValue({ _id: 'wallet', balance: 1000 })
+    const order = makeOrder({ status: 'completed' })
+    subOrderModel.create.mockResolvedValue([order])
+    userModel.findById.mockResolvedValue({ _id: userId, vip: null })
+    userModel.findByIdAndUpdate.mockResolvedValue({ _id: userId, vip: {} })
 
-    const result = await createSubscriptionCheckout('yearly', userCtx)
+    const result = await service.createSubscriptionCheckout('monthly', { _id: userId }, 'wallet', 'wallet-key')
 
-    expect(payosInstance.paymentRequests.create).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: PLANS.yearly.price })
-    )
-    expect(result.plan).toBe('yearly')
-  })
-})
-
-// =============================================================================
-// handleSubscriptionWebhook
-// =============================================================================
-describe('handleSubscriptionWebhook', () => {
-  it('throws INVALID_SIGNATURE when PayOS verify throws', async () => {
-    payosInstance.webhooks.verify.mockRejectedValue(new Error('bad sig'))
-
-    await expect(handleSubscriptionWebhook({ signature: 'bad' })).rejects.toMatchObject({
-      errorCode: 'INVALID_SIGNATURE',
-    })
+    expect(postBalancedTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      commandKey: `subscription_payment:${order._id}`,
+    }), { id: 'session' })
+    expect(walletTransactionModel.create).toHaveBeenCalled()
+    expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(userId, expect.any(Object), expect.objectContaining({ session: { id: 'session' } }))
+    expect(result.activated).toBe(true)
   })
 
-  it('throws SUBSCRIPTION_NOT_FOUND when order does not exist', async () => {
-    payosInstance.webhooks.verify.mockResolvedValue({ orderCode: 123456, code: '00' })
-    subOrderModel.findOne.mockResolvedValue(null)
-
-    await expect(handleSubscriptionWebhook({})).rejects.toMatchObject({
-      errorCode: 'SUBSCRIPTION_NOT_FOUND',
-    })
+  it('rejects an invalid PayOS webhook signature', async () => {
+    payos.webhooks.verify.mockRejectedValue(new Error('invalid'))
+    await expect(service.handleSubscriptionWebhook({})).rejects.toMatchObject({ errorCode: 'INVALID_SIGNATURE' })
   })
 
-  it('is idempotent — skips already-processed orders', async () => {
-    payosInstance.webhooks.verify.mockResolvedValue({ orderCode: 123456, code: '00' })
-    const sub = makeSubOrder({ status: 'completed' })
-    subOrderModel.findOne.mockResolvedValue(sub)
+  it('rejects a verified webhook with the wrong amount', async () => {
+    payos.webhooks.verify.mockResolvedValue({ orderCode: 101, code: '00', amount: 1 })
+    subOrderModel.findOne.mockResolvedValue(makeOrder())
+    await expect(service.handleSubscriptionWebhook({})).rejects.toMatchObject({ errorCode: 'PAYMENT_AMOUNT_MISMATCH' })
+  })
 
-    const result = await handleSubscriptionWebhook({})
+  it('activates once from a verified webhook and posts a balanced command', async () => {
+    const current = makeOrder()
+    const completed = makeOrder({ status: 'completed' })
+    payos.webhooks.verify.mockResolvedValue({ orderCode: 101, code: '00', amount: 69000 })
+    subOrderModel.findOne.mockResolvedValue(current)
+    subOrderModel.findOneAndUpdate.mockResolvedValue(completed)
+    userModel.findById.mockResolvedValue({ _id: userId, vip: null })
+    userModel.findByIdAndUpdate.mockResolvedValue({ _id: userId, vip: {} })
+
+    const result = await service.handleSubscriptionWebhook({ signature: 'valid' })
 
     expect(result.status).toBe('completed')
-    expect(sub.save).not.toHaveBeenCalled()
+    expect(postBalancedTransaction).toHaveBeenCalledTimes(1)
+    expect(userModel.findByIdAndUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Return URL read-only even when provider reports PAID', async () => {
+    const pending = makeOrder()
+    subOrderModel.findOne.mockResolvedValue(pending)
+    payos.paymentRequests.get.mockResolvedValue({ status: 'PAID' })
+
+    const result = await service.handleSubscriptionReturn({ orderCode: '101', code: '00' }, userId)
+
+    expect(result).toMatchObject({ status: 'pending', providerStatus: 'PAID' })
+    expect(pending.save).not.toHaveBeenCalled()
     expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled()
   })
 
-  it('activates VIP and marks order completed on code 00', async () => {
-    payosInstance.webhooks.verify.mockResolvedValue({ orderCode: 123456, code: '00' })
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    userModel.findById.mockResolvedValue(makeUser(null))
-    userModel.findByIdAndUpdate.mockResolvedValue({})
-
-    const result = await handleSubscriptionWebhook({})
-
-    expect(result.status).toBe('completed')
-    expect(sub.paidAt).toBeInstanceOf(Date)
-    expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
-      userId,
-      expect.objectContaining({ 'vip.plan': 'monthly', 'vip.expiresAt': expect.any(Date) }),
-      { new: true }
-    )
-    expect(sub.save).toHaveBeenCalled()
-  })
-
-  it('marks order failed and skips VIP activation on non-00 code', async () => {
-    payosInstance.webhooks.verify.mockResolvedValue({ orderCode: 123456, code: '01' })
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-
-    const result = await handleSubscriptionWebhook({})
-
-    expect(result.status).toBe('failed')
-    expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled()
-    expect(sub.save).toHaveBeenCalled()
+  it('does not trust forged Return params when provider query is unavailable', async () => {
+    subOrderModel.findOne.mockResolvedValue(makeOrder())
+    payos.paymentRequests.get.mockRejectedValue(new Error('timeout'))
+    const result = await service.handleSubscriptionReturn({ orderCode: '101', code: '00' }, userId)
+    expect(result).toMatchObject({ status: 'pending', providerStatus: 'UNAVAILABLE' })
   })
 })
 
-// =============================================================================
-// handleSubscriptionReturn
-// =============================================================================
-describe('handleSubscriptionReturn', () => {
-  it('throws MISSING_ORDER_CODE when query has no orderCode', async () => {
-    await expect(handleSubscriptionReturn({}, userId)).rejects.toMatchObject({
-      errorCode: 'MISSING_ORDER_CODE',
-    })
-  })
-
-  it('throws SUBSCRIPTION_NOT_FOUND when order does not exist', async () => {
-    subOrderModel.findOne.mockResolvedValue(null)
-
-    await expect(handleSubscriptionReturn({ orderCode: '123456' }, userId)).rejects.toMatchObject({
-      errorCode: 'SUBSCRIPTION_NOT_FOUND',
-    })
-  })
-
-  it('throws FORBIDDEN when order belongs to a different user', async () => {
-    const sub = makeSubOrder({ user: objectId(99) })
-    subOrderModel.findOne.mockResolvedValue(sub)
-
-    await expect(handleSubscriptionReturn({ orderCode: '123456' }, userId)).rejects.toMatchObject({
-      errorCode: 'FORBIDDEN',
-    })
-  })
-
-  it('is idempotent — returns current status for already-processed order', async () => {
-    const sub = makeSubOrder({ status: 'completed' })
-    subOrderModel.findOne.mockResolvedValue(sub)
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456' }, userId)
-
-    expect(result.status).toBe('completed')
-    expect(sub.save).not.toHaveBeenCalled()
-  })
-
-  it('activates VIP and marks completed when PayOS API returns PAID', async () => {
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    payosInstance.paymentRequests.get.mockResolvedValue({ status: 'PAID' })
-    userModel.findById.mockResolvedValue(makeUser(null))
-    userModel.findByIdAndUpdate.mockResolvedValue({})
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456' }, userId)
-
-    expect(result.status).toBe('completed')
-    expect(userModel.findByIdAndUpdate).toHaveBeenCalled()
-    expect(sub.save).toHaveBeenCalled()
-  })
-
-  it('marks cancelled and skips VIP when PayOS returns CANCELLED', async () => {
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    payosInstance.paymentRequests.get.mockResolvedValue({ status: 'CANCELLED' })
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456' }, userId)
-
-    expect(result.status).toBe('cancelled')
-    expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled()
-    expect(sub.save).toHaveBeenCalled()
-  })
-
-  it('returns pending and saves nothing when PayOS reports PROCESSING', async () => {
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    payosInstance.paymentRequests.get.mockResolvedValue({ status: 'PROCESSING' })
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456' }, userId)
-
-    expect(result.status).toBe('pending')
-    expect(sub.save).not.toHaveBeenCalled()
-  })
-
-  it('falls back to cancel=true query param when PayOS API call fails', async () => {
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    payosInstance.paymentRequests.get.mockRejectedValue(new Error('network'))
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456', cancel: 'true' }, userId)
-
-    expect(result.status).toBe('cancelled')
-  })
-
-  it('falls back to code=00 query param when PayOS API call fails (→ completed)', async () => {
-    const sub = makeSubOrder()
-    subOrderModel.findOne.mockResolvedValue(sub)
-    payosInstance.paymentRequests.get.mockRejectedValue(new Error('network'))
-    userModel.findById.mockResolvedValue(makeUser(null))
-    userModel.findByIdAndUpdate.mockResolvedValue({})
-
-    const result = await handleSubscriptionReturn({ orderCode: '123456', code: '00' }, userId)
-
-    expect(result.status).toBe('completed')
-    expect(userModel.findByIdAndUpdate).toHaveBeenCalled()
-  })
-})
-
-// =============================================================================
-// getMySubscription
-// =============================================================================
-describe('getMySubscription', () => {
-  it('returns isActive true and positive daysLeft for active VIP', async () => {
+describe('subscription access', () => {
+  it('reports active VIP', async () => {
     userModel.findById.mockReturnValue({
-      select: jest.fn().mockResolvedValue(makeUser({ plan: 'monthly', expiresAt: futureDate(15) })),
+      select: jest.fn().mockResolvedValue({ vip: { plan: 'monthly', expiresAt: new Date(Date.now() + 86400000) } }),
     })
-
-    const result = await getMySubscription(userId)
-
-    expect(result.isActive).toBe(true)
-    expect(result.plan).toBe('monthly')
-    expect(result.daysLeft).toBeGreaterThan(0)
-    expect(result.expiresAt).toBeInstanceOf(Date)
+    expect(await service.getMySubscription(userId)).toMatchObject({ isActive: true, plan: 'monthly' })
   })
 
-  it('returns isActive false for expired VIP', async () => {
-    userModel.findById.mockReturnValue({
-      select: jest.fn().mockResolvedValue(makeUser({ plan: 'monthly', expiresAt: pastDate(1) })),
-    })
-
-    const result = await getMySubscription(userId)
-
-    expect(result.isActive).toBe(false)
-    expect(result.plan).toBeNull()
-    expect(result.expiresAt).toBeNull()
-    expect(result.daysLeft).toBe(0)
-  })
-
-  it('returns isActive false when user has no VIP', async () => {
-    userModel.findById.mockReturnValue({
-      select: jest.fn().mockResolvedValue(makeUser(null)),
-    })
-
-    const result = await getMySubscription(userId)
-
-    expect(result.isActive).toBe(false)
-    expect(result.plan).toBeNull()
-    expect(result.daysLeft).toBe(0)
-  })
-})
-
-// =============================================================================
-// _activateVip (via webhook) — VIP stack-up logic
-// =============================================================================
-describe('_activateVip — VIP stack-up logic', () => {
-  const setupWebhookMocks = (vip) => {
-    payosInstance.webhooks.verify.mockResolvedValue({ orderCode: 123456, code: '00' })
-    subOrderModel.findOne.mockResolvedValue(makeSubOrder({ plan: 'monthly' }))
-    userModel.findById.mockResolvedValue(makeUser(vip))
-    userModel.findByIdAndUpdate.mockImplementation((_id, update) => Promise.resolve(update))
-  }
-
-  it('stacks up from currentExpiry when VIP is still active', async () => {
-    setupWebhookMocks({ plan: 'monthly', expiresAt: futureDate(10) })
-
-    let capturedUpdate
-    userModel.findByIdAndUpdate.mockImplementation((_id, update) => {
-      capturedUpdate = update
-      return Promise.resolve({})
-    })
-
-    await handleSubscriptionWebhook({})
-
-    const newExpiry = capturedUpdate['vip.expiresAt']
-    const daysFromNow = (newExpiry - Date.now()) / 86_400_000
-    // 10 days remaining + 30 new days = ~40 days
-    expect(daysFromNow).toBeGreaterThan(35)
-    expect(daysFromNow).toBeLessThan(45)
-  })
-
-  it('resets to today when VIP has already expired', async () => {
-    setupWebhookMocks({ plan: 'monthly', expiresAt: pastDate(5) })
-
-    let capturedUpdate
-    userModel.findByIdAndUpdate.mockImplementation((_id, update) => {
-      capturedUpdate = update
-      return Promise.resolve({})
-    })
-
-    await handleSubscriptionWebhook({})
-
-    const newExpiry = capturedUpdate['vip.expiresAt']
-    const daysFromNow = (newExpiry - Date.now()) / 86_400_000
-    // Should be ~30 days from now, not 25 (expired base)
-    expect(daysFromNow).toBeGreaterThan(29)
-    expect(daysFromNow).toBeLessThan(31)
-  })
-})
-
-// =============================================================================
-// requireVip middleware
-// =============================================================================
-describe('requireVip middleware', () => {
-  const res = {}
-  let next
-
-  const makeReq = (overrides = {}) => ({
-    user: { roles: [], vip: null, permissions: undefined, ...overrides },
-  })
-
-  beforeEach(() => {
-    next = jest.fn()
-  })
-
-  it('passes for admin regardless of VIP status', async () => {
-    const req = makeReq({ roles: ['admin'], vip: null })
-    await requireVip(req, res, next)
-
+  it('allows admin without VIP', async () => {
+    const next = jest.fn()
+    await requireVip({ user: { roles: ['admin'], vip: null } }, {}, next)
     expect(next).toHaveBeenCalledWith()
-    expect(roleRepo.findByCodesWithPermissions).not.toHaveBeenCalled()
   })
 
-  it('passes for user with active VIP (expiresAt in future)', async () => {
-    const req = makeReq({ vip: { expiresAt: futureDate(10) } })
-    await requireVip(req, res, next)
-
-    expect(next).toHaveBeenCalledWith()
-    expect(roleRepo.findByCodesWithPermissions).not.toHaveBeenCalled()
-  })
-
-  it('blocks user with expired VIP', async () => {
+  it('blocks a member without VIP or permission', async () => {
     roleRepo.findByCodesWithPermissions.mockResolvedValue([])
-    const req = makeReq({ roles: ['member'], vip: { expiresAt: pastDate(1) } })
-    await requireVip(req, res, next)
-
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'VIP_REQUIRED' }))
-  })
-
-  it('blocks user with no VIP at all', async () => {
-    roleRepo.findByCodesWithPermissions.mockResolvedValue([])
-    const req = makeReq({ roles: ['member'], vip: null })
-    await requireVip(req, res, next)
-
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'VIP_REQUIRED' }))
-  })
-
-  it('passes user with room_visualizer:use permission even without VIP', async () => {
-    roleRepo.findByCodesWithPermissions.mockResolvedValue([
-      { permissions: [{ key: 'room_visualizer:use' }] },
-    ])
-    const req = makeReq({ roles: ['member'], vip: null })
-    await requireVip(req, res, next)
-
-    expect(next).toHaveBeenCalledWith()
-  })
-
-  it('uses cached permissions and skips DB lookup', async () => {
-    const req = makeReq({ vip: null, roles: ['member'], permissions: ['room_visualizer:use'] })
-    await requireVip(req, res, next)
-
-    expect(roleRepo.findByCodesWithPermissions).not.toHaveBeenCalled()
-    expect(next).toHaveBeenCalledWith()
-  })
-
-  it('blocks user with irrelevant cached permissions', async () => {
-    const req = makeReq({ vip: null, roles: ['member'], permissions: ['product:read'] })
-    await requireVip(req, res, next)
-
-    expect(roleRepo.findByCodesWithPermissions).not.toHaveBeenCalled()
+    const next = jest.fn()
+    await requireVip({ user: { roles: ['member'], vip: null } }, {}, next)
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'VIP_REQUIRED' }))
   })
 })

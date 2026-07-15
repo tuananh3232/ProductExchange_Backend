@@ -9,18 +9,12 @@ import { createSampleCategory } from '../setup/factories.js'
 import Product, { PRODUCT_OWNER_TYPES } from '../../src/models/product.model.js'
 import UserWallet from '../../src/models/user-wallet.model.js'
 import UserWalletTransaction from '../../src/models/user-wallet-transaction.model.js'
-import LedgerTransaction from '../../src/models/ledger-transaction.model.js'
-import LedgerEntry from '../../src/models/ledger-entry.model.js'
-import PlatformWallet from '../../src/models/platform-wallet.model.js'
+import AccountingTransaction from '../../src/models/accounting-transaction.model.js'
+import AccountingEntry from '../../src/models/accounting-entry.model.js'
+import AccountingAccount from '../../src/models/accounting-account.model.js'
 import ExchangeOffer from '../../src/models/exchange-offer.model.js'
 import FeePolicy from '../../src/models/fee-policy.model.js'
 import { EXCHANGE_STATUS, FEE_POLICY_STATUS, PRODUCT_STATUS, USER_WALLET_TRANSACTION_TYPE } from '../../src/constants/status.constant.js'
-import {
-  LEDGER_ENTRY_DIRECTION,
-  LEDGER_REFERENCE_TYPE,
-  LEDGER_TRANSACTION_TYPE,
-  PLATFORM_WALLET_KEYS,
-} from '../../src/constants/ledger.constant.js'
 
 const api = env.apiPrefix
 
@@ -127,22 +121,15 @@ describe('exchange integration', () => {
     expect(payResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.PAID)
 
     const requesterWalletAfterHold = await UserWallet.findOne({ user: requester._id }).lean()
-    const holdTx = await LedgerTransaction.findOne({
-      referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-      referenceId: exchangeOfferId,
-      transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_PAYMENT_HOLD,
-    }).lean()
-    const clearingAfterHold = await PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean()
-    const holdEntries = await LedgerEntry.find({ ledgerTransaction: holdTx._id }).lean()
+    const holdTx = await AccountingTransaction.findOne({ commandKey: `exchange_hold:${exchangeOfferId}` }).lean()
+    const holdEntries = await AccountingEntry.find({ transaction: holdTx._id }).lean()
+    const escrowAfterHold = await AccountingAccount.findOne({ key: `exchange_escrow:${exchangeOfferId}` }).lean()
 
     expect(requesterWalletAfterHold.balance).toBe(680000)
-    expect(holdTx.grossAmount).toBe(320000)
-    expect(holdTx.platformFee).toBe(20000)
-    expect(holdTx.netSettlementAmount).toBe(300000)
-    expect(clearingAfterHold.balance).toBe(320000)
-    expect(holdEntries).toHaveLength(1)
-    expect(holdEntries[0].direction).toBe(LEDGER_ENTRY_DIRECTION.CREDIT)
-    expect(holdEntries[0].amount).toBe(320000)
+    expect(holdTx.amount).toBe(320000)
+    expect(escrowAfterHold.balance).toBe(320000)
+    expect(holdEntries).toHaveLength(2)
+    expect(holdEntries.reduce((sum, entry) => sum + (entry.direction === 'debit' ? entry.amount : -entry.amount), 0)).toBe(0)
 
     await request(app)
       .post(`${api}/exchanges/offers/${exchangeOfferId}/ship`)
@@ -162,34 +149,29 @@ describe('exchange integration', () => {
       .post(`${api}/exchanges/offers/${exchangeOfferId}/confirm-received`)
       .set('Authorization', `Bearer ${receiverToken}`)
 
-    expect(secondConfirmResponse.status).toBe(200)
+    expect({ status: secondConfirmResponse.status, body: secondConfirmResponse.body }).toMatchObject({ status: 200 })
     expect(secondConfirmResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.COMPLETED)
 
-    const [completedOffer, releaseTx, releaseEntries, requesterProductAfter, receiverProductAfter, revenueWallet, clearingWallet, receiverWallet, walletTransactions] =
+    const [completedOffer, releaseTx, releaseEntries, requesterProductAfter, receiverProductAfter, revenueAccount, escrowAccount, receiverWallet, walletTransactions] =
       await Promise.all([
         ExchangeOffer.findById(exchangeOfferId).lean(),
-        LedgerTransaction.findOne({
-          referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-          referenceId: exchangeOfferId,
-          transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_SETTLEMENT_RELEASE,
-        }).lean(),
-        LedgerEntry.find({}).lean(),
+        AccountingTransaction.findOne({ commandKey: `exchange_release:${exchangeOfferId}` }).lean(),
+        AccountingEntry.find({}).lean(),
         Product.findById(requesterProduct._id).lean(),
         Product.findById(receiverProduct._id).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
+        AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
+        AccountingAccount.findOne({ key: `exchange_escrow:${exchangeOfferId}` }).lean(),
         UserWallet.findOne({ user: receiver._id }).lean(),
         UserWalletTransaction.find({ user: { $in: [requester._id, receiver._id] } }).sort({ createdAt: 1 }).lean(),
       ])
 
-    const releaseEntriesForTx = releaseEntries.filter((entry) => String(entry.ledgerTransaction) === String(releaseTx._id))
+    const releaseEntriesForTx = releaseEntries.filter((entry) => String(entry.transaction) === String(releaseTx._id))
 
     expect(completedOffer.status).toBe(EXCHANGE_STATUS.COMPLETED)
-    expect(releaseTx.grossAmount).toBe(320000)
-    expect(releaseTx.platformFee).toBe(20000)
+    expect(releaseTx.amount).toBe(320000)
     expect(releaseEntriesForTx).toHaveLength(3)
-    expect(revenueWallet.balance).toBe(20000)
-    expect(clearingWallet.balance).toBe(0)
+    expect(revenueAccount.balance).toBe(20000)
+    expect(escrowAccount.balance).toBe(0)
     expect(receiverWallet.balance).toBe(350000)
     expect(requesterProductAfter.status).toBe(PRODUCT_STATUS.SOLD)
     expect(receiverProductAfter.status).toBe(PRODUCT_STATUS.SOLD)
@@ -241,26 +223,18 @@ describe('exchange integration', () => {
     expect(disputeResponse.status).toBe(200)
     expect(disputeResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.DISPUTED)
 
-    const [exchangeOffer, clearingWallet, revenueWallet, releaseTx, refundTx, receiverWallet] = await Promise.all([
+    const [exchangeOffer, escrowAccount, revenueAccount, releaseTx, refundTx, receiverWallet] = await Promise.all([
       ExchangeOffer.findById(exchangeOfferId).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
-      PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
-      LedgerTransaction.findOne({
-        referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-        referenceId: exchangeOfferId,
-        transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_SETTLEMENT_RELEASE,
-      }).lean(),
-      LedgerTransaction.findOne({
-        referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-        referenceId: exchangeOfferId,
-        transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_REFUND,
-      }).lean(),
+      AccountingAccount.findOne({ key: `exchange_escrow:${exchangeOfferId}` }).lean(),
+      AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
+      AccountingTransaction.findOne({ commandKey: `exchange_release:${exchangeOfferId}` }).lean(),
+      AccountingTransaction.findOne({ commandKey: `exchange_refund:${exchangeOfferId}` }).lean(),
       UserWallet.findOne({ user: receiver._id }).lean(),
     ])
 
     expect(exchangeOffer.status).toBe(EXCHANGE_STATUS.DISPUTED)
-    expect(clearingWallet.balance).toBe(320000)
-    expect(revenueWallet).toBeNull()
+    expect(escrowAccount.balance).toBe(320000)
+    expect(revenueAccount).toBeNull()
     expect(releaseTx).toBeNull()
     expect(refundTx).toBeNull()
     expect(receiverWallet.balance).toBe(120000)
@@ -312,27 +286,19 @@ describe('exchange integration', () => {
         note: 'Admin cancels exchange and refunds held amount',
       })
 
-    expect(resolveResponse.status).toBe(200)
+    expect({ status: resolveResponse.status, body: resolveResponse.body }).toMatchObject({ status: 200 })
     expect(resolveResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.CANCELLED)
     expect(resolveResponse.body.data.exchangeOffer.resolution).toBe('cancel_refund')
 
-    const [exchangeOffer, requesterWallet, receiverWallet, clearingWallet, revenueWallet, refundTx, releaseTx, requesterProductAfter, receiverProductAfter, walletTransactions] =
+    const [exchangeOffer, requesterWallet, receiverWallet, escrowAccount, revenueAccount, refundTx, releaseTx, requesterProductAfter, receiverProductAfter, walletTransactions] =
       await Promise.all([
         ExchangeOffer.findById(exchangeOfferId).lean(),
         UserWallet.findOne({ user: requester._id }).lean(),
         UserWallet.findOne({ user: receiver._id }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean(),
-        PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.REVENUE }).lean(),
-        LedgerTransaction.findOne({
-          referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-          referenceId: exchangeOfferId,
-          transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_REFUND,
-        }).lean(),
-        LedgerTransaction.findOne({
-          referenceType: LEDGER_REFERENCE_TYPE.EXCHANGE,
-          referenceId: exchangeOfferId,
-          transactionType: LEDGER_TRANSACTION_TYPE.EXCHANGE_SETTLEMENT_RELEASE,
-        }).lean(),
+        AccountingAccount.findOne({ key: `exchange_escrow:${exchangeOfferId}` }).lean(),
+        AccountingAccount.findOne({ key: 'platform_revenue:vnd' }).lean(),
+        AccountingTransaction.findOne({ commandKey: `exchange_refund:${exchangeOfferId}` }).lean(),
+        AccountingTransaction.findOne({ commandKey: `exchange_release:${exchangeOfferId}` }).lean(),
         Product.findById(requesterProduct._id).lean(),
         Product.findById(receiverProduct._id).lean(),
         UserWalletTransaction.find({ user: requester._id }).sort({ createdAt: 1 }).lean(),
@@ -342,9 +308,9 @@ describe('exchange integration', () => {
     expect(exchangeOffer.resolution).toBe('cancel_refund')
     expect(requesterWallet.balance).toBe(1000000)
     expect(receiverWallet.balance).toBe(150000)
-    expect(clearingWallet.balance).toBe(0)
-    expect(revenueWallet).toBeNull()
-    expect(refundTx?.grossAmount).toBe(320000)
+    expect(escrowAccount.balance).toBe(0)
+    expect(revenueAccount).toBeNull()
+    expect(refundTx?.amount).toBe(320000)
     expect(releaseTx).toBeNull()
     expect(requesterProductAfter.status).toBe(PRODUCT_STATUS.AVAILABLE)
     expect(receiverProductAfter.status).toBe(PRODUCT_STATUS.AVAILABLE)

@@ -1,6 +1,6 @@
 import WithdrawalRequest from '../../models/withdrawal-request.model.js'
 
-export const create = (data) => WithdrawalRequest.create(data)
+export const create = (data, options = {}) => WithdrawalRequest.create([data], options).then((documents) => documents[0])
 
 export const findById = (id) =>
   WithdrawalRequest.findById(id)
@@ -24,6 +24,12 @@ export const updateById = (id, data, options = {}) =>
     .populate('shop', 'name slug logo')
     .populate('requestedBy', 'name email')
     .populate('approvedBy', 'name email')
+
+export const transition = (id, currentStatuses, data, options = {}) => WithdrawalRequest.findOneAndUpdate(
+  { _id: id, status: { $in: currentStatuses } },
+  data,
+  { returnDocument: 'after', runValidators: true, ...options }
+)
 
 export const hasPendingRequest = (shopId) =>
   WithdrawalRequest.exists({ shop: shopId, status: 'pending' })

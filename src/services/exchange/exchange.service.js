@@ -22,6 +22,11 @@ import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/n
 import { notifySafely } from '../notification/notification.service.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
+import {
+  holdExchangePayment as holdExchangePaymentV1,
+  refundExchangeHold as refundExchangeHoldV1,
+  releaseExchangeSettlement as releaseExchangeSettlementV1,
+} from './exchange-money.service.js'
 
 const EXCHANGE_LIST_POPULATE = [
   { path: 'requesterSeller', select: 'name email avatar' },
@@ -55,7 +60,7 @@ const mutatePlatformWallet = async (walletKey, direction, amount) => {
   return PlatformWallet.findOneAndUpdate(
     { walletKey },
     { $inc: inc },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   )
 }
 
@@ -457,6 +462,9 @@ const refundExchangeHold = async (exchangeOffer, reason, actorUserId = null) => 
   return refundTx
 }
 
+// Kept only to read and reconcile historical single-entry exchange records.
+void [holdExchangePayment, releaseExchangeSettlement, refundExchangeHold]
+
 const mapOfferPayload = async ({ requesterProductId, receiverProductId, note, currentUserId, ignoreExchangeId = null }) => {
   const eligibility = await getExchangeEligibility({
     requesterProductId,
@@ -674,7 +682,7 @@ export const payExchangeDifference = async (exchangeOfferId, userContext) => {
   }
 
   const amountDue = exchangeOffer.cashDifferenceAmount + exchangeOffer.platformFee
-  await holdExchangePayment(exchangeOffer, userContext._id, amountDue)
+  await holdExchangePaymentV1(exchangeOffer, userContext._id, amountDue)
 
   exchangeOffer.status = EXCHANGE_STATUS.PAID
   exchangeOffer.paidAt = new Date()
@@ -727,7 +735,7 @@ export const confirmExchangeReceived = async (exchangeOfferId, userContext) => {
   }
 
   if (exchangeOffer.requesterReceivedAt && exchangeOffer.receiverReceivedAt) {
-    await releaseExchangeSettlement(exchangeOffer)
+    await releaseExchangeSettlementV1(exchangeOffer)
     exchangeOffer.status = EXCHANGE_STATUS.COMPLETED
     exchangeOffer.completedAt = new Date()
   }
@@ -753,7 +761,7 @@ export const cancelExchangeOffer = async (exchangeOfferId, payload, userContext)
   assertStatusIn(exchangeOffer, [EXCHANGE_STATUS.PENDING_ACCEPTANCE, EXCHANGE_STATUS.ACCEPTED, EXCHANGE_STATUS.PAID])
 
   if (exchangeOffer.paidAt) {
-    await refundExchangeHold(exchangeOffer, payload.reason || payload.note || 'Exchange cancelled', userContext._id)
+    await refundExchangeHoldV1(exchangeOffer, payload.reason || payload.note || 'Exchange cancelled', userContext._id)
   }
 
   exchangeOffer.status = EXCHANGE_STATUS.CANCELLED
@@ -830,7 +838,7 @@ export const resolveAdminExchangeDispute = async (exchangeOfferId, payload, user
   assertStatusIn(exchangeOffer, [EXCHANGE_STATUS.DISPUTED])
 
   if (payload.resolution === 'complete') {
-    await releaseExchangeSettlement(exchangeOffer, userContext._id)
+    await releaseExchangeSettlementV1(exchangeOffer, userContext._id)
     exchangeOffer.status = EXCHANGE_STATUS.COMPLETED
     exchangeOffer.completedAt = new Date()
     await Promise.all([
@@ -838,7 +846,7 @@ export const resolveAdminExchangeDispute = async (exchangeOfferId, payload, user
       Product.findByIdAndUpdate(exchangeOffer.receiverProduct, { status: 'sold' }),
     ])
   } else {
-    await refundExchangeHold(exchangeOffer, payload.note || 'Admin resolved dispute with cancel/refund', userContext._id)
+    await refundExchangeHoldV1(exchangeOffer, payload.note || 'Admin resolved dispute with cancel/refund', userContext._id)
     exchangeOffer.status = EXCHANGE_STATUS.CANCELLED
     exchangeOffer.cancelledAt = new Date()
   }

@@ -59,17 +59,17 @@ export const refundFromExchange = (userId, amount, options = {}) =>
   )
 
 // atomic deduct: chỉ thành công khi balance >= amount
-export const deductForWithdrawal = (userId, amount) =>
+export const deductForWithdrawal = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId, balance: { $gte: amount } },
     { $inc: { balance: -amount, pendingBalance: amount } },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
 // hoàn tiền khi withdrawal bị reject
 export const revertWithdrawal = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
-    { user: userId },
+    { user: userId, pendingBalance: { $gte: amount } },
     { $inc: { balance: amount, pendingBalance: -amount } },
     { returnDocument: 'after', ...options }
   )
@@ -77,7 +77,7 @@ export const revertWithdrawal = (userId, amount, options = {}) =>
 // finalize khi withdrawal hoàn tất
 export const completeWithdrawal = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
-    { user: userId },
+    { user: userId, pendingBalance: { $gte: amount } },
     { $inc: { pendingBalance: -amount, totalWithdrawn: amount } },
     { returnDocument: 'after', ...options }
   )
@@ -138,7 +138,7 @@ export const countTopups = (filter) => UserWalletTopup.countDocuments(filter)
 
 // ─── User Wallet Withdrawal ───────────────────────────────────────────────────
 
-export const createWithdrawal = (data) => UserWalletWithdrawal.create(data)
+export const createWithdrawal = (data, options = {}) => UserWalletWithdrawal.create([data], options).then((documents) => documents[0])
 
 export const findWithdrawalById = (id) =>
   UserWalletWithdrawal.findById(id)
@@ -162,6 +162,12 @@ export const updateWithdrawalById = (id, data, options = {}) =>
     .populate('user', 'name email')
     .populate('approvedBy', 'name email')
     .populate('completedBy', 'name email')
+
+export const transitionWithdrawal = (id, currentStatuses, data, options = {}) => UserWalletWithdrawal.findOneAndUpdate(
+  { _id: id, status: { $in: currentStatuses } },
+  data,
+  { returnDocument: 'after', runValidators: true, ...options }
+)
 
 export const hasPendingWithdrawal = (userId) =>
   UserWalletWithdrawal.exists({ user: userId, status: WITHDRAWAL_STATUS.PENDING })

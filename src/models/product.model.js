@@ -13,6 +13,18 @@ export const PRODUCT_TRANSACTION_MODES = {
   EXCHANGE: 'exchange',
 }
 
+const productVariantSchema = new mongoose.Schema(
+  {
+    sku: { type: String, required: true, trim: true, uppercase: true },
+    attributes: { type: Map, of: String, default: {} },
+    price: { type: Number, required: true, min: 0 },
+    stockOnHand: { type: Number, required: true, min: 0, default: 0 },
+    reservedStock: { type: Number, required: true, min: 0, default: 0 },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+)
+
 const productSchema = new mongoose.Schema(
   {
     title: {
@@ -35,6 +47,10 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 1,
       min: [0, 'Stock must not be negative'],
+    },
+    variants: {
+      type: [productVariantSchema],
+      default: [],
     },
     listingType: {
       type: String,
@@ -192,6 +208,17 @@ const productSchema = new mongoose.Schema(
 )
 
 productSchema.pre('validate', function () {
+  if (!this.variants?.length && this.transactionMode === PRODUCT_TRANSACTION_MODES.SELL) {
+    this.variants = [{
+      sku: `DEFAULT-${String(this._id).slice(-12)}`,
+      attributes: { version: 'default' },
+      price: Math.round(Number(this.price || 0)),
+      stockOnHand: Number(this.stock || 0),
+      reservedStock: 0,
+      isActive: true,
+    }]
+  }
+
   if (!this.ownerType) {
     this.ownerType = this.shop ? PRODUCT_OWNER_TYPES.SHOP : PRODUCT_OWNER_TYPES.SELLER
   }
@@ -218,5 +245,6 @@ productSchema.index({ transactionMode: 1, status: 1 })
 productSchema.index({ createdAt: -1 })
 productSchema.index({ 'rating.average': -1 })
 productSchema.index({ isActive: 1, status: 1, stock: 1, decorRole: 1, price: 1 })
+productSchema.index({ 'variants.sku': 1 }, { unique: true, sparse: true })
 
 export default mongoose.model('Product', productSchema)

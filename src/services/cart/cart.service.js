@@ -1,29 +1,37 @@
-import crypto from 'crypto'
 import Product from '../../models/product.model.js'
 import Cart from '../../models/cart.model.js'
 import User from '../../models/user.model.js'
-import Order from '../../models/order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
-import { ORDER_STATUS, PAYMENT_STATUS } from '../../constants/status.constant.js'
-import * as orderService from '../order/order.service.js'
-import * as paymentService from '../payment/payment.service.js'
-import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import { createCheckout } from '../checkout/checkout.service.js'
+import { createPaymentAttempt } from '../payment/payment-attempt.service.js'
 
 const mergeItems = (items) => {
   const quantities = new Map()
   for (const item of items) {
-    quantities.set(item.productId, (quantities.get(item.productId) || 0) + item.quantity)
+    const key = `${item.productId}:${item.variantId || ''}`
+    const current = quantities.get(key) || { ...item, quantity: 0 }
+    current.quantity += item.quantity
+    quantities.set(key, current)
   }
-  return [...quantities.entries()].map(([productId, quantity]) => ({ productId, quantity }))
+  return [...quantities.values()]
 }
 
-const getUnavailableReason = (product, quantity) => {
+const resolveVariant = (product, variantId = null) => {
+  const variants = (product?.variants || []).filter((variant) => variant.isActive)
+  if (variantId) return variants.find((variant) => String(variant._id) === String(variantId)) || null
+  return variants.length === 1 ? variants[0] : null
+}
+
+const getUnavailableReason = (product, quantity, variantId = null) => {
   if (!product) return 'product_not_found'
   if (!product.isActive || product.status !== 'available') return 'inactive'
-  if (product.stock <= 0) return 'out_of_stock'
-  if (product.stock < quantity) return 'insufficient_stock'
+  const variant = resolveVariant(product, variantId)
+  if (!variant) return 'variant_required'
+  const availableStock = Number(variant.stockOnHand) - Number(variant.reservedStock)
+  if (availableStock <= 0) return 'out_of_stock'
+  if (availableStock < quantity) return 'insufficient_stock'
   return null
 }
 
@@ -38,6 +46,7 @@ const formatCart = (cart) => {
       return {
         productId: productIdOf(item),
         product: item.product,
+        variantId: item.variantId,
         quantity,
         unitPrice,
         subtotal: unitPrice * quantity,
@@ -56,7 +65,7 @@ const getOrCreateCart = async (userId) => (await Cart.findOne({ user: userId }))
 const populateCart = (cart) =>
   cart.populate({
     path: 'items.product',
-    select: 'title price stock status isActive images owner ownerType shop seller category listingType transactionMode',
+    select: 'title price stock variants status isActive images owner ownerType shop seller category listingType transactionMode',
     populate: [
       { path: 'shop', select: 'name' },
       { path: 'category', select: 'name' },
@@ -65,8 +74,8 @@ const populateCart = (cart) =>
     ],
   })
 
-const assertProductAvailableForQuantity = (product, quantity) => {
-  const reason = getUnavailableReason(product, quantity)
+const assertProductAvailableForQuantity = (product, quantity, variantId = null) => {
+  const reason = getUnavailableReason(product, quantity, variantId)
   if (reason === 'product_not_found') {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
@@ -75,8 +84,8 @@ const assertProductAvailableForQuantity = (product, quantity) => {
   }
 }
 
-const assertProductCheckoutable = (product, quantity, userId) => {
-  assertProductAvailableForQuantity(product, quantity)
+const assertProductCheckoutable = (product, quantity, userId, variantId = null) => {
+  assertProductAvailableForQuantity(product, quantity, variantId)
 
   if ((product.transactionMode || 'sell') !== 'sell') {
     throw new AppError('Sản phẩm này không hỗ trợ đặt mua', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PRODUCT_NOT_SELLABLE)
@@ -100,23 +109,31 @@ export const addCombo = async (userId, items) => {
   const products = await Product.find({ _id: { $in: mergedItems.map((item) => item.productId) } })
   const productById = new Map(products.map((product) => [product._id.toString(), product]))
   const cart = await getOrCreateCart(userId)
-  const existingQuantities = new Map(cart.items.map((item) => [item.product.toString(), item.quantity]))
+  const existingQuantities = new Map(cart.items.map((item) => [
+    `${item.product}:${item.variantId || ''}`,
+    item.quantity,
+  ]))
 
-  const errors = mergedItems.flatMap(({ productId, quantity }) => {
+  const errors = mergedItems.flatMap(({ productId, variantId, quantity }) => {
     const product = productById.get(productId)
-    const reason = getUnavailableReason(product, quantity + (existingQuantities.get(productId) || 0))
-    return reason ? [{ productId, reason }] : []
+    const resolvedVariant = resolveVariant(product, variantId)
+    const key = `${productId}:${resolvedVariant?._id || variantId || ''}`
+    const reason = getUnavailableReason(product, quantity + (existingQuantities.get(key) || 0), variantId)
+    return reason ? [{ productId, variantId: variantId || null, reason }] : []
   })
   if (errors.length) return { errors }
 
-  for (const { productId, quantity } of mergedItems) {
+  for (const { productId, variantId, quantity } of mergedItems) {
     const product = productById.get(productId)
-    const existingItem = cart.items.find((item) => item.product.toString() === productId)
+    const variant = resolveVariant(product, variantId)
+    const existingItem = cart.items.find((item) =>
+      item.product.toString() === productId && String(item.variantId || '') === String(variant._id)
+    )
     if (existingItem) {
       existingItem.quantity += quantity
-      existingItem.unitPrice = product.price
+      existingItem.unitPrice = variant.price
     } else {
-      cart.items.push({ product: product._id, quantity, unitPrice: product.price })
+      cart.items.push({ product: product._id, variantId: variant._id, quantity, unitPrice: variant.price })
     }
   }
 
@@ -138,11 +155,11 @@ export const updateCartItem = async (userId, productId, quantity) => {
     throw new AppError('Sản phẩm không có trong giỏ hàng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
   }
 
-  const product = await Product.findById(productId).select('_id price stock status isActive')
-  assertProductAvailableForQuantity(product, quantity)
+  const product = await Product.findById(productId).select('_id price stock variants status isActive')
+  assertProductAvailableForQuantity(product, quantity, item.variantId)
 
   item.quantity = quantity
-  item.unitPrice = product.price
+  item.unitPrice = resolveVariant(product, item.variantId).price
   await cart.save()
   await populateCart(cart)
   return formatCart(cart)
@@ -180,113 +197,79 @@ const getCheckoutItems = (cart, selectedProductIds) => {
 }
 
 const getShippingAddress = async (userId) => {
-  const user = await User.findById(userId).select('address')
-  return user?.address || {}
+  const user = await User.findById(userId).select('name phone address')
+  const address = user?.address || {}
+  if (!user?.name || !user?.phone || !address.province || !address.district || !address.detail) {
+    throw new AppError(
+      'Vui lòng cập nhật đầy đủ người nhận, số điện thoại và địa chỉ trước khi checkout',
+      HTTP_STATUS.BAD_REQUEST,
+      'SHIPPING_ADDRESS_INCOMPLETE'
+    )
+  }
+  return {
+    recipientName: user.name,
+    phone: user.phone,
+    province: address.province,
+    district: address.district,
+    detail: address.detail,
+  }
 }
 
-const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext, req) => {
-  if (!paymentMethod) return { paymentUrl: null, payment: null }
-
-  if (paymentMethod === 'PAYOS') {
-    return paymentService.createPayosPayment(orderId, userContext)
-  }
-
-  if (paymentMethod === 'VNPAY') {
-    return paymentService.createVnpayPayment(orderId, userContext, req)
-  }
-
-  if (paymentMethod === 'WALLET') {
-    const walletResult = await userWalletService.payOrderWithWallet(orderId, userContext)
-    return { paymentUrl: null, payment: walletResult.transaction }
-  }
-
-  return { paymentUrl: null, payment: null }
-}
-
-const toCheckoutOrder = (order) => ({
-  id: order._id?.toString?.() || order.id,
-  status: order.status,
-  paymentStatus: order.paymentStatus,
-  totalAmount: order.totalAmount,
-  productId: order.product?._id?.toString?.() || order.product?.toString?.(),
-})
-
-export const checkoutCart = async (userId, payload = {}, userContext, req) => {
+export const checkoutCart = async (userId, payload = {}, _userContext, req) => {
   const cart = await getOrCreateCart(userId)
   if (!cart.items.length) {
-    throw new AppError('Gio hang dang trong', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
+    throw new AppError('Giỏ hàng đang trống', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   const checkoutItems = getCheckoutItems(cart, payload.selectedProductIds)
   const productIds = checkoutItems.map((item) => item.product.toString())
-  const products = await Product.find({ _id: { $in: productIds } }).select('_id price stock status isActive owner ownerType shop seller listingType transactionMode')
+  const products = await Product.find({ _id: { $in: productIds } }).select('_id price stock variants status isActive owner ownerType shop seller listingType transactionMode')
   const productById = new Map(products.map((product) => [product._id.toString(), product]))
 
   for (const item of checkoutItems) {
     const product = productById.get(item.product.toString())
-    assertProductCheckoutable(product, item.quantity, userId)
+    assertProductCheckoutable(product, item.quantity, userId, item.variantId)
   }
 
   const shippingAddress = await getShippingAddress(userId)
-  const createdOrders = []
-  for (const item of checkoutItems) {
-    const order = await orderService.createOrder(userId, {
+  const idempotencyKey = req.get('idempotency-key')
+  const checkout = await createCheckout({
+    buyerId: userId,
+    idempotencyKey,
+    items: checkoutItems.map((item) => ({
       productId: item.product.toString(),
+      variantId: item.variantId || undefined,
       quantity: item.quantity,
-      shippingAddress,
-      note: '',
+    })),
+    shippingAddress,
+    cartId: cart._id,
+    cartProductIds: productIds,
+  })
+
+  const provider = payload.paymentMethod?.toLowerCase?.()
+  const payment = provider
+    ? await createPaymentAttempt({
+      checkoutId: checkout._id,
+      buyerId: userId,
+      provider,
+      idempotencyKey: `${idempotencyKey}:payment`,
+      clientIp: '127.0.0.1',
     })
-    createdOrders.push(order)
-  }
+    : null
 
-  let paymentUrl = null
-  let payment = null
-  const paymentMethod = payload.paymentMethod?.toUpperCase?.()
-
-  if (paymentMethod && createdOrders.length === 1) {
-    const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext, req)
-    paymentUrl = paymentResult.paymentUrl || null
-    payment = paymentResult.payment || null
-    if (paymentMethod === 'WALLET') {
-      createdOrders[0].paymentStatus = PAYMENT_STATUS.PAID
-    }
-  }
-
-  if (paymentMethod && createdOrders.length > 1) {
-    await Promise.all(
-      createdOrders.map((order) =>
-        Order.findByIdAndUpdate(order._id, {
-          paymentMethod: paymentMethod.toLowerCase(),
-          paymentProvider: paymentMethod.toLowerCase(),
-          paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
-        })
-      )
-    )
-    createdOrders.forEach((order) => {
-      order.paymentMethod = paymentMethod.toLowerCase()
-      order.paymentProvider = paymentMethod.toLowerCase()
-      order.paymentStatus = PAYMENT_STATUS.PENDING_PAYMENT
-    })
-  }
-
-  const checkedOutProductIds = new Set(productIds)
-  cart.items = cart.items.filter((item) => !checkedOutProductIds.has(item.product.toString()))
-  await cart.save()
-  await populateCart(cart)
-
+  const refreshedCart = await Cart.findById(cart._id)
+  await populateCart(refreshedCart)
   return {
-    checkoutId: `chk_${crypto.randomUUID()}`,
-    orders: createdOrders.map(toCheckoutOrder),
-    paymentUrl,
+    checkoutId: checkout._id,
+    orders: checkout.orders,
+    paymentUrl: payment?.checkoutUrl || null,
     payment,
-    cart: formatCart(cart),
+    reservationExpiresAt: checkout.expiresAt,
+    cart: formatCart(refreshedCart),
     summary: {
       totalItems: checkoutItems.reduce((total, item) => total + item.quantity, 0),
-      subtotal: checkoutItems.reduce((total, item) => {
-        const product = productById.get(item.product.toString())
-        return total + Number(product.price) * Number(item.quantity)
-      }, 0),
-      status: createdOrders.every((order) => order.status === ORDER_STATUS.PENDING) ? ORDER_STATUS.PENDING : null,
+      subtotal: checkout.amount.subtotal,
+      status: checkout.status,
     },
   }
 }
