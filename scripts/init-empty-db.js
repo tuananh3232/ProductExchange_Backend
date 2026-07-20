@@ -4,6 +4,7 @@ import { connectDB, disconnectDB } from '../src/configs/database.config.js';
 import User from '../src/models/user.model.js';
 import { ROLES } from '../src/constants/role.constant.js';
 import { ensureRbacSeedData } from '../src/services/rbac/rbac-seed.service.js';
+import { ensureDefaultCategories } from '../src/services/category/category-seed.service.js';
 
 import '../src/models/cart.model.js';
 import '../src/models/category.model.js';
@@ -92,11 +93,13 @@ const main = async () => {
       await ensureRbacSeedData();
     }
 
+    const categorySeedResult = await ensureDefaultCategories();
     const admin = await upsertAdmin();
 
     console.log(`Database: ${mongoose.connection.name}`);
     console.log(`Collections ready: ${collections.length}`);
     console.log(`RBAC seed: ${SKIP_RBAC ? 'skipped' : 'created/updated'}`);
+    console.log(`Default categories: ${categorySeedResult.skipped ? 'already available' : 'created/updated'}`);
     console.log(`Admin email: ${admin.email}`);
     console.log('Admin password: 123456');
   } finally {
