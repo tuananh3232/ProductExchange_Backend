@@ -13,6 +13,7 @@ import { errorHandler } from './middlewares/error.middleware.js'
 import { apiRateLimit } from './middlewares/rate-limit.middleware.js'
 import router from './routes/index.js'
 import { ensureRbacSeedData } from './services/rbac/rbac-seed.service.js'
+import { ensureDefaultCategories } from './services/category/category-seed.service.js'
 import { initChatSocket } from './sockets/chat.socket.js'
 import { getSocketServer } from './sockets/socket-hub.js'
 import { startSchedulers, stopSchedulers } from './jobs/scheduler.js'
@@ -70,6 +71,15 @@ if (!isTestRuntime) {
       await ensureRbacSeedData()
     } catch (error) {
       console.error('RBAC seed failed:', error.message)
+    }
+
+    try {
+      const categorySeedResult = await ensureDefaultCategories()
+      if (!categorySeedResult.skipped) {
+        console.log(`Default categories ready: ${categorySeedResult.upsertedCount} created, ${categorySeedResult.modifiedCount} reactivated`)
+      }
+    } catch (error) {
+      console.error('Default category seed failed:', error.message)
     }
 
     startSchedulers()
