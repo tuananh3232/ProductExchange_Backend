@@ -109,12 +109,23 @@ describe('admin audit, report, and notification flows', () => {
       .query({ type: 'users', fromDate: '2020-01-01', toDate: '2020-01-31' })
       .set('Authorization', `Bearer ${token}`)
 
+    const today = new Date().toISOString().slice(0, 10)
+    const previewResponse = await request(app)
+      .get(`${api}/admin/reports/preview`)
+      .query({ type: 'users', fromDate: today, toDate: today, page: 1, limit: 20 })
+      .set('Authorization', `Bearer ${token}`)
+
     expect(invalidResponse.status).toBe(400)
     expect(validResponse.status).toBe(200)
     expect(validResponse.headers['content-type']).toContain('text/csv')
     expect(validResponse.text).toContain('id,name,email,roles,isActive,createdAt')
     expect(validResponse.text).not.toContain('999999999999')
     expect(validResponse.text).not.toContain('idNumber')
+    expect(previewResponse.status).toBe(200)
+    expect(previewResponse.body.data.columns).toEqual(['id', 'name', 'email', 'roles', 'isActive', 'createdAt'])
+    expect(previewResponse.body.data.rows.some((row) => row.email === 'report-user@example.com')).toBe(true)
+    expect(JSON.stringify(previewResponse.body)).not.toContain('999999999999')
+    expect(previewResponse.body.meta.pagination.total).toBeGreaterThan(0)
   })
 
   it('creates admin notifications and records RBAC audit events', async () => {

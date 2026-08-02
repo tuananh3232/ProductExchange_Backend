@@ -38,7 +38,13 @@ const paymentAttemptSchema = new mongoose.Schema(
 
 paymentAttemptSchema.index({ buyer: 1, idempotencyKey: 1 }, { unique: true })
 paymentAttemptSchema.index({ provider: 1, merchantReference: 1 }, { unique: true })
-paymentAttemptSchema.index({ provider: 1, providerReference: 1 }, { unique: true, sparse: true })
-paymentAttemptSchema.index({ provider: 1, providerOrderCode: 1 }, { unique: true, sparse: true })
+paymentAttemptSchema.index(
+  { provider: 1, providerReference: 1 },
+  { unique: true, partialFilterExpression: { providerReference: { $type: 'string' } } }
+)
+paymentAttemptSchema.index(
+  { provider: 1, providerOrderCode: 1 },
+  { unique: true, partialFilterExpression: { providerOrderCode: { $type: 'number' } } }
+)
 
 export default mongoose.model('PaymentAttempt', paymentAttemptSchema)

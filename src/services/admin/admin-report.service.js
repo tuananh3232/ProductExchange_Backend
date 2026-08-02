@@ -14,6 +14,7 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 const MAX_EXPORT_DAYS = 31
 const MAX_EXPORT_ROWS = 500
+const MAX_PREVIEW_ROWS = 50
 
 const parseDate = (value, label) => {
   const parsed = new Date(value)
@@ -189,25 +190,64 @@ const exportConfig = {
   },
 }
 
-export const exportAdminReport = async ({ type, fromDate, toDate }) => {
+const getReportConfig = (type) => {
   const config = exportConfig[type]
   if (!config) {
     throw new AppError('Loại báo cáo không hợp lệ', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
+  return config
+}
 
+const buildReportFilter = ({ type, fromDate, toDate }) => {
   const filter = buildDateRange({ fromDate, toDate, requireRange: true })
   if (type === 'exchange_disputes') {
-    filter.disputeOpenedAt = filter.createdAt
+    filter.disputeOpenedAt = { ...filter.createdAt, $exists: true }
     delete filter.createdAt
-    filter.disputeOpenedAt = {
-      ...filter.disputeOpenedAt,
-      $exists: true,
-    }
   }
+  if (type === 'rental_claims') filter.ownerType = { $in: ['SELLER', 'SHOP'] }
+  return filter
+}
 
-  if (type === 'rental_claims') {
-    filter.ownerType = { $in: ['SELLER', 'SHOP'] }
+const serializePreviewValue = (value) => {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) return value.toISOString()
+  if (value?._bsontype === 'ObjectId') return value.toString()
+  if (typeof value === 'object') return JSON.stringify(value)
+  return value
+}
+
+export const previewAdminReport = async ({ type, fromDate, toDate, page = 1, limit = 20 }) => {
+  const config = getReportConfig(type)
+  const filter = buildReportFilter({ type, fromDate, toDate })
+  const safePage = Math.max(1, Number.parseInt(page, 10) || 1)
+  const safeLimit = Math.min(MAX_PREVIEW_ROWS, Math.max(1, Number.parseInt(limit, 10) || 20))
+  const [records, total] = await Promise.all([
+    config.model.find(filter).sort({ createdAt: -1 }).skip((safePage - 1) * safeLimit).limit(safeLimit).lean(),
+    config.model.countDocuments(filter),
+  ])
+  const rows = records.map((record) => Object.fromEntries(
+    config.columns.map((column) => [column.header, serializePreviewValue(column.value(record))]),
+  ))
+  return {
+    columns: config.columns.map((column) => column.header),
+    rows,
+    meta: {
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+        hasNextPage: safePage * safeLimit < total,
+        hasPrevPage: safePage > 1,
+      },
+      exportMaxRows: MAX_EXPORT_ROWS,
+    },
   }
+}
+
+export const exportAdminReport = async ({ type, fromDate, toDate }) => {
+  const config = getReportConfig(type)
+  const filter = buildReportFilter({ type, fromDate, toDate })
 
   const rows = await config.model.find(filter).sort({ createdAt: -1 }).limit(MAX_EXPORT_ROWS).lean()
 

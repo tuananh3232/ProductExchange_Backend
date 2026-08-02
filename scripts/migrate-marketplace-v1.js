@@ -18,7 +18,7 @@ import Counter from '../src/models/counter.model.js'
 
 const apply = process.argv.includes('--apply')
 const dryRun = process.argv.includes('--dry-run') || !apply
-if (dryRun) mongoose.set('autoIndex', false)
+mongoose.set('autoIndex', false)
 const checkpointCollection = () => mongoose.connection.collection('migration_checkpoints')
 const stats = { products: 0, orders: 0, payments: 0, subscriptions: 0, rentalSlots: 0, visualizerRecords: 0, accounts: 0, manualReconciliation: 0 }
 
@@ -217,6 +217,43 @@ const migrateTopupActivityIndex = async () => {
   )
 }
 
+const migratePaymentAttemptIndexes = async () => {
+  if (dryRun) return
+  const collection = mongoose.connection.collection('paymentattempts')
+  let indexes = []
+  try {
+    indexes = await collection.indexes()
+  } catch (error) {
+    if (error?.codeName !== 'NamespaceNotFound') throw error
+  }
+
+  const definitions = [
+    {
+      name: 'provider_1_providerReference_1',
+      key: { provider: 1, providerReference: 1 },
+      partialFilterExpression: { providerReference: { $type: 'string' } },
+    },
+    {
+      name: 'provider_1_providerOrderCode_1',
+      key: { provider: 1, providerOrderCode: 1 },
+      partialFilterExpression: { providerOrderCode: { $type: 'number' } },
+    },
+  ]
+
+  for (const definition of definitions) {
+    const existing = indexes.find((index) => index.name === definition.name)
+    const isCompatible = existing && JSON.stringify(existing.partialFilterExpression) === JSON.stringify(definition.partialFilterExpression)
+    if (existing && !isCompatible) await collection.dropIndex(existing.name)
+    if (!isCompatible) {
+      await collection.createIndex(definition.key, {
+        name: definition.name,
+        unique: true,
+        partialFilterExpression: definition.partialFilterExpression,
+      })
+    }
+  }
+}
+
 const main = async () => {
   await connectDB()
   if (apply && process.env.MIGRATION_BACKUP_CONFIRMED !== 'true') {
@@ -226,6 +263,7 @@ const main = async () => {
   if (previous?.status === 'completed' && apply) throw new Error('Migration marketplace-v1 đã hoàn tất trước đó')
   await migrateProducts()
   await migrateOrders()
+  await migratePaymentAttemptIndexes()
   await migratePayments()
   await migrateSubscriptions()
   await migrateRentalSlots()

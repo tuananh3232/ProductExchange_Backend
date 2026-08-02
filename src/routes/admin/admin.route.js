@@ -40,6 +40,7 @@ import {
   adminNotificationCreateSchema,
   adminNotificationQuerySchema,
   adminReportExportQuerySchema,
+  adminReportPreviewQuerySchema,
   adminPaymentReconcileSchema,
   adminPaymentStatusSchema,
   adminProductStatusSchema,
@@ -193,6 +194,14 @@ router.get(
  *       200:
  *         description: Xuat bao cao thanh cong
  */
+router.get(
+  '/reports/preview',
+  authenticate,
+  requireAdmin,
+  validate(adminReportPreviewQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST),
+  adminReportController.previewReport
+)
+
 router.get(
   '/reports/export',
   authenticate,

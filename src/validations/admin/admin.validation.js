@@ -279,6 +279,12 @@ export const adminReportExportQuerySchema = Joi.object({
   format: Joi.string().valid('csv').default('csv'),
 })
 
+export const adminReportPreviewQuerySchema = adminReportExportQuerySchema.keys({
+  format: Joi.forbidden(),
+  page,
+  limit,
+})
+
 export const adminNotificationQuerySchema = Joi.object({
   page,
   limit,
