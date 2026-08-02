@@ -400,10 +400,7 @@ const applyTransactionModeFilter = async (query, filter) => {
   if (query.transactionMode === PRODUCT_TRANSACTION_MODES.RENTAL) {
     return {
       ...filter,
-      $or: [
-        { _id: { $in: activeRentalProductIds } },
-        { transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL },
-      ],
+      _id: { ...(filter._id || {}), $in: activeRentalProductIds },
     }
   }
 
