@@ -116,6 +116,7 @@ const orderSchema = new mongoose.Schema(
       index: true,
     },
     shippingAddress: {
+      phone: { type: String, default: '' },
       province: { type: String, default: '' },
       district: { type: String, default: '' },
       detail: { type: String, default: '' },

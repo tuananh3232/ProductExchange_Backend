@@ -10,6 +10,12 @@ const shippingAddressSchema = new mongoose.Schema(
       default: 'Địa chỉ nhận hàng',
       maxlength: [50, 'Address label must not exceed 50 characters'],
     },
+    phone: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [20, 'Phone must not exceed 20 characters'],
+    },
     province: {
       type: String,
       trim: true,

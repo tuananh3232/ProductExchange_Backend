@@ -49,6 +49,7 @@ export const updateProfileSchema = Joi.object({
 
 const shippingAddressFields = {
   label: Joi.string().trim().max(50).allow(''),
+  phone: Joi.string().trim().pattern(/^[0-9+()\s.-]{7,20}$/).required(),
   province: Joi.string().trim().max(100).required(),
   district: Joi.string().trim().max(100).required(),
   detail: Joi.string().trim().max(200).required(),
@@ -61,6 +62,7 @@ export const createShippingAddressSchema = Joi.object({
 
 export const updateShippingAddressSchema = Joi.object({
   label: Joi.string().trim().max(50).allow(''),
+  phone: Joi.string().trim().pattern(/^[0-9+()\s.-]{7,20}$/).required(),
   province: Joi.string().trim().min(1).max(100),
   district: Joi.string().trim().min(1).max(100),
   detail: Joi.string().trim().min(1).max(200),

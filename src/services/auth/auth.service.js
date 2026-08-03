@@ -297,6 +297,7 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
 const serializeShippingAddress = (address) => ({
   id: address?._id?.toString?.() || address?.id,
   label: address?.label || 'Địa chỉ nhận hàng',
+  phone: address?.phone || '',
   province: address?.province || '',
   district: address?.district || '',
   detail: address?.detail || '',
@@ -317,6 +318,7 @@ const syncDefaultAddress = (user) => {
     district: defaultAddress.district,
     detail: defaultAddress.detail,
   }
+  if (defaultAddress.phone?.trim()) user.phone = defaultAddress.phone
   return defaultAddress
 }
 
@@ -330,6 +332,7 @@ const ensureAddressBook = async (user) => {
       province: user.address.province || '',
       district: user.address.district || '',
       detail: user.address.detail || '',
+      phone: user.phone || '',
       isDefault: true,
     })
   }
@@ -360,6 +363,7 @@ export const createAddress = async (userId, payload) => {
 
   const address = user.addresses.create({
     label: payload.label || 'Địa chỉ nhận hàng',
+    phone: payload.phone,
     province: payload.province,
     district: payload.district,
     detail: payload.detail,
@@ -380,6 +384,7 @@ export const updateAddress = async (userId, addressId, payload) => {
   }
 
   if (payload.label !== undefined) address.label = payload.label || 'Địa chỉ nhận hàng'
+  if (payload.phone !== undefined) address.phone = payload.phone
   if (payload.province !== undefined) address.province = payload.province
   if (payload.district !== undefined) address.district = payload.district
   if (payload.detail !== undefined) address.detail = payload.detail

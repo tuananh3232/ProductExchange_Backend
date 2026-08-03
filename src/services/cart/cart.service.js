@@ -180,8 +180,11 @@ const getCheckoutItems = (cart, selectedProductIds) => {
 }
 
 const getShippingAddress = async (userId) => {
-  const user = await User.findById(userId).select('address')
-  return user?.address || {}
+  const user = await User.findById(userId).select('address phone')
+  return {
+    ...(user?.address || {}),
+    phone: user?.phone || '',
+  }
 }
 
 const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext, req) => {

@@ -188,8 +188,12 @@ export const createOrder = async (buyerId, payload) => {
   let shippingAddress = payload.shippingAddress || {}
   const isEmptyAddress = !shippingAddress || (!shippingAddress.province && !shippingAddress.district && !shippingAddress.detail)
   if (isEmptyAddress) {
-    const buyer = await User.findById(buyerId).select('address')
-    if (buyer && buyer.address) shippingAddress = buyer.address
+    const buyer = await User.findById(buyerId).select('address phone')
+    if (buyer && buyer.address) shippingAddress = { ...buyer.address.toObject?.() ?? buyer.address, phone: buyer.phone || '' }
+  }
+
+  if (!shippingAddress.phone?.trim()) {
+    throw new AppError('Vui lòng bổ sung số điện thoại nhận hàng trước khi đặt đơn', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   const reservedProduct = await Product.findOneAndUpdate(

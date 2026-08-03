@@ -26,6 +26,7 @@ export const toUserResponse = (user = {}) => {
       ? user.addresses.map((address) => ({
           id: address._id?.toString?.() || address.id,
           label: address.label || 'Địa chỉ nhận hàng',
+          phone: address.phone || '',
           province: address.province || '',
           district: address.district || '',
           detail: address.detail || '',

@@ -6,6 +6,7 @@ export const createOrderSchema = Joi.object({
   product: Joi.string().hex().length(24).optional(),
   quantity: Joi.number().integer().min(1).max(100).optional(),
   shippingAddress: Joi.object({
+    phone: Joi.string().trim().pattern(/^[0-9+()\s.-]{7,20}$/).allow(''),
     province: Joi.string().max(100).allow(''),
     district: Joi.string().max(100).allow(''),
     detail: Joi.string().max(300).allow(''),
