@@ -347,6 +347,7 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
 
   if (publicOnly) {
     filter.isActive = true
+    filter.stock = { $gt: 0 }
   } else if (query.isActive !== undefined) {
     filter.isActive = query.isActive === 'true' || query.isActive === true
   }

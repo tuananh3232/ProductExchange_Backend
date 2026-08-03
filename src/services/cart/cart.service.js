@@ -244,11 +244,18 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
   const paymentMethod = payload.paymentMethod?.toUpperCase?.()
 
   if (paymentMethod && createdOrders.length === 1) {
-    const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext, req)
-    paymentUrl = paymentResult.paymentUrl || null
-    payment = paymentResult.payment || null
-    if (paymentMethod === 'WALLET') {
-      createdOrders[0].paymentStatus = PAYMENT_STATUS.PAID
+    try {
+      const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext, req)
+      paymentUrl = paymentResult.paymentUrl || null
+      payment = paymentResult.payment || null
+      if (paymentMethod === 'WALLET') {
+        createdOrders[0].paymentStatus = PAYMENT_STATUS.PAID
+      }
+    } catch (error) {
+      if (paymentMethod === 'WALLET') {
+        await Promise.all(createdOrders.map((order) => orderService.cancelOrder(order._id, { _id: userId, roles: [] }, 'Wallet payment failed; inventory restored')))
+      }
+      throw error
     }
   }
 
