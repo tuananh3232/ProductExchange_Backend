@@ -5,7 +5,10 @@ import { resetTestDatabase } from '../setup/test-db.js'
 import { loginMember, loginSeller } from '../setup/auth.js'
 import { createSampleProduct } from '../setup/factories.js'
 import Cart from '../../src/models/cart.model.js'
+import Order from '../../src/models/order.model.js'
+import Payment from '../../src/models/payment.model.js'
 import Product from '../../src/models/product.model.js'
+import UserWallet from '../../src/models/user-wallet.model.js'
 import { ORDER_STATUS, PAYMENT_STATUS, PRODUCT_STATUS } from '../../src/constants/status.constant.js'
 
 const api = env.apiPrefix
@@ -124,6 +127,83 @@ describe('cart, order, and payment integration', () => {
     expect(updatedProduct.status).toBe(PRODUCT_STATUS.PENDING)
   })
 
+  it('does not let stale PayOS return release inventory for an order already paid by wallet', async () => {
+    const { user, token } = await loginMember()
+    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
+    const orderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
+
+    const orderId = orderResponse.body.data.order._id
+    await Payment.create({
+      order: orderId,
+      buyer: user._id,
+      amount: product.price,
+      provider: 'payos',
+      method: 'payos',
+      status: PAYMENT_STATUS.PENDING_PAYMENT,
+      transactionRef: 'PAYOS_123456789',
+    })
+    await Order.findByIdAndUpdate(orderId, {
+      paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
+      paymentMethod: 'payos',
+      paymentProvider: 'payos',
+      paymentRef: 'PAYOS_123456789',
+    })
+    await UserWallet.create({ user: user._id, balance: 500000, totalTopUp: 500000 })
+
+    const walletResponse = await request(app)
+      .post(`${api}/user-wallet/me/pay-order`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ orderId })
+
+    expect(walletResponse.status).toBe(200)
+
+    const payosReturnResponse = await request(app).get(`${api}/payments/payos/cancel`).query({
+      code: '01',
+      cancel: 'true',
+      orderCode: 123456789,
+    })
+
+    const [freshOrder, freshProduct] = await Promise.all([
+      Order.findById(orderId),
+      Product.findById(product._id),
+    ])
+
+    expect(payosReturnResponse.status).toBe(200)
+    expect(freshOrder.paymentStatus).toBe(PAYMENT_STATUS.PAID)
+    expect(freshOrder.paymentMethod).toBe('wallet')
+    expect(freshOrder.inventoryStatus).toBe('reserved')
+    expect(freshProduct.stock).toBe(4)
+  })
+
+  it('rolls back reserved stock when wallet checkout fails for insufficient balance', async () => {
+    const { user, token } = await loginMember()
+    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
+
+    await request(app)
+      .post(`${api}/cart/add-combo`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ items: [{ productId: product._id.toString(), quantity: 2 }] })
+
+    const checkoutResponse = await request(app)
+      .post(`${api}/cart/checkout`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ selectedProductIds: [product._id.toString()], paymentMethod: 'WALLET' })
+
+    const [freshProduct, orders] = await Promise.all([
+      Product.findById(product._id),
+      Order.find({ buyer: user._id, product: product._id }),
+    ])
+
+    expect(checkoutResponse.status).toBe(400)
+    expect(freshProduct.stock).toBe(5)
+    expect(orders).toHaveLength(1)
+    expect(orders[0].status).toBe(ORDER_STATUS.CANCELLED)
+    expect(orders[0].inventoryStatus).toBe('released')
+  })
+
   it('allows a buyer to cancel an order and restores the product availability', async () => {
     const { token } = await loginMember()
     const product = await createSampleProduct({ status: PRODUCT_STATUS.AVAILABLE })
@@ -156,5 +236,17 @@ describe('cart, order, and payment integration', () => {
 
     expect([200, 400, 404]).toContain(response.status)
     expect(response.status).not.toBe(500)
+  })
+
+  it('hides out-of-stock products from public product listing', async () => {
+    const outOfStockProduct = await createSampleProduct({ stock: 0, status: PRODUCT_STATUS.AVAILABLE })
+    const availableProduct = await createSampleProduct({ stock: 2, status: PRODUCT_STATUS.AVAILABLE })
+
+    const response = await request(app).get(`${api}/products`)
+    const ids = response.body.data.products.map((product) => product._id.toString())
+
+    expect(response.status).toBe(200)
+    expect(ids).toContain(availableProduct._id.toString())
+    expect(ids).not.toContain(outOfStockProduct._id.toString())
   })
 })
