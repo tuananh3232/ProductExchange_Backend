@@ -1038,6 +1038,8 @@ export const listAdminRentalBookings = async (query, { page, limit, skip, sortBy
   }
 }
 
+export const getAdminRentalBookingById = async (bookingId) => withRentalRiskSummary(await getBookingByIdOrThrow(bookingId))
+
 export const listAdminRentalClaims = async (query, { page, limit, skip, sortBy, sortOrder }) => {
   const filter = { isActive: true }
   if (query.status) filter.status = query.status
