@@ -110,7 +110,7 @@ describe('cart, order, and payment integration', () => {
 
   it('creates an order and reserves the requested stock', async () => {
     const { token } = await loginMember()
-    const product = await createSampleProduct({ status: PRODUCT_STATUS.AVAILABLE })
+    const product = await createSampleProduct({ stock: 1, status: PRODUCT_STATUS.AVAILABLE })
 
     const response = await request(app)
       .post(`${api}/orders`)

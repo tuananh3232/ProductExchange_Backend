@@ -1,11 +1,11 @@
-import Joi from 'joi';
-import { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.constant.js';
+import Joi from 'joi'
+import { SHOP_STAFF_PERMISSIONS } from '../../constants/permission.constant.js'
 
 const addressSchema = Joi.object({
   province: Joi.string().max(100).allow(''),
   district: Joi.string().max(100).allow(''),
   detail: Joi.string().max(300).allow(''),
-});
+})
 
 export const createShopSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
@@ -18,7 +18,7 @@ export const createShopSchema = Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().required(),
   }).optional(),
-});
+})
 
 export const updateShopSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).optional(),
@@ -33,18 +33,18 @@ export const updateShopSchema = Joi.object({
   }).optional(),
 }).min(1).messages({
   'object.min': 'Vui lòng cung cấp ít nhất một thông tin cần cập nhật',
-});
+})
 
 export const transferOwnerSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
-});
+})
 
 export const updateStaffPermissionsSchema = Joi.object({
   permissions: Joi.array()
     .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
     .default([])
     .messages({ 'any.only': 'Quyền staff shop không hợp lệ' }),
-});
+})
 
 export const sendInvitationSchema = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
@@ -52,11 +52,11 @@ export const sendInvitationSchema = Joi.object({
     .items(Joi.string().valid(...SHOP_STAFF_PERMISSIONS))
     .default([])
     .messages({ 'any.only': 'Quyền staff shop không hợp lệ' }),
-});
+})
 
 export const invitationActionSchema = Joi.object({
   action: Joi.string().valid('accept', 'reject').required(),
-});
+})
 
 export const rejectShopSchema = Joi.object({
   rejectionReason: Joi.string().trim().min(5).max(500).required().messages({
@@ -70,4 +70,4 @@ export const suspendShopSchema = Joi.object({
     'string.min': 'Lý do đình chỉ phải có ít nhất 5 ký tự',
     'any.required': 'Lý do đình chỉ là bắt buộc',
   }),
-});
+})

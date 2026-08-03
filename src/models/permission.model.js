@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from 'mongoose'
 
 const permissionSchema = new mongoose.Schema(
   {
@@ -29,8 +29,8 @@ const permissionSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
-const Permission = mongoose.model('Permission', permissionSchema);
+const Permission = mongoose.model('Permission', permissionSchema)
 
-export default Permission;
+export default Permission
