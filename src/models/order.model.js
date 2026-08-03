@@ -58,6 +58,16 @@ const orderSchema = new mongoose.Schema(
       min: 1,
       max: 100,
     },
+    inventoryStatus: {
+      type: String,
+      enum: ['reserved', 'released', 'consumed'],
+      default: 'reserved',
+      index: true,
+    },
+    inventoryReleasedAt: {
+      type: Date,
+      default: null,
+    },
     unitPrice: {
       type: Number,
       required: true,

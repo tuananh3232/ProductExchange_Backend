@@ -1,4 +1,5 @@
 import Product, { PRODUCT_OWNER_TYPES } from '../../models/product.model.js'
+import Order from '../../models/order.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
@@ -152,7 +153,7 @@ const ensureTransitionAllowed = (currentStatus, nextStatus) => {
 
 export const createOrder = async (buyerId, payload) => {
   const productId = payload.productId || payload.product
-  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType transactionMode price isActive title')
+  const product = await Product.findById(productId).select('_id owner ownerType shop seller status listingType transactionMode price stock isActive title')
   if (!product || !product.isActive) {
     throw new AppError('Không tìm thấy sản phẩm', HTTP_STATUS.NOT_FOUND, ERRORS.PRODUCT.NOT_FOUND)
   }
@@ -178,6 +179,9 @@ export const createOrder = async (buyerId, payload) => {
   }
 
   const quantity = payload.quantity || 1
+  if (product.stock < quantity) {
+    throw new AppError('Product does not have enough stock', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
+  }
   const unitPrice = product.price
   const totalAmount = unitPrice * quantity
   // If shippingAddress is not provided or empty, use buyer's profile address
@@ -188,7 +192,18 @@ export const createOrder = async (buyerId, payload) => {
     if (buyer && buyer.address) shippingAddress = buyer.address
   }
 
-  const order = await orderRepo.create({
+  const reservedProduct = await Product.findOneAndUpdate(
+    { _id: product._id, isActive: true, status: 'available', stock: { $gte: quantity } },
+    { $inc: { stock: -quantity } },
+    { returnDocument: 'after' }
+  )
+  if (!reservedProduct) {
+    throw new AppError('Product stock was just reserved by another buyer', HTTP_STATUS.CONFLICT, ERRORS.PRODUCT.UNAVAILABLE)
+  }
+
+  let order
+  try {
+    order = await orderRepo.create({
     buyer: buyerId,
     shop: product.ownerType === PRODUCT_OWNER_TYPES.SHOP ? product.shop : null,
     seller: product.ownerType === PRODUCT_OWNER_TYPES.SELLER ? product.seller : null,
@@ -203,6 +218,7 @@ export const createOrder = async (buyerId, payload) => {
     status: ORDER_STATUS.PENDING,
     shippingAddress,
     note: payload.note || '',
+    inventoryStatus: 'reserved',
     history: [
       {
         status: ORDER_STATUS.PENDING,
@@ -211,9 +227,11 @@ export const createOrder = async (buyerId, payload) => {
         updatedAt: new Date(),
       },
     ],
-  })
-
-  await Product.findByIdAndUpdate(product._id, { status: 'pending' })
+    })
+  } catch (error) {
+    await Product.findByIdAndUpdate(product._id, { $inc: { stock: quantity } })
+    throw error
+  }
 
   const populatedOrder = await orderRepo.findById(order._id)
   await notifyOrderUser(getOrderSellerRecipient(populatedOrder), NOTIFICATION_TYPES.ORDER_CREATED, populatedOrder, 'Bạn có đơn hàng mới', buyerId)
@@ -422,7 +440,14 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
 
   const updated = await orderRepo.updateById(orderId, cancelUpdate)
 
-  await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+  const releasedInventory = await Order.findOneAndUpdate(
+    { _id: orderId, inventoryStatus: 'reserved' },
+    { $set: { inventoryStatus: 'released', inventoryReleasedAt: new Date() } },
+    { returnDocument: 'after' }
+  )
+  if (releasedInventory) {
+    await Product.findByIdAndUpdate(order.product?._id || order.product, { $inc: { stock: order.quantity }, $set: { status: 'available' } })
+  }
   if (order.paymentStatus === PAYMENT_STATUS.PAID || order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
     await ledgerService.reverseOrderSettlement(orderId, { source: 'order_cancel', reason: note || 'Order cancelled' })
   }
@@ -451,6 +476,10 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_UPDATE_STATUS)
   ensureTransitionAllowed(order.status, nextStatus)
 
+  if (nextStatus === ORDER_STATUS.CANCELLED) {
+    return cancelOrder(orderId, userContext, note)
+  }
+
   const updated = await orderRepo.updateById(orderId, {
     status: nextStatus,
     $push: {
@@ -464,11 +493,8 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   })
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
-    await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'sold' })
-  }
-
-  if (nextStatus === ORDER_STATUS.CANCELLED) {
-    await Product.findByIdAndUpdate(order.product?._id || order.product, { status: 'available' })
+    await Order.findByIdAndUpdate(orderId, { inventoryStatus: 'consumed' })
+    await Product.findOneAndUpdate({ _id: order.product?._id || order.product, stock: { $lte: 0 } }, { status: 'sold' })
   }
 
   const typeByStatus = {
@@ -560,4 +586,21 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
   })
 
   return updated
+}
+
+export const releaseInventoryForOrder = async (orderId) => {
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, inventoryStatus: 'reserved' },
+    {
+      $set: {
+        inventoryStatus: 'released',
+        inventoryReleasedAt: new Date(),
+        status: ORDER_STATUS.CANCELLED,
+      },
+    },
+    { returnDocument: 'after' }
+  )
+  if (!order) return false
+  await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity }, $set: { status: 'available' } })
+  return true
 }
