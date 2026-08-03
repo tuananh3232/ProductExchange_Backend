@@ -723,16 +723,6 @@ export const handlePayosReturn = async (query) => {
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
     const isBatchReturn = updatedPayment.orders?.length > 0
     if (isBatchReturn) {
-<<<<<<< Updated upstream
-      await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
-        await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
-      }
-    } else {
-      await Order.findByIdAndUpdate(payment.order, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
-        await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
-=======
       const eligibleOrders = await Order.find({
         _id: { $in: updatedPayment.orders },
         status: { $ne: ORDER_STATUS.CANCELLED },
@@ -755,7 +745,6 @@ export const handlePayosReturn = async (query) => {
         await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
       } else if (updatedOrder) {
         await releaseInventoryForOrder(payment.order)
->>>>>>> Stashed changes
       }
     }
     await notifyPaymentResult(updatedPayment, nextStatus)
