@@ -1,3 +1,4 @@
+import dns from 'node:dns'
 import mongoose from 'mongoose'
 import { env } from './env.config.js'
 
@@ -11,6 +12,10 @@ export const connectDB = async () => {
 
   if (!env.mongodb.uri) {
     throw new Error('MongoDB connection failed: MONGODB_URI is not configured.')
+  }
+
+  if (env.mongodb.dnsServers.length) {
+    dns.setServers(env.mongodb.dnsServers)
   }
 
   connectPromise = mongoose.connect(env.mongodb.uri, {

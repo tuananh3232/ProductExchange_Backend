@@ -16,6 +16,10 @@ const apiPrefix = process.env.API_PREFIX || '/api/v1'
 const appUrl = process.env.APP_URL || 'http://localhost:3000'
 const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || appUrl
 const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value)
+const mongodbDnsServers = (process.env.MONGODB_DNS_SERVERS || '')
+  .split(',')
+  .map((server) => server.trim())
+  .filter(Boolean)
 const dbName = process.env.DB_NAME || 'anhdecor'
 
 const normalizeMongoUri = (uri, databaseName) => {
@@ -57,6 +61,7 @@ export const env = {
   mongodb: {
     uri: normalizeMongoUri(process.env.MONGODB_URI, dbName),
     dbName,
+    dnsServers: mongodbDnsServers,
   },
 
   jwt: {

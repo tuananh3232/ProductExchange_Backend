@@ -47,6 +47,26 @@ export const updateProfileSchema = Joi.object({
   }),
 }).min(1)
 
+const shippingAddressFields = {
+  label: Joi.string().trim().max(50).allow(''),
+  province: Joi.string().trim().max(100).required(),
+  district: Joi.string().trim().max(100).required(),
+  detail: Joi.string().trim().max(200).required(),
+}
+
+export const createShippingAddressSchema = Joi.object({
+  ...shippingAddressFields,
+  isDefault: Joi.boolean().default(false),
+})
+
+export const updateShippingAddressSchema = Joi.object({
+  label: Joi.string().trim().max(50).allow(''),
+  province: Joi.string().trim().min(1).max(100),
+  district: Joi.string().trim().min(1).max(100),
+  detail: Joi.string().trim().min(1).max(200),
+  isDefault: Joi.boolean(),
+}).min(1)
+
 export const banUserSchema = Joi.object({
   reason: Joi.string().max(300).optional().allow(''),
 })

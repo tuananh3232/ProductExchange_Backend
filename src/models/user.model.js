@@ -2,6 +2,40 @@ import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 import { ROLE_ENUM, ROLES } from '../constants/role.constant.js'
 
+const shippingAddressSchema = new mongoose.Schema(
+  {
+    label: {
+      type: String,
+      trim: true,
+      default: 'Địa chỉ nhận hàng',
+      maxlength: [50, 'Address label must not exceed 50 characters'],
+    },
+    province: {
+      type: String,
+      trim: true,
+      required: [true, 'Province is required'],
+      maxlength: [100, 'Province must not exceed 100 characters'],
+    },
+    district: {
+      type: String,
+      trim: true,
+      required: [true, 'District is required'],
+      maxlength: [100, 'District must not exceed 100 characters'],
+    },
+    detail: {
+      type: String,
+      trim: true,
+      required: [true, 'Address detail is required'],
+      maxlength: [200, 'Address detail must not exceed 200 characters'],
+    },
+    isDefault: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: true, timestamps: true }
+)
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -37,6 +71,10 @@ const userSchema = new mongoose.Schema(
       province: { type: String, default: '' },
       district: { type: String, default: '' },
       detail: { type: String, default: '' },
+    },
+    addresses: {
+      type: [shippingAddressSchema],
+      default: [],
     },
     roles: {
       type: [

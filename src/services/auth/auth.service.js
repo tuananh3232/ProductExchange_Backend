@@ -294,6 +294,140 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
   await user.save()
 }
 
+const serializeShippingAddress = (address) => ({
+  id: address?._id?.toString?.() || address?.id,
+  label: address?.label || 'Địa chỉ nhận hàng',
+  province: address?.province || '',
+  district: address?.district || '',
+  detail: address?.detail || '',
+  isDefault: Boolean(address?.isDefault),
+})
+
+const syncDefaultAddress = (user) => {
+  const defaultAddress = user.addresses.find((address) => address.isDefault) || user.addresses[0]
+  if (!defaultAddress) {
+    return null
+  }
+
+  user.addresses.forEach((address) => {
+    address.isDefault = address._id.toString() === defaultAddress._id.toString()
+  })
+  user.address = {
+    province: defaultAddress.province,
+    district: defaultAddress.district,
+    detail: defaultAddress.detail,
+  }
+  return defaultAddress
+}
+
+const ensureAddressBook = async (user) => {
+  if (!Array.isArray(user.addresses)) user.addresses = []
+
+  const hasCompleteLegacyAddress = user.address?.province?.trim() && user.address?.district?.trim() && user.address?.detail?.trim()
+  if (!user.addresses.length && hasCompleteLegacyAddress) {
+    user.addresses.push({
+      label: 'Địa chỉ mặc định',
+      province: user.address.province || '',
+      district: user.address.district || '',
+      detail: user.address.detail || '',
+      isDefault: true,
+    })
+  }
+
+  syncDefaultAddress(user)
+  if (user.isModified('addresses') || user.isModified('address')) {
+    await user.save()
+  }
+
+  return user
+}
+
+export const getAddresses = async (userId) => {
+  const user = await ensureAddressBook(await ensureUserExists(userId))
+  return user.addresses.map(serializeShippingAddress)
+}
+
+export const createAddress = async (userId, payload) => {
+  await ensureProfileUnlocked(userId)
+  const user = await ensureAddressBook(await ensureUserExists(userId))
+  const shouldBeDefault = payload.isDefault === true || user.addresses.length === 0
+
+  if (shouldBeDefault) {
+    user.addresses.forEach((address) => {
+      address.isDefault = false
+    })
+  }
+
+  const address = user.addresses.create({
+    label: payload.label || 'Địa chỉ nhận hàng',
+    province: payload.province,
+    district: payload.district,
+    detail: payload.detail,
+    isDefault: shouldBeDefault,
+  })
+  user.addresses.push(address)
+  syncDefaultAddress(user)
+  await user.save()
+  return serializeShippingAddress(address)
+}
+
+export const updateAddress = async (userId, addressId, payload) => {
+  await ensureProfileUnlocked(userId)
+  const user = await ensureAddressBook(await ensureUserExists(userId))
+  const address = user.addresses.id(addressId)
+  if (!address) {
+    throw new AppError('Không tìm thấy địa chỉ', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  if (payload.label !== undefined) address.label = payload.label || 'Địa chỉ nhận hàng'
+  if (payload.province !== undefined) address.province = payload.province
+  if (payload.district !== undefined) address.district = payload.district
+  if (payload.detail !== undefined) address.detail = payload.detail
+  if (payload.isDefault === true) {
+    user.addresses.forEach((item) => {
+      item.isDefault = item._id.toString() === address._id.toString()
+    })
+  }
+
+  syncDefaultAddress(user)
+  await user.save()
+  return serializeShippingAddress(address)
+}
+
+export const deleteAddress = async (userId, addressId) => {
+  await ensureProfileUnlocked(userId)
+  const user = await ensureAddressBook(await ensureUserExists(userId))
+  const address = user.addresses.id(addressId)
+  if (!address) {
+    throw new AppError('Không tìm thấy địa chỉ', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  user.addresses.pull(addressId)
+  if (user.addresses.length) {
+    syncDefaultAddress(user)
+  } else {
+    user.address = { province: '', district: '', detail: '' }
+  }
+  await user.save()
+  return user.addresses.map(serializeShippingAddress)
+}
+
+export const setDefaultAddress = async (userId, addressId) => {
+  await ensureProfileUnlocked(userId)
+  const user = await ensureAddressBook(await ensureUserExists(userId))
+  const address = user.addresses.id(addressId)
+  if (!address) {
+    throw new AppError('Không tìm thấy địa chỉ', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  user.addresses.forEach((item) => {
+    item.isDefault = item._id.toString() === address._id.toString()
+  })
+  syncDefaultAddress(user)
+  await user.save()
+  return serializeShippingAddress(address)
+}
+
 export const updateProfile = async (userId, updateData) => {
   const user = await userRepo.findById(userId)
   if (!user) {
@@ -313,6 +447,14 @@ export const updateProfile = async (userId, updateData) => {
   if (updateData.phone !== undefined) user.phone = updateData.phone
   if (updateData.address) {
     user.address = { ...user.address, ...updateData.address }
+    const hasCompleteAddress = user.address.province?.trim() && user.address.district?.trim() && user.address.detail?.trim()
+    if (hasCompleteAddress && Array.isArray(user.addresses) && user.addresses.length) {
+      const defaultAddress = user.addresses.find((address) => address.isDefault) || user.addresses[0]
+      defaultAddress.province = user.address.province
+      defaultAddress.district = user.address.district
+      defaultAddress.detail = user.address.detail
+      syncDefaultAddress(user)
+    }
   }
 
   await user.save()
