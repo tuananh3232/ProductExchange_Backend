@@ -215,29 +215,20 @@ const getTopShops = async ({ match = {}, limit = 5 }) => {
 
 const getTopProducts = async ({ match = {}, shopId = null, limit = 5 }) => {
   const pipeline = [
-    { $match: { status: PAYMENT_STATUS.PAID, ...match } },
-    {
-      $lookup: {
-        from: 'orders',
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, ...match } },
   ]
 
   if (shopId) {
-    pipeline.push({ $match: { 'order.shop': toObjectId(shopId) } })
+    pipeline.push({ $match: { shop: toObjectId(shopId) } })
   }
 
   pipeline.push(
     {
       $group: {
-        _id: '$order.product',
-        revenue: { $sum: '$amount' },
+        _id: '$product',
+        revenue: { $sum: '$totalAmount' },
         paidOrders: { $sum: 1 },
-        totalQuantity: { $sum: '$order.quantity' },
+        totalQuantity: { $sum: '$quantity' },
       },
     },
     { $sort: { revenue: -1, paidOrders: -1 } },
@@ -266,7 +257,7 @@ const getTopProducts = async ({ match = {}, shopId = null, limit = 5 }) => {
     }
   )
 
-  return Payment.aggregate(pipeline)
+  return Order.aggregate(pipeline)
 }
 
 const buildAdminOverview = async (query = {}) => {
