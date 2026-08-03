@@ -2,7 +2,7 @@ import request from 'supertest'
 import app from '../../src/server.js'
 import { env } from '../../src/configs/env.config.js'
 import { resetTestDatabase } from '../setup/test-db.js'
-import { loginMember, loginSeller } from '../setup/auth.js'
+import { loginAdmin, loginMember, loginSeller } from '../setup/auth.js'
 import { createSampleProduct } from '../setup/factories.js'
 import Cart from '../../src/models/cart.model.js'
 import Order from '../../src/models/order.model.js'
@@ -111,9 +111,9 @@ describe('cart, order, and payment integration', () => {
     expect(directOrderResponse.status).toBe(400)
   })
 
-  it('creates an order for an available product and marks the product pending', async () => {
+  it('creates an order and reserves the requested stock without hiding remaining inventory', async () => {
     const { token } = await loginMember()
-    const product = await createSampleProduct({ status: PRODUCT_STATUS.AVAILABLE })
+    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
 
     const response = await request(app)
       .post(`${api}/orders`)
@@ -124,7 +124,9 @@ describe('cart, order, and payment integration', () => {
 
     expect(response.status).toBe(201)
     expect(response.body.data.order.status).toBe(ORDER_STATUS.PENDING)
-    expect(updatedProduct.status).toBe(PRODUCT_STATUS.PENDING)
+    expect(response.body.data.order.inventoryStatus).toBe('reserved')
+    expect(updatedProduct.stock).toBe(4)
+    expect(updatedProduct.status).toBe(PRODUCT_STATUS.AVAILABLE)
   })
 
   it('does not let stale PayOS return release inventory for an order already paid by wallet', async () => {
@@ -225,6 +227,31 @@ describe('cart, order, and payment integration', () => {
     expect(restoredProduct.status).toBe(PRODUCT_STATUS.AVAILABLE)
   })
 
+  it('marks an exhausted product sold when the reserved order is delivered', async () => {
+    const [{ token }, { token: adminToken }] = await Promise.all([loginMember(), loginAdmin()])
+    const product = await createSampleProduct({ stock: 1, status: PRODUCT_STATUS.AVAILABLE })
+    const orderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
+
+    const orderId = orderResponse.body.data.order._id
+    await Order.findByIdAndUpdate(orderId, { status: ORDER_STATUS.SHIPPED, paymentStatus: PAYMENT_STATUS.PAID })
+
+    const deliveredResponse = await request(app)
+      .patch(`${api}/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: ORDER_STATUS.DELIVERED })
+
+    const deliveredProduct = await Product.findById(product._id)
+    const deliveredOrder = await Order.findById(orderId)
+
+    expect(deliveredResponse.status).toBe(200)
+    expect(deliveredProduct.stock).toBe(0)
+    expect(deliveredProduct.status).toBe(PRODUCT_STATUS.SOLD)
+    expect(deliveredOrder.inventoryStatus).toBe('consumed')
+  })
+
   it('handles PayOS cancel callback without calling a real payment provider', async () => {
     const response = await request(app).get(`${api}/payments/payos/cancel`).query({
       code: '00',
@@ -248,5 +275,26 @@ describe('cart, order, and payment integration', () => {
     expect(response.status).toBe(200)
     expect(ids).toContain(availableProduct._id.toString())
     expect(ids).not.toContain(outOfStockProduct._id.toString())
+  })
+
+  it('keeps a purchased product searchable when stock remains after reservation', async () => {
+    const { token } = await loginMember()
+    const product = await createSampleProduct({
+      title: 'Searchable Reserved Decor',
+      stock: 3,
+      status: PRODUCT_STATUS.AVAILABLE,
+    })
+
+    const orderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
+
+    const searchResponse = await request(app).get(`${api}/products`).query({ search: 'Searchable Reserved Decor' })
+    const ids = searchResponse.body.data.products.map((item) => item._id.toString())
+
+    expect(orderResponse.status).toBe(201)
+    expect(searchResponse.status).toBe(200)
+    expect(ids).toContain(product._id.toString())
   })
 })
