@@ -18,6 +18,7 @@ export const createProductSchema = Joi.object({
   listingType: Joi.string().valid('sell').required(),
   transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   condition: Joi.string().valid('new', 'like_new', 'good', 'fair', 'poor').required(),
+  status: Joi.string().valid('available', 'pending', 'hidden').default('available'),
   category: Joi.string().hex().length(24).required(),
   shop: Joi.when('ownerType', {
     is: 'SELLER',
