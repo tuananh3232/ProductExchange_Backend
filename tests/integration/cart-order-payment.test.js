@@ -108,7 +108,7 @@ describe('cart, order, and payment integration', () => {
     expect(directOrderResponse.status).toBe(400)
   })
 
-  it('creates an order for an available product and marks the product pending', async () => {
+  it('creates an order and reserves the requested stock', async () => {
     const { token } = await loginMember()
     const product = await createSampleProduct({ status: PRODUCT_STATUS.AVAILABLE })
 
@@ -121,7 +121,26 @@ describe('cart, order, and payment integration', () => {
 
     expect(response.status).toBe(201)
     expect(response.body.data.order.status).toBe(ORDER_STATUS.PENDING)
-    expect(updatedProduct.status).toBe(PRODUCT_STATUS.PENDING)
+    expect(updatedProduct.stock).toBe(0)
+  })
+
+  it('decrements and restores the exact ordered quantity', async () => {
+    const { token } = await loginMember()
+    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
+    const orderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: product._id.toString(), quantity: 3, shippingAddress })
+
+    expect(orderResponse.status).toBe(201)
+    expect((await Product.findById(product._id)).stock).toBe(2)
+
+    await request(app)
+      .patch(`${api}/orders/${orderResponse.body.data.order._id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ note: 'Không còn nhu cầu' })
+
+    expect((await Product.findById(product._id)).stock).toBe(5)
   })
 
   it('allows a buyer to cancel an order and restores the product availability', async () => {

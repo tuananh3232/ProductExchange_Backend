@@ -11,6 +11,7 @@ import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
+import { releaseInventoryForOrder } from '../order/order.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
@@ -361,11 +362,13 @@ export const handleVnpayCallback = async (callbackPayload) => {
 
   // Không ghi đè đơn đã được thanh toán bằng phương thức khác (vd ví) — tránh hạ cấp trạng thái
   await Order.findOneAndUpdate(
-    { _id: payment.order, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+    { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
     orderUpdate
   )
   if (nextStatus === PAYMENT_STATUS.PAID) {
     await ledgerService.settlePaidOrder(payment.order, { source: 'vnpay_callback' })
+  } else {
+    await releaseInventoryForOrder(payment.order)
   }
   await notifyPaymentResult(updatedPayment, nextStatus)
 
@@ -488,19 +491,23 @@ export const handlePayosWebhook = async (webhookData) => {
   if (isBatchWebhook) {
     // Không ghi đè đơn đã được thanh toán bằng phương thức khác (vd ví)
     await Order.updateMany(
-      { _id: { $in: updatedPayment.orders }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
       orderUpdate
     )
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_webhook' })))
+    } else {
+      await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
     }
   } else {
     await Order.findOneAndUpdate(
-      { _id: payment.order, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
       orderUpdate
     )
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await ledgerService.settlePaidOrder(payment.order, { source: 'payos_webhook' })
+    } else {
+      await releaseInventoryForOrder(payment.order)
     }
   }
   await notifyPaymentResult(updatedPayment, nextStatus)
@@ -723,14 +730,18 @@ export const handlePayosReturn = async (query) => {
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
     const isBatchReturn = updatedPayment.orders?.length > 0
     if (isBatchReturn) {
-      await Order.updateMany({ _id: { $in: updatedPayment.orders } }, orderUpdate)
+      await Order.updateMany({ _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } }, orderUpdate)
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
+      } else {
+        await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
       }
     } else {
-      await Order.findByIdAndUpdate(payment.order, orderUpdate)
+      await Order.findOneAndUpdate({ _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } }, orderUpdate)
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
+      } else {
+        await releaseInventoryForOrder(payment.order)
       }
     }
     await notifyPaymentResult(updatedPayment, nextStatus)

@@ -229,14 +229,19 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
 
   const shippingAddress = await getShippingAddress(userId)
   const createdOrders = []
-  for (const item of checkoutItems) {
-    const order = await orderService.createOrder(userId, {
-      productId: item.product.toString(),
-      quantity: item.quantity,
-      shippingAddress,
-      note: '',
-    })
-    createdOrders.push(order)
+  try {
+    for (const item of checkoutItems) {
+      const order = await orderService.createOrder(userId, {
+        productId: item.product.toString(),
+        quantity: item.quantity,
+        shippingAddress,
+        note: '',
+      })
+      createdOrders.push(order)
+    }
+  } catch (error) {
+    await Promise.all(createdOrders.map((order) => orderService.cancelOrder(order._id, { _id: userId, roles: [] }, 'Checkout không thể hoàn tất; đã hoàn lại tồn kho')))
+    throw error
   }
 
   let paymentUrl = null
