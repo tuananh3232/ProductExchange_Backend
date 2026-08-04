@@ -15,7 +15,7 @@ const PRODUCT_LISTING_TYPES = ['sell', 'rental', 'exchange']
 const PRODUCT_OWNER_TYPES = ['SHOP', 'SELLER']
 const USER_STATUSES = ['active', 'inactive']
 const KYC_STATUSES = ['none', 'pending', 'approved', 'rejected']
-const PAYMENT_METHODS = ['PAYOS', 'VNPAY', 'WALLET']
+const PAYMENT_METHODS = ['PAYOS', 'WALLET']
 
 const LABELS = {
   ...COMBO_LABELS,
@@ -53,7 +53,6 @@ const LABELS = {
   SHOP: 'Shop',
   SELLER: 'Seller',
   PAYOS: 'PayOS',
-  VNPAY: 'VNPay',
   WALLET: 'Wallet',
   newest: 'Newest',
   oldest: 'Oldest',

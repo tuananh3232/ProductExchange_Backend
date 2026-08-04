@@ -1,4 +1,4 @@
-import { env } from '../configs/env.config.js';
+import { env } from '../configs/env.config.js'
 
 // eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, req, res, next) => {
@@ -8,17 +8,17 @@ export const errorHandler = (err, req, res, next) => {
       success: false,
       message: err.message,              // Tiếng Việt
       error: err.errorCode || err.message, // Tiếng Anh / mã lỗi
-    });
+    })
   }
 
   // Lỗi Mongoose — Duplicate key (email trùng)
   if (err.code === 11000) {
-    const field = Object.keys(err.keyPattern)[0];
+    const field = Object.keys(err.keyPattern)[0]
     return res.status(409).json({
       success: false,
       message: `Giá trị ${field} đã tồn tại trong hệ thống`,
       error: `Duplicate key: ${field}`,
-    });
+    })
   }
 
   // Lỗi Mongoose — Cast error (ObjectId không hợp lệ)
@@ -27,7 +27,7 @@ export const errorHandler = (err, req, res, next) => {
       success: false,
       message: 'ID không hợp lệ',
       error: 'Invalid ID format',
-    });
+    })
   }
 
   // Lỗi JWT
@@ -36,7 +36,7 @@ export const errorHandler = (err, req, res, next) => {
       success: false,
       message: 'Token không hợp lệ, vui lòng đăng nhập lại',
       error: 'Token is invalid',
-    });
+    })
   }
 
   if (err.name === 'TokenExpiredError') {
@@ -44,7 +44,7 @@ export const errorHandler = (err, req, res, next) => {
       success: false,
       message: 'Phiên đăng nhập đã hết hạn',
       error: 'Token has expired',
-    });
+    })
   }
 
   // Log lỗi không xác định (môi trường development)
@@ -63,5 +63,5 @@ export const errorHandler = (err, req, res, next) => {
     success: false,
     message: 'Đã xảy ra lỗi, vui lòng thử lại sau',
     error: 'Internal server error',
-  });
-};
+  })
+}

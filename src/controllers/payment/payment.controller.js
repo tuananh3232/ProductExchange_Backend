@@ -26,27 +26,6 @@ export const reconcileAdminPayment = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.PAYMENT.UPDATED || 'Đối soát thanh toán thành công', data: { payment } })
 })
 
-export const createVnpayPayment = asyncHandler(async (req, res) => {
-  const result = await paymentService.createVnpayPayment(req.body.orderId, req.user, req)
-  sendSuccess(res, {
-    message: MESSAGES.PAYMENT.CREATED,
-    data: result,
-    statusCode: HTTP_STATUS.CREATED,
-  })
-})
-
-export const vnpayReturn = asyncHandler(async (req, res) => {
-  const result = await paymentService.buildReturnResponse(req.query)
-  sendSuccess(res, { message: MESSAGES.PAYMENT.CALLBACK_PROCESSED, data: result })
-})
-
-export const vnpayIpn = asyncHandler(async (req, res) => {
-  const result = await paymentService.handleVnpayCallback(
-    req.body && Object.keys(req.body).length ? req.body : req.query
-  )
-  res.status(200).json({ RspCode: '00', Message: 'Confirm Success', data: result })
-})
-
 export const createPayosPayment = asyncHandler(async (req, res) => {
   const result = await paymentService.createPayosPayment(req.body.orderId, req.user)
   sendSuccess(res, {

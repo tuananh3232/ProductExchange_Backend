@@ -1,21 +1,21 @@
-import { Router } from 'express';
-import * as shopInvitationController from '../../controllers/shop/shop-invitation.controller.js';
-import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js';
-import { validate } from '../../middlewares/validate.middleware.js';
+import { Router } from 'express'
+import * as shopInvitationController from '../../controllers/shop/shop-invitation.controller.js'
+import { authenticate, requireShopPermission } from '../../middlewares/auth.middleware.js'
+import { validate } from '../../middlewares/validate.middleware.js'
 import {
   sendInvitationSchema,
   invitationActionSchema,
-} from '../../validations/shop/shop.validation.js';
-import PERMISSIONS from '../../constants/permission.constant.js';
+} from '../../validations/shop/shop.validation.js'
+import PERMISSIONS from '../../constants/permission.constant.js'
 
-const router = Router();
+const router = Router()
 
 // Get user's pending invitations
 router.get(
   '/my/invitations',
   authenticate,
   shopInvitationController.getMyPendingInvitations
-);
+)
 
 // Accept or reject invitation
 router.post(
@@ -23,14 +23,14 @@ router.post(
   authenticate,
   validate(invitationActionSchema),
   shopInvitationController.handleInvitationAction
-);
+)
 
 // Cancel invitation (shop owner only)
 router.delete(
   '/invitations/:invitationId',
   authenticate,
   shopInvitationController.cancelInvitation
-);
+)
 
 // Send invitation to user (shop owner only)
 router.post(
@@ -39,7 +39,7 @@ router.post(
   requireShopPermission(PERMISSIONS.SHOP_STAFF_INVITE),
   validate(sendInvitationSchema),
   shopInvitationController.sendInvitation
-);
+)
 
 // Get shop invitations (shop owner only)
 router.get(
@@ -47,6 +47,6 @@ router.get(
   authenticate,
   requireShopPermission(PERMISSIONS.SHOP_STAFF_READ),
   shopInvitationController.getShopInvitations
-);
+)
 
-export default router;
+export default router

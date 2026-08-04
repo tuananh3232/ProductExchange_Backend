@@ -1,19 +1,19 @@
-import ShopInvitation from '../../models/shop-invitation.model.js';
+import ShopInvitation from '../../models/shop-invitation.model.js'
 
 export const create = async (data) => {
-  return ShopInvitation.create(data);
-};
+  return ShopInvitation.create(data)
+}
 
 export const findById = async (id) => {
   return ShopInvitation.findById(id)
     .populate('shop', 'name slug')
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const findMany = async (filter = {}, options = {}) => {
-  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options;
-  const sortObj = { [sortBy]: sortOrder };
+  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options
+  const sortObj = { [sortBy]: sortOrder }
   
   return ShopInvitation.find(filter)
     .sort(sortObj)
@@ -21,45 +21,45 @@ export const findMany = async (filter = {}, options = {}) => {
     .limit(limit)
     .populate('shop', 'name slug')
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const countMany = async (filter = {}) => {
-  return ShopInvitation.countDocuments(filter);
-};
+  return ShopInvitation.countDocuments(filter)
+}
 
 export const findByIdAndUpdate = async (id, update) => {
   return ShopInvitation.findByIdAndUpdate(id, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const findOneAndUpdate = async (filter, update) => {
   return ShopInvitation.findOneAndUpdate(filter, update, { returnDocument: 'after' })
     .populate('shop', 'name slug')
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const findOne = async (filter) => {
   return ShopInvitation.findOne(filter)
     .populate('shop', 'name slug')
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const deleteById = async (id) => {
-  return ShopInvitation.findByIdAndDelete(id);
-};
+  return ShopInvitation.findByIdAndDelete(id)
+}
 
 export const deleteMany = async (filter) => {
-  return ShopInvitation.deleteMany(filter);
-};
+  return ShopInvitation.deleteMany(filter)
+}
 
 export const findPendingByInvitee = async (inviteeId, options = {}) => {
-  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options;
-  const sortObj = { [sortBy]: sortOrder };
+  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options
+  const sortObj = { [sortBy]: sortOrder }
   
   return ShopInvitation.find({
     invitee: inviteeId,
@@ -70,20 +70,20 @@ export const findPendingByInvitee = async (inviteeId, options = {}) => {
     .skip(skip)
     .limit(limit)
     .populate('shop', 'name slug')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const countPendingByInvitee = async (inviteeId) => {
   return ShopInvitation.countDocuments({
     invitee: inviteeId,
     status: 'pending',
     expiresAt: { $gt: new Date() },
-  });
-};
+  })
+}
 
 export const findByShopAndStatus = async (shopId, status, options = {}) => {
-  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options;
-  const sortObj = { [sortBy]: sortOrder };
+  const { skip = 0, limit = 10, sortBy = 'createdAt', sortOrder = -1 } = options
+  const sortObj = { [sortBy]: sortOrder }
   
   return ShopInvitation.find({
     shop: shopId,
@@ -93,15 +93,15 @@ export const findByShopAndStatus = async (shopId, status, options = {}) => {
     .skip(skip)
     .limit(limit)
     .populate('invitee', 'email name')
-    .populate('inviter', 'email name');
-};
+    .populate('inviter', 'email name')
+}
 
 export const countByShopAndStatus = async (shopId, status) => {
   return ShopInvitation.countDocuments({
     shop: shopId,
     status,
-  });
-};
+  })
+}
 
 export default {
   create,
@@ -117,4 +117,4 @@ export default {
   countPendingByInvitee,
   findByShopAndStatus,
   countByShopAndStatus,
-};
+}

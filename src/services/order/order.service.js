@@ -180,7 +180,7 @@ export const createOrder = async (buyerId, payload) => {
 
   const quantity = payload.quantity || 1
   if (product.stock < quantity) {
-    throw new AppError('Product does not have enough stock', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
+    throw new AppError('Sản phẩm không còn đủ số lượng yêu cầu', HTTP_STATUS.BAD_REQUEST, ERRORS.PRODUCT.UNAVAILABLE)
   }
   const unitPrice = product.price
   const totalAmount = unitPrice * quantity
@@ -188,17 +188,20 @@ export const createOrder = async (buyerId, payload) => {
   let shippingAddress = payload.shippingAddress || {}
   const isEmptyAddress = !shippingAddress || (!shippingAddress.province && !shippingAddress.district && !shippingAddress.detail)
   if (isEmptyAddress) {
-    const buyer = await User.findById(buyerId).select('address')
-    if (buyer && buyer.address) shippingAddress = buyer.address
+    const buyer = await User.findById(buyerId).select('address phone')
+    if (buyer && buyer.address) shippingAddress = { ...buyer.address.toObject?.() ?? buyer.address, phone: buyer.phone || '' }
+  }
+
+  if (!shippingAddress.phone?.trim()) {
+    throw new AppError('Vui lòng bổ sung số điện thoại nhận hàng trước khi đặt đơn', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
   }
 
   const reservedProduct = await Product.findOneAndUpdate(
     { _id: product._id, isActive: true, status: 'available', stock: { $gte: quantity } },
     { $inc: { stock: -quantity } },
-    { returnDocument: 'after' }
   )
   if (!reservedProduct) {
-    throw new AppError('Product stock was just reserved by another buyer', HTTP_STATUS.CONFLICT, ERRORS.PRODUCT.UNAVAILABLE)
+    throw new AppError('Sản phẩm vừa được người khác mua hết', HTTP_STATUS.CONFLICT, ERRORS.PRODUCT.UNAVAILABLE)
   }
 
   let order
@@ -433,7 +436,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
     if (order.paymentMethod === 'wallet') {
       cancelUpdate.paymentStatus = PAYMENT_STATUS.UNPAID
     } else {
-      // Thanh toán qua cổng (VNPay/PayOS) → admin xử lý hoàn tiền thủ công
+      // Thanh toán qua cổng PayOS → admin xử lý hoàn tiền thủ công
       cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
     }
   }
@@ -446,7 +449,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
     { returnDocument: 'after' }
   )
   if (releasedInventory) {
-    await Product.findByIdAndUpdate(order.product?._id || order.product, { $inc: { stock: order.quantity }, $set: { status: 'available' } })
+    await Product.findByIdAndUpdate(order.product?._id || order.product, { $inc: { stock: order.quantity } })
   }
   if (order.paymentStatus === PAYMENT_STATUS.PAID || order.paymentStatus === PAYMENT_STATUS.REFUND_PENDING) {
     await ledgerService.reverseOrderSettlement(orderId, { source: 'order_cancel', reason: note || 'Order cancelled' })
@@ -588,6 +591,46 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
   return updated
 }
 
+export const expirePendingOrders = async ({ olderThanMs = 30 * 60 * 1000 } = {}) => {
+  const cutoff = new Date(Date.now() - olderThanMs)
+  const candidates = await Order.find({
+    isActive: true,
+    status: { $in: [ORDER_STATUS.PENDING] },
+    paymentStatus: { $ne: PAYMENT_STATUS.PAID },
+    createdAt: { $lt: cutoff },
+    inventoryStatus: 'reserved',
+  }).select('_id buyer product quantity paymentStatus inventoryStatus')
+
+  let expiredCount = 0
+  for (const order of candidates) {
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, status: ORDER_STATUS.PENDING, inventoryStatus: 'reserved', paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      {
+        $set: {
+          status: ORDER_STATUS.CANCELLED,
+          paymentStatus: order.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT ? PAYMENT_STATUS.CANCELLED : order.paymentStatus,
+          inventoryStatus: 'released',
+          inventoryReleasedAt: new Date(),
+        },
+        $push: {
+          history: {
+            status: ORDER_STATUS.CANCELLED,
+            note: 'Đơn hàng đã hết thời gian thanh toán và được huỷ',
+            updatedBy: order.buyer,
+            updatedAt: new Date(),
+          },
+        },
+      },
+      { returnDocument: 'after' }
+    )
+    if (!updated) continue
+    await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity } })
+    expiredCount += 1
+    await notifyOrderUser(order.buyer, NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER, updated, 'Đơn hàng đã hết thời gian thanh toán và được huỷ')
+  }
+  return { expiredCount }
+}
+
 export const releaseInventoryForOrder = async (orderId) => {
   const order = await Order.findOneAndUpdate(
     { _id: orderId, inventoryStatus: 'reserved' },
@@ -601,6 +644,6 @@ export const releaseInventoryForOrder = async (orderId) => {
     { returnDocument: 'after' }
   )
   if (!order) return false
-  await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity }, $set: { status: 'available' } })
+  await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity } })
   return true
 }

@@ -402,10 +402,7 @@ const applyTransactionModeFilter = async (query, filter) => {
   if (query.transactionMode === PRODUCT_TRANSACTION_MODES.RENTAL) {
     return {
       ...filter,
-      $or: [
-        { _id: { $in: activeRentalProductIds } },
-        { transactionMode: PRODUCT_TRANSACTION_MODES.RENTAL },
-      ],
+      _id: { ...(filter._id || {}), $in: activeRentalProductIds },
     }
   }
 
@@ -590,6 +587,12 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
   }
 
   const updatedProduct = await productRepo.updateById(productId, { status: nextStatus })
+  const statusLabelByValue = {
+    available: 'Đang bán',
+    pending: 'Chờ duyệt',
+    hidden: 'Đã ẩn',
+    sold: 'Đã bán',
+  }
   const typeByStatus = {
     hidden: NOTIFICATION_TYPES.PRODUCT_BLOCKED,
     available: product.status === 'hidden' ? NOTIFICATION_TYPES.PRODUCT_UNBLOCKED : NOTIFICATION_TYPES.PRODUCT_APPROVED,
@@ -600,7 +603,7 @@ export const updateProductStatus = async (productId, userContext, nextStatus) =>
       sender: userContext._id,
       type: typeByStatus[nextStatus],
       title: 'Cập nhật sản phẩm',
-      message: `Trạng thái sản phẩm đã cập nhật: ${nextStatus}`,
+      message: `Trạng thái sản phẩm đã cập nhật: ${statusLabelByValue[nextStatus] || nextStatus}`,
       targetType: NOTIFICATION_TARGET_TYPES.PRODUCT,
       targetId: product._id,
       actionUrl: `/products/${product._id}`,

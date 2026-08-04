@@ -3,25 +3,25 @@ export const DECOR_CATEGORIES = [
     name: 'Đồ trang trí',
     slug: 'do-trang-tri',
     description: 'Các món decor giúp làm đẹp không gian sống.',
-    icon: 'sparkles',
+    icon: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=600&q=80',
   },
   {
-    name: 'Den decor',
+    name: 'Đèn decor',
     slug: 'den-decor',
     description: 'Đèn bàn, đèn ngủ và đèn trang trí cho phòng.',
-    icon: 'lamp',
+    icon: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=600&q=80',
   },
   {
-    name: 'Tranh treo tuong',
+    name: 'Tranh treo tường',
     slug: 'tranh-treo-tuong',
-    description: 'Tranh canvas, tranh nghe thuat va tranh toi gian.',
-    icon: 'image',
+    description: 'Tranh canvas, tranh nghệ thuật và tranh tối giản.',
+    icon: 'https://images.unsplash.com/photo-1577083288073-40892c0860a4?auto=format&fit=crop&w=600&q=80',
   },
   {
-    name: 'Ke decor',
+    name: 'Kệ decor',
     slug: 'ke-decor',
-    description: 'Ke go, ke mini va ke trung bay do decor.',
-    icon: 'shelf',
+    description: 'Kệ gỗ, kệ mini và kệ trưng bày đồ decor.',
+    icon: 'https://images.unsplash.com/photo-1594620302200-9a762244a156?auto=format&fit=crop&w=600&q=80',
   },
 ]
 
@@ -65,8 +65,9 @@ export const DECOR_SHOPS = [
 ]
 
 const imageFor = (shopSlug, productSlug) => ({
-  url: `https://img.example.com/seed/${shopSlug}/${productSlug}.jpg`,
+  url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80',
   publicId: `seed/${shopSlug}/${productSlug}`,
+  isPrimary: true,
 })
 
 const buildProduct = ({

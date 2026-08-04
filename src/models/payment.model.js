@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { PAYMENT_STATUS, PAYMENT_STATUS_ENUM } from '../constants/status.constant.js';
+import mongoose from 'mongoose'
+import { PAYMENT_STATUS, PAYMENT_STATUS_ENUM } from '../constants/status.constant.js'
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -27,12 +27,12 @@ const paymentSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
-      default: 'vnpay',
+      default: 'payos',
       index: true,
     },
     method: {
       type: String,
-      default: 'vnpay',
+      default: 'payos',
     },
     status: {
       type: String,
@@ -45,15 +45,7 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    bankCode: {
-      type: String,
-      default: '',
-    },
     responseCode: {
-      type: String,
-      default: '',
-    },
-    vnpTransactionNo: {
       type: String,
       default: '',
     },
@@ -94,12 +86,12 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
 // Sparse unique: single-order payments cannot share the same order; batch payments (order=null) are exempt
-paymentSchema.index({ order: 1 }, { unique: true, sparse: true });
-paymentSchema.index({ orders: 1 }, { sparse: true });
+paymentSchema.index({ order: 1 }, { unique: true, sparse: true })
+paymentSchema.index({ orders: 1 }, { sparse: true })
 
-const Payment = mongoose.model('Payment', paymentSchema);
+const Payment = mongoose.model('Payment', paymentSchema)
 
-export default Payment;
+export default Payment

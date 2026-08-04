@@ -8,6 +8,7 @@ import { reconcileOwnerShopQuota } from '../shop/shop.service.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import { USER_WALLET_TRANSACTION_TYPE } from '../../constants/status.constant.js'
 import ERRORS from '../../constants/error.constant.js'
+import * as ledgerService from '../ledger/ledger.service.js'
 
 export const PLANS = {
   monthly: { price: 69000, days: 30, label: 'thang' },
@@ -76,6 +77,7 @@ export const createSubscriptionCheckout = async (plan, userContext, paymentMetho
       user: userId,
       plan,
       amount: price,
+      paymentMethod: 'wallet',
       orderCode,
       transactionRef,
       status: 'completed',
@@ -97,6 +99,7 @@ export const createSubscriptionCheckout = async (plan, userContext, paymentMetho
 
     // Kích hoạt VIP
     await _activateVip(userId, plan)
+    await ledgerService.recordVipSubscriptionRevenue(subOrder._id, { paymentMethod: 'wallet' })
 
     return { success: true, activated: true, plan }
   }
@@ -131,6 +134,7 @@ export const createSubscriptionCheckout = async (plan, userContext, paymentMetho
     user: userContext._id,
     plan,
     amount: price,
+    paymentMethod: 'payos',
     orderCode,
     transactionRef,
     status: 'pending',
@@ -166,6 +170,9 @@ export const handleSubscriptionWebhook = async (webhookData) => {
     await _activateVip(sub.user, sub.plan)
   }
   await sub.save()
+  if (nextStatus === 'completed') {
+    await ledgerService.recordVipSubscriptionRevenue(sub._id, { paymentMethod: 'payos' })
+  }
 
   return { sub, status: nextStatus }
 }
@@ -211,6 +218,9 @@ export const handleSubscriptionReturn = async (query, userId) => {
     await _activateVip(sub.user, sub.plan)
   }
   await sub.save()
+  if (nextStatus === 'completed') {
+    await ledgerService.recordVipSubscriptionRevenue(sub._id, { paymentMethod: 'payos' })
+  }
 
   return { status: nextStatus, plan: sub.plan }
 }

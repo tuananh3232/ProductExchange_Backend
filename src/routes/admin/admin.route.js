@@ -1208,6 +1208,14 @@ router.get(
 )
 
 router.get(
+  '/rentals/:rentalBookingId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('rentalBookingId'),
+  adminRentalController.getAdminRentalBookingById
+)
+
+router.get(
   '/rental-claims',
   authenticate,
   requireAdmin,

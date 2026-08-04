@@ -180,19 +180,18 @@ const getCheckoutItems = (cart, selectedProductIds) => {
 }
 
 const getShippingAddress = async (userId) => {
-  const user = await User.findById(userId).select('address')
-  return user?.address || {}
+  const user = await User.findById(userId).select('address phone')
+  return {
+    ...(user?.address || {}),
+    phone: user?.phone || '',
+  }
 }
 
-const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext, req) => {
+const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext) => {
   if (!paymentMethod) return { paymentUrl: null, payment: null }
 
   if (paymentMethod === 'PAYOS') {
     return paymentService.createPayosPayment(orderId, userContext)
-  }
-
-  if (paymentMethod === 'VNPAY') {
-    return paymentService.createVnpayPayment(orderId, userContext, req)
   }
 
   if (paymentMethod === 'WALLET') {
@@ -211,7 +210,7 @@ const toCheckoutOrder = (order) => ({
   productId: order.product?._id?.toString?.() || order.product?.toString?.(),
 })
 
-export const checkoutCart = async (userId, payload = {}, userContext, req) => {
+export const checkoutCart = async (userId, payload = {}, userContext) => {
   const cart = await getOrCreateCart(userId)
   if (!cart.items.length) {
     throw new AppError('Gio hang dang trong', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
@@ -229,14 +228,19 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
 
   const shippingAddress = await getShippingAddress(userId)
   const createdOrders = []
-  for (const item of checkoutItems) {
-    const order = await orderService.createOrder(userId, {
-      productId: item.product.toString(),
-      quantity: item.quantity,
-      shippingAddress,
-      note: '',
-    })
-    createdOrders.push(order)
+  try {
+    for (const item of checkoutItems) {
+      const order = await orderService.createOrder(userId, {
+        productId: item.product.toString(),
+        quantity: item.quantity,
+        shippingAddress,
+        note: '',
+      })
+      createdOrders.push(order)
+    }
+  } catch (error) {
+    await Promise.all(createdOrders.map((order) => orderService.cancelOrder(order._id, { _id: userId, roles: [] }, 'Checkout không thể hoàn tất; đã hoàn lại tồn kho')))
+    throw error
   }
 
   let paymentUrl = null
@@ -244,18 +248,11 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
   const paymentMethod = payload.paymentMethod?.toUpperCase?.()
 
   if (paymentMethod && createdOrders.length === 1) {
-    try {
-      const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext, req)
-      paymentUrl = paymentResult.paymentUrl || null
-      payment = paymentResult.payment || null
-      if (paymentMethod === 'WALLET') {
-        createdOrders[0].paymentStatus = PAYMENT_STATUS.PAID
-      }
-    } catch (error) {
-      if (paymentMethod === 'WALLET') {
-        await Promise.all(createdOrders.map((order) => orderService.cancelOrder(order._id, { _id: userId, roles: [] }, 'Wallet payment failed; inventory restored')))
-      }
-      throw error
+    const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext)
+    paymentUrl = paymentResult.paymentUrl || null
+    payment = paymentResult.payment || null
+    if (paymentMethod === 'WALLET') {
+      createdOrders[0].paymentStatus = PAYMENT_STATUS.PAID
     }
   }
 

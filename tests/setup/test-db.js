@@ -14,6 +14,17 @@ export const ensureTestDatabase = () => {
     throw new Error(`Refusing to use non-test database: ${dbName || '(empty)'}. Database name must be exactly ${TEST_DB_NAME}.`)
   }
 
+  const mongoUri = env.mongodb.uri || ''
+  let hostname = ''
+  try {
+    hostname = new URL(mongoUri).hostname
+  } catch {
+    hostname = ''
+  }
+  if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+    throw new Error('Integration test chỉ được phép dùng MongoDB cục bộ; không được xoá dữ liệu database dùng chung.')
+  }
+
   return dbName
 }
 

@@ -17,6 +17,7 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit",
     "test:integration": "node scripts/test/run-integration-serial.js",
     "test:integration:serial": "node scripts/test/run-integration-serial.js",
+    "test:integration:local": "node scripts/test/run-integration-local.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:coverage:serial": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand",

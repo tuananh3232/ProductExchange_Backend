@@ -1,47 +1,51 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env' });
+import dotenv from 'dotenv'
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH || '.env' })
 
-const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
-const isProduction = process.env.NODE_ENV === 'production';
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'JWT_REFRESH_SECRET']
+const isProduction = process.env.NODE_ENV === 'production'
 
 if (isProduction) {
   requiredEnvVars.forEach((key) => {
     if (!process.env[key]) {
-      throw new Error(`Missing required environment variable: ${key}`);
+      throw new Error(`Missing required environment variable: ${key}`)
     }
-  });
+  })
 }
 
-const apiPrefix = process.env.API_PREFIX || '/api/v1';
-const appUrl = process.env.APP_URL || 'http://localhost:3000';
-const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || appUrl;
-const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value);
-const dbName = process.env.DB_NAME || 'anhdecor';
+const apiPrefix = process.env.API_PREFIX || '/api/v1'
+const appUrl = process.env.APP_URL || 'http://localhost:3000'
+const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || appUrl
+const normalizeSecret = (value) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value)
+const mongodbDnsServers = (process.env.MONGODB_DNS_SERVERS || '')
+  .split(',')
+  .map((server) => server.trim())
+  .filter(Boolean)
+const dbName = process.env.DB_NAME || 'anhdecor'
 
 const normalizeMongoUri = (uri, databaseName) => {
-  if (!uri) return uri;
+  if (!uri) return uri
 
   try {
-    const url = new URL(uri);
-    const currentPath = url.pathname.replace(/^\/+/, '');
+    const url = new URL(uri)
+    const currentPath = url.pathname.replace(/^\/+/, '')
 
     if (!currentPath || currentPath === 'test') {
-      url.pathname = `/${databaseName}`;
+      url.pathname = `/${databaseName}`
     }
 
-    return url.toString();
+    return url.toString()
   } catch {
     if (uri.endsWith('/test')) {
-      return `${uri.slice(0, -5)}/${databaseName}`;
+      return `${uri.slice(0, -5)}/${databaseName}`
     }
 
     if (uri.endsWith('/')) {
-      return `${uri}${databaseName}`;
+      return `${uri}${databaseName}`
     }
 
-    return uri;
+    return uri
   }
-};
+}
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -57,6 +61,7 @@ export const env = {
   mongodb: {
     uri: normalizeMongoUri(process.env.MONGODB_URI, dbName),
     dbName,
+    dnsServers: mongodbDnsServers,
   },
 
   jwt: {
@@ -91,18 +96,6 @@ export const env = {
   },
 
   payment: {
-    vnpay: {
-      paymentUrl: process.env.VNPAY_PAYMENT_URL || process.env.VNPAY_SANDBOX_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
-      tmnCode: process.env.VNPAY_TMN_CODE || 'DEMO',
-      hashSecret: process.env.VNPAY_HASH_SECRET || 'DEMO_HASH_SECRET',
-      version: process.env.VNPAY_VERSION || '2.1.0',
-      command: process.env.VNPAY_COMMAND || 'pay',
-      currCode: process.env.VNPAY_CURR_CODE || 'VND',
-      locale: process.env.VNPAY_LOCALE || 'vn',
-      orderType: process.env.VNPAY_ORDER_TYPE || 'other',
-      returnUrl: process.env.VNPAY_RETURN_URL || `${appUrl}${apiPrefix}/payments/vnpay/return`,
-      ipnUrl: process.env.VNPAY_IPN_URL || `${appUrl}${apiPrefix}/payments/vnpay/ipn`,
-    },
     payos: {
       clientId: process.env.PAYOS_CLIENT_ID || '',
       apiKey: process.env.PAYOS_API_KEY || '',
@@ -115,4 +108,4 @@ export const env = {
       subCancelUrl: process.env.PAYOS_SUB_CANCEL_URL || `${appUrl}${apiPrefix}/subscriptions/payos/cancel`,
     },
   },
-};
+}
