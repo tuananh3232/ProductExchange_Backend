@@ -2,7 +2,6 @@ import mongoose from 'mongoose'
 import Order from '../../models/order.model.js'
 import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
-import Payment from '../../models/payment.model.js'
 import User from '../../models/user.model.js'
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -102,20 +101,11 @@ const aggregateStatusSummary = async (Model, match = {}) => {
 const getRevenueSeries = async ({ match = {}, shopId = null, period = 'day' }) => {
   const dateFormat = normalizePeriod(period) === 'month' ? '%Y-%m' : '%Y-%m-%d'
   const pipeline = [
-    { $match: { status: PAYMENT_STATUS.PAID, ...match } },
-    {
-      $lookup: {
-        from: 'orders',
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED }, ...match } },
   ]
 
   if (shopId) {
-    pipeline.push({ $match: { 'order.shop': toObjectId(shopId) } })
+    pipeline.push({ $match: { shop: toObjectId(shopId) } })
   }
 
   pipeline.push(
@@ -124,66 +114,48 @@ const getRevenueSeries = async ({ match = {}, shopId = null, period = 'day' }) =
         _id: {
           $dateToString: {
             format: dateFormat,
-            date: '$paidAt',
+            date: { $ifNull: ['$paidAt', { $ifNull: ['$updatedAt', '$createdAt'] }] },
             timezone: TIMEZONE,
           },
         },
-        revenue: { $sum: '$amount' },
+        revenue: { $sum: '$totalAmount' },
         orderCount: { $sum: 1 },
       },
     },
     { $sort: { _id: 1 } }
   )
 
-  return Payment.aggregate(pipeline)
+  return Order.aggregate(pipeline)
 }
 
 const getRevenueSummary = async ({ match = {}, shopId = null }) => {
   const pipeline = [
-    { $match: { status: PAYMENT_STATUS.PAID, ...match } },
-    {
-      $lookup: {
-        from: 'orders',
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED }, ...match } },
   ]
 
   if (shopId) {
-    pipeline.push({ $match: { 'order.shop': toObjectId(shopId) } })
+    pipeline.push({ $match: { shop: toObjectId(shopId) } })
   }
 
   pipeline.push({
     $group: {
       _id: null,
-      totalRevenue: { $sum: '$amount' },
+      totalRevenue: { $sum: '$totalAmount' },
       paidOrders: { $sum: 1 },
     },
   })
 
-  const [summary = { totalRevenue: 0, paidOrders: 0 }] = await Payment.aggregate(pipeline)
+  const [summary = { totalRevenue: 0, paidOrders: 0 }] = await Order.aggregate(pipeline)
   return summary
 }
 
 const getTopShops = async ({ match = {}, limit = 5 }) => {
-  const rows = await Payment.aggregate([
-    { $match: { status: PAYMENT_STATUS.PAID, ...match } },
-    {
-      $lookup: {
-        from: 'orders',
-        localField: 'order',
-        foreignField: '_id',
-        as: 'order',
-      },
-    },
-    { $unwind: '$order' },
+  const rows = await Order.aggregate([
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED }, ...match } },
     {
       $group: {
-        _id: '$order.shop',
-        revenue: { $sum: '$amount' },
+        _id: '$shop',
+        revenue: { $sum: '$totalAmount' },
         paidOrders: { $sum: 1 },
       },
     },
@@ -215,7 +187,7 @@ const getTopShops = async ({ match = {}, limit = 5 }) => {
 
 const getTopProducts = async ({ match = {}, shopId = null, limit = 5 }) => {
   const pipeline = [
-    { $match: { paymentStatus: PAYMENT_STATUS.PAID, ...match } },
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED }, ...match } },
   ]
 
   if (shopId) {
@@ -241,14 +213,14 @@ const getTopProducts = async ({ match = {}, shopId = null, limit = 5 }) => {
         as: 'product',
       },
     },
-    { $unwind: '$product' },
+    { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
     {
       $project: {
         _id: 0,
         productId: '$_id',
-        productName: '$product.title',
-        status: '$product.status',
-        shop: '$product.shop',
+        productName: { $ifNull: ['$product.title', 'Sản phẩm không còn trong hệ thống'] },
+        status: { $ifNull: ['$product.status', 'unavailable'] },
+        shop: { $ifNull: ['$product.shop', null] },
         revenue: 1,
         paidOrders: 1,
         totalQuantity: 1,

@@ -13,7 +13,7 @@ import {
   LEDGER_TRANSACTION_TYPE,
   PLATFORM_WALLET_KEYS,
 } from '../../constants/ledger.constant.js'
-import { PAYMENT_STATUS, SETTLEMENT_STATUS } from '../../constants/status.constant.js'
+import { ORDER_STATUS, PAYMENT_STATUS, SETTLEMENT_STATUS } from '../../constants/status.constant.js'
 import { previewFee } from '../fee-policy/fee-policy.service.js'
 import * as walletRepo from '../../repositories/wallet/wallet.repository.js'
 
@@ -145,6 +145,79 @@ const applyMonitoringFilter = (transactions, query = {}) => {
   }
 
   return transactions
+}
+
+const getOrphanLedgerEntrySummary = async () => {
+  const [summary = {}] = await LedgerEntry.aggregate([
+    {
+      $lookup: {
+        from: 'ledgertransactions',
+        localField: 'ledgerTransaction',
+        foreignField: '_id',
+        as: 'transaction',
+      },
+    },
+    { $match: { transaction: { $size: 0 } } },
+    {
+      $group: {
+        _id: null,
+        count: { $sum: 1 },
+        clearingAmount: {
+          $sum: {
+            $cond: [
+              { $eq: ['$walletKey', PLATFORM_WALLET_KEYS.CLEARING] },
+              { $cond: [{ $eq: ['$direction', LEDGER_ENTRY_DIRECTION.CREDIT] }, '$amount', { $multiply: ['$amount', -1] }] },
+              0,
+            ],
+          },
+        },
+        revenueAmount: {
+          $sum: {
+            $cond: [
+              { $eq: ['$walletKey', PLATFORM_WALLET_KEYS.REVENUE] },
+              { $cond: [{ $eq: ['$direction', LEDGER_ENTRY_DIRECTION.CREDIT] }, '$amount', { $multiply: ['$amount', -1] }] },
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ])
+
+  return {
+    count: summary.count || 0,
+    clearingAmount: summary.clearingAmount || 0,
+    revenueAmount: summary.revenueAmount || 0,
+  }
+}
+
+const getMissingOrderSettlementCount = async () => {
+  const [summary = {}] = await Order.aggregate([
+    { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED } } },
+    {
+      $lookup: {
+        from: 'ledgertransactions',
+        let: { orderId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ['$order', '$$orderId'] },
+                  { $eq: ['$transactionType', LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT] },
+                ],
+              },
+            },
+          },
+        ],
+        as: 'settlements',
+      },
+    },
+    { $match: { settlements: { $size: 0 } } },
+    { $count: 'count' },
+  ])
+
+  return summary.count || 0
 }
 
 const getPlatformWallet = async (walletKey, session = null) =>
@@ -557,8 +630,7 @@ export const getPlatformWalletSummary = async () => {
       settlementStatus: SETTLEMENT_STATUS.SETTLED,
     }),
     LedgerTransaction.countDocuments({
-      transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
-      settlementStatus: SETTLEMENT_STATUS.HELD,
+      settlementStatus: { $in: [SETTLEMENT_STATUS.PENDING, SETTLEMENT_STATUS.HELD, SETTLEMENT_STATUS.DISPUTED] },
     }),
   ])
 
@@ -573,7 +645,16 @@ export const getPlatformWalletSummary = async () => {
 }
 
 export const getPlatformLedgerReconciliationSummary = async () => {
-  const [clearingWallet, revenueWallet, clearingEntries, revenueEntries, stuckTransactions, missingEntryTransactions] = await Promise.all([
+  const [
+    clearingWallet,
+    revenueWallet,
+    clearingEntries,
+    revenueEntries,
+    stuckTransactions,
+    missingEntryTransactions,
+    orphanEntries,
+    missingOrderSettlements,
+  ] = await Promise.all([
     getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING),
     getPlatformWallet(PLATFORM_WALLET_KEYS.REVENUE),
     LedgerEntry.aggregate([
@@ -618,6 +699,8 @@ export const getPlatformLedgerReconciliationSummary = async () => {
       { $match: { entries: { $size: 0 } } },
       { $count: 'count' },
     ]),
+    getOrphanLedgerEntrySummary(),
+    getMissingOrderSettlementCount(),
   ])
 
   const expectedClearingBalance = clearingEntries[0]?.expectedBalance || 0
@@ -643,9 +726,12 @@ export const getPlatformLedgerReconciliationSummary = async () => {
     },
     issueCounts: {
       missingEntryTransactions: missingEntryTransactions[0]?.count || 0,
+      missingOrderSettlements,
+      orphanLedgerEntries: orphanEntries.count,
       stuckSettlements: stuckItems.length,
       walletDriftIssues: [clearingDrift !== 0, revenueDrift !== 0].filter(Boolean).length,
     },
+    orphanEntries,
     stuckTransactions: stuckItems.map((transaction) => ({
       _id: transaction._id,
       transactionType: transaction.transactionType,
