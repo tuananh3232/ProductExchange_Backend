@@ -330,11 +330,19 @@ export const getAdminOrderById = async (orderId) => {
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
   const payment = await paymentRepo.findByOrder(order._id)
+  const resolvedSeller = order.seller
+    || order.shop?.owner
+    || order.product?.seller
+    || order.product?.shop?.owner
+    || null
+  const orderResponse = order.toObject()
+  if (!orderResponse.seller && resolvedSeller) orderResponse.seller = resolvedSeller
+
   return {
-    order,
+    order: orderResponse,
     buyer: order.buyer,
     shop: order.shop,
-    seller: order.seller,
+    seller: resolvedSeller,
     items: [{ product: order.product, quantity: order.quantity, unitPrice: order.unitPrice }],
     amount: {
       unitPrice: order.unitPrice,
