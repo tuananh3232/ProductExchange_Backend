@@ -3,6 +3,7 @@ import Order from '../../models/order.model.js'
 import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
+import SubscriptionOrder from '../../models/subscription-order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import ERRORS from '../../constants/error.constant.js'
@@ -149,6 +150,89 @@ const getRevenueSummary = async ({ match = {}, shopId = null }) => {
   return summary
 }
 
+const getVipRevenueSummary = async ({ match = {} } = {}) => {
+  const [summary = { vipRevenue: 0, paidSubscriptions: 0 }] = await SubscriptionOrder.aggregate([
+    { $match: { status: 'completed', ...match } },
+    {
+      $group: {
+        _id: null,
+        vipRevenue: { $sum: '$amount' },
+        paidSubscriptions: { $sum: 1 },
+      },
+    },
+  ])
+
+  return summary
+}
+
+const getVipRevenueSeries = async ({ match = {}, period = 'day' } = {}) => {
+  const dateFormat = normalizePeriod(period) === 'month' ? '%Y-%m' : '%Y-%m-%d'
+  return SubscriptionOrder.aggregate([
+    { $match: { status: 'completed', ...match } },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: dateFormat,
+            date: { $ifNull: ['$paidAt', '$updatedAt'] },
+            timezone: TIMEZONE,
+          },
+        },
+        revenue: { $sum: '$amount' },
+        subscriptionCount: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ])
+}
+
+const mergeRevenueSeries = (orderSeries = [], vipSeries = []) => {
+  const byPeriod = new Map()
+
+  for (const row of orderSeries) {
+    byPeriod.set(row._id, {
+      _id: row._id,
+      revenue: row.revenue || 0,
+      orderCount: row.orderCount || 0,
+      subscriptionCount: 0,
+      orderRevenue: row.revenue || 0,
+      vipRevenue: 0,
+    })
+  }
+
+  for (const row of vipSeries) {
+    const current = byPeriod.get(row._id) || {
+      _id: row._id,
+      revenue: 0,
+      orderCount: 0,
+      subscriptionCount: 0,
+      orderRevenue: 0,
+      vipRevenue: 0,
+    }
+    current.revenue += row.revenue || 0
+    current.subscriptionCount += row.subscriptionCount || 0
+    current.vipRevenue += row.revenue || 0
+    byPeriod.set(row._id, current)
+  }
+
+  return [...byPeriod.values()].sort((a, b) => a._id.localeCompare(b._id))
+}
+
+const getAdminRevenueSummary = async ({ match = {} } = {}) => {
+  const [orderSummary, vipSummary] = await Promise.all([
+    getRevenueSummary({ match }),
+    getVipRevenueSummary({ match: match.paidAt ? { paidAt: match.paidAt } : {} }),
+  ])
+
+  return {
+    totalRevenue: (orderSummary.totalRevenue || 0) + (vipSummary.vipRevenue || 0),
+    paidOrders: orderSummary.paidOrders || 0,
+    orderRevenue: orderSummary.totalRevenue || 0,
+    vipRevenue: vipSummary.vipRevenue || 0,
+    paidSubscriptions: vipSummary.paidSubscriptions || 0,
+  }
+}
+
 const getTopShops = async ({ match = {}, limit = 5 }) => {
   const rows = await Order.aggregate([
     { $match: { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED }, ...match } },
@@ -243,7 +327,7 @@ const buildAdminOverview = async (query = {}) => {
     totalShops,
     totalUsers,
   ] = await Promise.all([
-    getRevenueSummary({ match: paidAtMatch }),
+    getAdminRevenueSummary({ match: paidAtMatch }),
     aggregateStatusSummary(Order, createdAtMatch),
     aggregateStatusSummary(Product, createdAtMatch),
     Shop.countDocuments({ ...createdAtMatch, isActive: true }),
@@ -414,9 +498,15 @@ const buildShopStaff = async (shopId, userContext) => {
 
 export const getAdminRevenue = async (query = {}) => {
   const paidAtMatch = parseDateFilter(query, 'paidAt')
+  const [summary, orderSeries, vipSeries] = await Promise.all([
+    getAdminRevenueSummary({ match: paidAtMatch }),
+    getRevenueSeries({ match: paidAtMatch, period: query.period }),
+    getVipRevenueSeries({ match: paidAtMatch, period: query.period }),
+  ])
+
   return {
-    summary: await getRevenueSummary({ match: paidAtMatch }),
-    series: await getRevenueSeries({ match: paidAtMatch, period: query.period }),
+    summary,
+    series: mergeRevenueSeries(orderSeries, vipSeries),
   }
 }
 

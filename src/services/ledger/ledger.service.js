@@ -3,6 +3,7 @@ import PlatformWallet from '../../models/platform-wallet.model.js'
 import LedgerTransaction from '../../models/ledger-transaction.model.js'
 import LedgerEntry from '../../models/ledger-entry.model.js'
 import FeeSnapshot from '../../models/fee-snapshot.model.js'
+import SubscriptionOrder from '../../models/subscription-order.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -10,6 +11,7 @@ import { buildPaginationMeta } from '../../utils/pagination.util.js'
 import { runMongoTransaction } from '../../utils/mongo-transaction.util.js'
 import {
   LEDGER_ENTRY_DIRECTION,
+  LEDGER_REFERENCE_TYPE,
   LEDGER_TRANSACTION_TYPE,
   PLATFORM_WALLET_KEYS,
 } from '../../constants/ledger.constant.js'
@@ -30,6 +32,9 @@ const buildCsv = (rows) => {
     'platformFee',
     'netSettlementAmount',
     'settlementStatus',
+    'source',
+    'description',
+    'paymentMethod',
     'reconciliationState',
     'reconciliationIssues',
     'createdAt',
@@ -48,6 +53,9 @@ const buildCsv = (rows) => {
         row.platformFee,
         row.netSettlementAmount,
         row.settlementStatus,
+        row.source,
+        row.description,
+        row.metadata?.paymentMethod,
         row.monitoring?.reconciliationState || 'ok',
         (row.monitoring?.reconciliationIssues || []).join('|'),
         row.createdAt,
@@ -86,11 +94,13 @@ const buildMonitoringForTransaction = (transaction, entries = []) => {
     reconciliationIssues.push('missing_entries')
   }
 
-  if (!entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.CLEARING)) {
+  const isVipRevenue = transaction.transactionType === LEDGER_TRANSACTION_TYPE.VIP_SUBSCRIPTION_PAYMENT
+
+  if (!isVipRevenue && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.CLEARING)) {
     reconciliationIssues.push('missing_clearing_entry')
   }
 
-  if (transaction.platformFee > 0 && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.REVENUE)) {
+  if ((transaction.platformFee > 0 || isVipRevenue) && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.REVENUE)) {
     reconciliationIssues.push('missing_revenue_entry')
   }
 
@@ -238,6 +248,88 @@ const mutatePlatformWallet = async (walletKey, direction, amount, session = null
     { $inc: inc },
     { upsert: true, new: true, setDefaultsOnInsert: true, ...(session ? { session } : {}) }
   )
+}
+
+/**
+ * Ghi nhận doanh thu bán gói VIP vào ví doanh thu nền tảng.
+ * Mỗi subscription order chỉ được ghi nhận một lần nhờ khóa duy nhất
+ * (referenceType + referenceId + transactionType), kể cả khi callback lặp.
+ */
+export const recordVipSubscriptionRevenue = async (subscriptionOrderId, { paymentMethod = 'payos' } = {}) => {
+  const subscription = await SubscriptionOrder.findById(subscriptionOrderId).lean()
+  if (!subscription || subscription.status !== 'completed') return null
+
+  const filter = {
+    referenceType: LEDGER_REFERENCE_TYPE.SUBSCRIPTION_ORDER,
+    referenceId: subscription._id,
+    transactionType: LEDGER_TRANSACTION_TYPE.VIP_SUBSCRIPTION_PAYMENT,
+  }
+  const existing = await LedgerTransaction.findOne(filter).lean()
+  if (existing) return existing
+
+  try {
+    return await runMongoTransaction(async (session) => {
+      const existingInTransaction = session
+        ? await LedgerTransaction.findOne(filter).session(session).lean()
+        : await LedgerTransaction.findOne(filter).lean()
+      if (existingInTransaction) return existingInTransaction
+
+      const options = session ? { session } : {}
+      const [transaction] = await LedgerTransaction.create(
+        [
+          {
+            transactionType: LEDGER_TRANSACTION_TYPE.VIP_SUBSCRIPTION_PAYMENT,
+            referenceType: LEDGER_REFERENCE_TYPE.SUBSCRIPTION_ORDER,
+            referenceId: subscription._id,
+            subscriptionOrder: subscription._id,
+            grossAmount: subscription.amount,
+            platformFee: 0,
+            netSettlementAmount: subscription.amount,
+            settlementStatus: SETTLEMENT_STATUS.SETTLED,
+            source: `vip_subscription_${paymentMethod}`,
+            description: `Doanh thu gói VIP ${subscription.plan === 'monthly' ? '1 tháng' : '1 năm'}`,
+            metadata: {
+              subscriptionOrderId: subscription._id,
+              userId: subscription.user,
+              plan: subscription.plan,
+              paymentMethod,
+              revenueCategory: 'vip_subscription',
+            },
+          },
+        ],
+        options
+      )
+
+      const revenueWallet = await mutatePlatformWallet(
+        PLATFORM_WALLET_KEYS.REVENUE,
+        LEDGER_ENTRY_DIRECTION.CREDIT,
+        subscription.amount,
+        session
+      )
+
+      await LedgerEntry.create(
+        [
+          {
+            ledgerTransaction: transaction._id,
+            walletKey: PLATFORM_WALLET_KEYS.REVENUE,
+            direction: LEDGER_ENTRY_DIRECTION.CREDIT,
+            amount: subscription.amount,
+            balanceAfter: revenueWallet.balance,
+            counterpartyType: 'vip_subscription',
+            counterpartyId: subscription.user,
+            note: `Ghi nhận doanh thu gói VIP (${paymentMethod === 'wallet' ? 'thanh toán từ ví' : 'thanh toán trực tiếp'})`,
+            metadata: { subscriptionOrderId: subscription._id, plan: subscription.plan, paymentMethod },
+          },
+        ],
+        options
+      )
+
+      return transaction
+    })
+  } catch (error) {
+    if (error?.code === 11000) return LedgerTransaction.findOne(filter).lean()
+    throw error
+  }
 }
 
 const resolveFallbackFeePreview = (baseAmount, ownerType) => {
@@ -622,16 +714,30 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
 }
 
 export const getPlatformWalletSummary = async () => {
-  const [clearingWallet, revenueWallet, settledCount, heldCount] = await Promise.all([
+  const [clearingWallet, revenueWallet, settledCount, heldCount, vipSummary] = await Promise.all([
     getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING),
     getPlatformWallet(PLATFORM_WALLET_KEYS.REVENUE),
     LedgerTransaction.countDocuments({
-      transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
+      transactionType: { $in: [LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT, LEDGER_TRANSACTION_TYPE.VIP_SUBSCRIPTION_PAYMENT] },
       settlementStatus: SETTLEMENT_STATUS.SETTLED,
     }),
     LedgerTransaction.countDocuments({
       settlementStatus: { $in: [SETTLEMENT_STATUS.PENDING, SETTLEMENT_STATUS.HELD, SETTLEMENT_STATUS.DISPUTED] },
     }),
+    SubscriptionOrder.aggregate([
+      {
+        $match: {
+          status: 'completed',
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          amount: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
   ])
 
   return {
@@ -640,6 +746,8 @@ export const getPlatformWalletSummary = async () => {
     totals: {
       settledTransactions: settledCount,
       heldTransactions: heldCount,
+      vipRevenue: vipSummary[0]?.amount || 0,
+      vipPurchases: vipSummary[0]?.count || 0,
     },
   }
 }
@@ -748,6 +856,7 @@ export const getPlatformLedgerTransactions = async (query, { page, limit, skip, 
   const filter = buildLedgerFilter(query)
   const baseTransactions = await LedgerTransaction.find(filter)
     .populate('order', 'paymentRef totalAmount paymentStatus grossAmount totalPlatformFee netSettlementAmount settlementStatus')
+    .populate('subscriptionOrder', 'plan amount paymentMethod status paidAt user')
     .sort({ [sortBy]: sortOrder })
     .lean()
 
@@ -764,6 +873,7 @@ export const getPlatformLedgerTransactions = async (query, { page, limit, skip, 
 export const getPlatformLedgerTransactionById = async (transactionId) => {
   const transaction = await LedgerTransaction.findById(transactionId)
     .populate('order', 'paymentRef totalAmount paymentStatus grossAmount totalPlatformFee netSettlementAmount settlementStatus')
+    .populate('subscriptionOrder', 'plan amount paymentMethod status paidAt user')
     .lean()
 
   if (!transaction) {

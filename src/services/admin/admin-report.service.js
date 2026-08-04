@@ -7,6 +7,7 @@ import RentalClaim from '../../models/rental-claim.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import UserWalletWithdrawal from '../../models/user-wallet-withdrawal.model.js'
+import SubscriptionOrder from '../../models/subscription-order.model.js'
 import WithdrawalRequest from '../../models/withdrawal-request.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
@@ -156,6 +157,24 @@ const exportConfig = {
       { header: 'platformFee', value: (row) => row.platformFee },
       { header: 'netSettlementAmount', value: (row) => row.netSettlementAmount },
       { header: 'settlementStatus', value: (row) => row.settlementStatus },
+      { header: 'source', value: (row) => row.source },
+      { header: 'description', value: (row) => row.description },
+      { header: 'paymentMethod', value: (row) => row.metadata?.paymentMethod },
+      { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
+    ],
+  },
+  vip_subscriptions: {
+    model: SubscriptionOrder,
+    columns: [
+      { header: 'id', value: (row) => row._id },
+      { header: 'user', value: (row) => row.user },
+      { header: 'plan', value: (row) => row.plan },
+      { header: 'amount', value: (row) => row.amount },
+      { header: 'paymentMethod', value: (row) => row.paymentMethod || (String(row.transactionRef || '').startsWith('SUB_WALLET_') ? 'wallet' : 'payos') },
+      { header: 'status', value: (row) => row.status },
+      { header: 'orderCode', value: (row) => row.orderCode },
+      { header: 'transactionRef', value: (row) => row.transactionRef },
+      { header: 'paidAt', value: (row) => row.paidAt?.toISOString?.() || '' },
       { header: 'createdAt', value: (row) => row.createdAt?.toISOString?.() || '' },
     ],
   },
@@ -207,6 +226,12 @@ export const exportAdminReport = async ({ type, fromDate, toDate }) => {
 
   if (type === 'rental_claims') {
     filter.ownerType = { $in: ['SELLER', 'SHOP'] }
+  }
+
+  if (type === 'vip_subscriptions') {
+    filter.status = 'completed'
+    filter.paidAt = filter.createdAt
+    delete filter.createdAt
   }
 
   const rows = await config.model.find(filter).sort({ createdAt: -1 }).limit(MAX_EXPORT_ROWS).lean()

@@ -30,6 +30,12 @@ const ledgerTransactionSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    subscriptionOrder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SubscriptionOrder',
+      default: null,
+      index: true,
+    },
     grossAmount: {
       type: Number,
       required: true,
