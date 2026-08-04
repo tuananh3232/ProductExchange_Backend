@@ -14,6 +14,15 @@ export const getAdminRentalBookings = asyncHandler(async (req, res) => {
   })
 })
 
+export const getAdminRentalBookingById = asyncHandler(async (req, res) => {
+  const rentalBooking = await rentalService.getAdminRentalBookingById(req.params.rentalBookingId)
+
+  sendSuccess(res, {
+    message: 'Lấy chi tiết đơn thuê thành công',
+    data: { rentalBooking },
+  })
+})
+
 export const getAdminRentalClaims = asyncHandler(async (req, res) => {
   const pagination = getPaginationParams(req.query)
   const result = await rentalService.listAdminRentalClaims(req.query, pagination)

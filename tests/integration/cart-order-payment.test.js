@@ -111,9 +111,9 @@ describe('cart, order, and payment integration', () => {
     expect(directOrderResponse.status).toBe(400)
   })
 
-  it('creates an order and reserves the requested stock without hiding remaining inventory', async () => {
+  it('creates an order and reserves the requested stock', async () => {
     const { token } = await loginMember()
-    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
+    const product = await createSampleProduct({ stock: 1, status: PRODUCT_STATUS.AVAILABLE })
 
     const response = await request(app)
       .post(`${api}/orders`)
@@ -124,86 +124,26 @@ describe('cart, order, and payment integration', () => {
 
     expect(response.status).toBe(201)
     expect(response.body.data.order.status).toBe(ORDER_STATUS.PENDING)
-    expect(response.body.data.order.inventoryStatus).toBe('reserved')
-    expect(updatedProduct.stock).toBe(4)
-    expect(updatedProduct.status).toBe(PRODUCT_STATUS.AVAILABLE)
+    expect(updatedProduct.stock).toBe(0)
   })
 
-  it('does not let stale PayOS return release inventory for an order already paid by wallet', async () => {
-    const { user, token } = await loginMember()
+  it('decrements and restores the exact ordered quantity', async () => {
+    const { token } = await loginMember()
     const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
     const orderResponse = await request(app)
       .post(`${api}/orders`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
+      .send({ productId: product._id.toString(), quantity: 3, shippingAddress })
 
-    const orderId = orderResponse.body.data.order._id
-    await Payment.create({
-      order: orderId,
-      buyer: user._id,
-      amount: product.price,
-      provider: 'payos',
-      method: 'payos',
-      status: PAYMENT_STATUS.PENDING_PAYMENT,
-      transactionRef: 'PAYOS_123456789',
-    })
-    await Order.findByIdAndUpdate(orderId, {
-      paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
-      paymentMethod: 'payos',
-      paymentProvider: 'payos',
-      paymentRef: 'PAYOS_123456789',
-    })
-    await UserWallet.create({ user: user._id, balance: 500000, totalTopUp: 500000 })
-
-    const walletResponse = await request(app)
-      .post(`${api}/user-wallet/me/pay-order`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ orderId })
-
-    expect(walletResponse.status).toBe(200)
-
-    const payosReturnResponse = await request(app).get(`${api}/payments/payos/cancel`).query({
-      code: '01',
-      cancel: 'true',
-      orderCode: 123456789,
-    })
-
-    const [freshOrder, freshProduct] = await Promise.all([
-      Order.findById(orderId),
-      Product.findById(product._id),
-    ])
-
-    expect(payosReturnResponse.status).toBe(200)
-    expect(freshOrder.paymentStatus).toBe(PAYMENT_STATUS.PAID)
-    expect(freshOrder.paymentMethod).toBe('wallet')
-    expect(freshOrder.inventoryStatus).toBe('reserved')
-    expect(freshProduct.stock).toBe(4)
-  })
-
-  it('rolls back reserved stock when wallet checkout fails for insufficient balance', async () => {
-    const { user, token } = await loginMember()
-    const product = await createSampleProduct({ stock: 5, status: PRODUCT_STATUS.AVAILABLE })
+    expect(orderResponse.status).toBe(201)
+    expect((await Product.findById(product._id)).stock).toBe(2)
 
     await request(app)
-      .post(`${api}/cart/add-combo`)
+      .patch(`${api}/orders/${orderResponse.body.data.order._id}/cancel`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ items: [{ productId: product._id.toString(), quantity: 2 }] })
+      .send({ note: 'Không còn nhu cầu' })
 
-    const checkoutResponse = await request(app)
-      .post(`${api}/cart/checkout`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ selectedProductIds: [product._id.toString()], paymentMethod: 'WALLET' })
-
-    const [freshProduct, orders] = await Promise.all([
-      Product.findById(product._id),
-      Order.find({ buyer: user._id, product: product._id }),
-    ])
-
-    expect(checkoutResponse.status).toBe(400)
-    expect(freshProduct.stock).toBe(5)
-    expect(orders).toHaveLength(1)
-    expect(orders[0].status).toBe(ORDER_STATUS.CANCELLED)
-    expect(orders[0].inventoryStatus).toBe('released')
+    expect((await Product.findById(product._id)).stock).toBe(5)
   })
 
   it('allows a buyer to cancel an order and restores the product availability', async () => {

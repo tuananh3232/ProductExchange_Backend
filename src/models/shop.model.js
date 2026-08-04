@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { SHOP_STATUS, SHOP_STATUS_ENUM } from '../constants/status.constant.js';
+import mongoose from 'mongoose'
+import { SHOP_STATUS, SHOP_STATUS_ENUM } from '../constants/status.constant.js'
 
 const shopSchema = new mongoose.Schema(
   {
@@ -152,16 +152,16 @@ const shopSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
-shopSchema.index({ name: 'text', description: 'text' });
-shopSchema.index({ owner: 1, isActive: 1 });
-shopSchema.index({ owner: 1, status: 1 });
-shopSchema.index({ staff: 1, isActive: 1 });
-shopSchema.index({ 'staffPermissions.staffUser': 1, isActive: 1 });
-shopSchema.index({ status: 1, createdAt: -1 });
-shopSchema.index({ createdAt: -1 });
+shopSchema.index({ name: 'text', description: 'text' })
+shopSchema.index({ owner: 1, isActive: 1 })
+shopSchema.index({ owner: 1, status: 1 })
+shopSchema.index({ staff: 1, isActive: 1 })
+shopSchema.index({ 'staffPermissions.staffUser': 1, isActive: 1 })
+shopSchema.index({ status: 1, createdAt: -1 })
+shopSchema.index({ createdAt: -1 })
 
-const Shop = mongoose.model('Shop', shopSchema);
+const Shop = mongoose.model('Shop', shopSchema)
 
-export default Shop;
+export default Shop

@@ -6,7 +6,9 @@ import { uploadAvatarImage, uploadKycImages } from '../../middlewares/upload.mid
 import PERMISSIONS from '../../constants/permission.constant.js'
 import {
   changePasswordSchema,
+  createShippingAddressSchema,
   updateProfileSchema,
+  updateShippingAddressSchema,
 } from '../../validations/auth/auth.validation.js'
 
 const router = Router()
@@ -67,6 +69,34 @@ router.put(
   requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
   validate(updateProfileSchema),
   userController.updateProfile
+)
+
+router.get('/addresses', authenticate, requirePermissions(PERMISSIONS.USER_SELF_READ), userController.getAddresses)
+router.post(
+  '/addresses',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
+  validate(createShippingAddressSchema),
+  userController.createAddress
+)
+router.put(
+  '/addresses/:addressId',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
+  validate(updateShippingAddressSchema),
+  userController.updateAddress
+)
+router.delete(
+  '/addresses/:addressId',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
+  userController.deleteAddress
+)
+router.patch(
+  '/addresses/:addressId/default',
+  authenticate,
+  requirePermissions(PERMISSIONS.USER_SELF_UPDATE),
+  userController.setDefaultAddress
 )
 
 /**

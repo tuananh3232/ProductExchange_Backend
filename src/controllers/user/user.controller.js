@@ -20,6 +20,31 @@ export const updateProfile = asyncHandler(async (req, res) => {
   sendSuccess(res, { message: MESSAGES.AUTH.PROFILE_UPDATED, data: { user: toUserResponse(user) } })
 })
 
+export const getAddresses = asyncHandler(async (req, res) => {
+  const addresses = await authService.getAddresses(req.user._id)
+  sendSuccess(res, { message: MESSAGES.AUTH.ADDRESSES_FETCHED, data: { addresses } })
+})
+
+export const createAddress = asyncHandler(async (req, res) => {
+  const address = await authService.createAddress(req.user._id, req.body)
+  sendSuccess(res, { message: MESSAGES.AUTH.ADDRESS_CREATED, data: { address } })
+})
+
+export const updateAddress = asyncHandler(async (req, res) => {
+  const address = await authService.updateAddress(req.user._id, req.params.addressId, req.body)
+  sendSuccess(res, { message: MESSAGES.AUTH.ADDRESS_UPDATED, data: { address } })
+})
+
+export const deleteAddress = asyncHandler(async (req, res) => {
+  const addresses = await authService.deleteAddress(req.user._id, req.params.addressId)
+  sendSuccess(res, { message: MESSAGES.AUTH.ADDRESS_DELETED, data: { addresses } })
+})
+
+export const setDefaultAddress = asyncHandler(async (req, res) => {
+  const address = await authService.setDefaultAddress(req.user._id, req.params.addressId)
+  sendSuccess(res, { message: MESSAGES.AUTH.ADDRESS_DEFAULT_UPDATED, data: { address } })
+})
+
 export const updateAvatar = asyncHandler(async (req, res) => {
   const user = await authService.updateAvatar(req.user._id, {
     file: req.file,

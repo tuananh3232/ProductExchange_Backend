@@ -19,6 +19,6 @@ export const updateCartItemSchema = Joi.object({
 })
 
 export const checkoutCartSchema = Joi.object({
-  paymentMethod: Joi.string().trim().uppercase().valid('PAYOS', 'VNPAY', 'WALLET').optional(),
+  paymentMethod: Joi.string().trim().uppercase().valid('PAYOS', 'WALLET').optional(),
   selectedProductIds: Joi.array().items(objectId).min(1).optional(),
 })

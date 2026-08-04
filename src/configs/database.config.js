@@ -1,16 +1,21 @@
-import mongoose from 'mongoose';
-import { env } from './env.config.js';
+import dns from 'node:dns'
+import mongoose from 'mongoose'
+import { env } from './env.config.js'
 
-let isConnected = false;
-let isDisconnecting = false;
-let connectPromise = null;
+let isConnected = false
+let isDisconnecting = false
+let connectPromise = null
 
 export const connectDB = async () => {
-  if (isConnected) return mongoose.connection;
-  if (connectPromise) return connectPromise;
+  if (isConnected) return mongoose.connection
+  if (connectPromise) return connectPromise
 
   if (!env.mongodb.uri) {
-    throw new Error('MongoDB connection failed: MONGODB_URI is not configured.');
+    throw new Error('MongoDB connection failed: MONGODB_URI is not configured.')
+  }
+
+  if (env.mongodb.dnsServers.length) {
+    dns.setServers(env.mongodb.dnsServers)
   }
 
   connectPromise = mongoose.connect(env.mongodb.uri, {
@@ -20,24 +25,24 @@ export const connectDB = async () => {
     socketTimeoutMS: 45000,
   })
     .then(() => {
-      isDisconnecting = false;
-      isConnected = true;
+      isDisconnecting = false
+      isConnected = true
       const dbName = mongoose.connection.db?.databaseName || env.mongodb.uri?.split('/').pop()?.split('?')[0]
-      console.log(`MongoDB connected successfully → DB: ${dbName}`);
+      console.log(`MongoDB connected successfully → DB: ${dbName}`)
 
       mongoose.connection.on('error', (err) => {
-        console.error('MongoDB connection error:', err);
-        isConnected = false;
-      });
+        console.error('MongoDB connection error:', err)
+        isConnected = false
+      })
 
       mongoose.connection.on('disconnected', () => {
         if (!isDisconnecting) {
-          console.warn('MongoDB disconnected. Attempting to reconnect...');
+          console.warn('MongoDB disconnected. Attempting to reconnect...')
         }
-        isConnected = false;
-      });
+        isConnected = false
+      })
 
-      return mongoose.connection;
+      return mongoose.connection
     })
     .catch((error) => {
       const message = `Failed to connect to MongoDB (${env.mongodb.dbName}): ${error.message}`
@@ -48,14 +53,14 @@ export const connectDB = async () => {
       connectPromise = null
     })
 
-  return connectPromise;
-};
+  return connectPromise
+}
 
 export const disconnectDB = async () => {
-  if (!isConnected && !mongoose.connection.readyState) return;
-  isDisconnecting = true;
-  await mongoose.disconnect();
-  isConnected = false;
-  connectPromise = null;
-  console.log('MongoDB disconnected');
-};
+  if (!isConnected && !mongoose.connection.readyState) return
+  isDisconnecting = true
+  await mongoose.disconnect()
+  isConnected = false
+  connectPromise = null
+  console.log('MongoDB disconnected')
+}

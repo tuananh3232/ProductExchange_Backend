@@ -22,6 +22,17 @@ export const toUserResponse = (user = {}) => {
     avatar: user.avatar || { url: avatarUrl, publicId: '' },
     phone: user.phone || '',
     address: user.address || { province: '', district: '', detail: '' },
+    addresses: Array.isArray(user.addresses)
+      ? user.addresses.map((address) => ({
+          id: address._id?.toString?.() || address.id,
+          label: address.label || 'Địa chỉ nhận hàng',
+          phone: address.phone || '',
+          province: address.province || '',
+          district: address.district || '',
+          detail: address.detail || '',
+          isDefault: Boolean(address.isDefault),
+        }))
+      : [],
     roles,
     primaryRole: getPrimaryRole(roles),
     status: isActive ? 'active' : 'inactive',

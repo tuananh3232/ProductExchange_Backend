@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { INVITATION_STATUS, INVITATION_STATUS_ENUM } from '../constants/status.constant.js';
+import mongoose from 'mongoose'
+import { INVITATION_STATUS, INVITATION_STATUS_ENUM } from '../constants/status.constant.js'
 
 const shopInvitationSchema = new mongoose.Schema(
   {
@@ -48,12 +48,12 @@ const shopInvitationSchema = new mongoose.Schema(
     timestamps: true,
     versionKey: false,
   }
-);
+)
 
 // Compound index for finding active invitations for a user
-shopInvitationSchema.index({ invitee: 1, status: 1 });
+shopInvitationSchema.index({ invitee: 1, status: 1 })
 
 // Compound index for finding invitations for a shop
-shopInvitationSchema.index({ shop: 1, status: 1 });
+shopInvitationSchema.index({ shop: 1, status: 1 })
 
-export default mongoose.model('ShopInvitation', shopInvitationSchema);
+export default mongoose.model('ShopInvitation', shopInvitationSchema)
