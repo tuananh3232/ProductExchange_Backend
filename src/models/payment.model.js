@@ -27,12 +27,12 @@ const paymentSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
-      default: 'vnpay',
+      default: 'payos',
       index: true,
     },
     method: {
       type: String,
-      default: 'vnpay',
+      default: 'payos',
     },
     status: {
       type: String,
@@ -45,15 +45,7 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    bankCode: {
-      type: String,
-      default: '',
-    },
     responseCode: {
-      type: String,
-      default: '',
-    },
-    vnpTransactionNo: {
       type: String,
       default: '',
     },

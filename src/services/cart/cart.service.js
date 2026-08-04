@@ -187,15 +187,11 @@ const getShippingAddress = async (userId) => {
   }
 }
 
-const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext, req) => {
+const createPaymentForSingleOrder = async (paymentMethod, orderId, userContext) => {
   if (!paymentMethod) return { paymentUrl: null, payment: null }
 
   if (paymentMethod === 'PAYOS') {
     return paymentService.createPayosPayment(orderId, userContext)
-  }
-
-  if (paymentMethod === 'VNPAY') {
-    return paymentService.createVnpayPayment(orderId, userContext, req)
   }
 
   if (paymentMethod === 'WALLET') {
@@ -214,7 +210,7 @@ const toCheckoutOrder = (order) => ({
   productId: order.product?._id?.toString?.() || order.product?.toString?.(),
 })
 
-export const checkoutCart = async (userId, payload = {}, userContext, req) => {
+export const checkoutCart = async (userId, payload = {}, userContext) => {
   const cart = await getOrCreateCart(userId)
   if (!cart.items.length) {
     throw new AppError('Gio hang dang trong', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.REQUIRED)
@@ -252,7 +248,7 @@ export const checkoutCart = async (userId, payload = {}, userContext, req) => {
   const paymentMethod = payload.paymentMethod?.toUpperCase?.()
 
   if (paymentMethod && createdOrders.length === 1) {
-    const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext, req)
+    const paymentResult = await createPaymentForSingleOrder(paymentMethod, createdOrders[0]._id, userContext)
     paymentUrl = paymentResult.paymentUrl || null
     payment = paymentResult.payment || null
     if (paymentMethod === 'WALLET') {

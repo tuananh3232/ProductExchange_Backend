@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-ProductExchange is a Node.js/Express/MongoDB REST API backend for EXE202 (FPTU Term8) — a marketplace for buying, selling, renting, and exchanging products (home decor focus). The platform acts as an escrow: buyers pay up front (wallet/VNPay/PayOS), the platform holds funds, and sellers/shops are paid only after an order is DELIVERED.
+ProductExchange is a Node.js/Express/MongoDB REST API backend for EXE202 (FPTU Term8) — a marketplace for buying, selling, renting, and exchanging products (home decor focus). The platform acts as an escrow: buyers pay up front (wallet/PayOS), the platform holds funds, and sellers/shops are paid only after an order is DELIVERED.
 
 ESM modules throughout (`"type": "module"`). All user-facing text is Vietnamese; developer-facing error codes are English.
 
@@ -71,12 +71,12 @@ Roles (`src/constants/role.constant.js`): `member`, `admin`, `seller`, `shop_own
 ### Money flows (escrow model)
 
 The platform holds funds and releases them only after delivery. Two distinct wallet systems exist — do not conflate them:
-- **User wallet** (`user-wallet*` models/services) — personal balance: top-up via VNPay/PayOS, pay orders instantly, auto-refund on cancel.
+- **User wallet** (`user-wallet*` models/services) — personal balance: top-up via PayOS, pay orders instantly, auto-refund on cancel.
 - **Shop wallet** (`wallet*` models/services) — shop earnings: order DELIVERED → credit shop wallet minus platform fee → withdrawal request → admin approve/complete.
 
 A double-entry **ledger** (`ledger-*` models, `src/services/ledger/`) plus `fee-policy`/`fee-snapshot` models record transactions and fees. New payment/payout features must preserve the escrow invariant (buyer pays first, seller paid only post-delivery).
 
-Payment providers: **VNPay** (HMAC-SHA512 signed query) and **PayOS** (`@payos/node` SDK). Config in `src/configs/env.config.js` under `env.payment`. Return/IPN URLs are env-driven.
+Payment provider: **PayOS** (`@payos/node` SDK). Config in `src/configs/env.config.js` under `env.payment`. Return/webhook URLs are env-driven.
 
 ### Other cross-cutting pieces
 

@@ -96,18 +96,6 @@ export const env = {
   },
 
   payment: {
-    vnpay: {
-      paymentUrl: process.env.VNPAY_PAYMENT_URL || process.env.VNPAY_SANDBOX_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
-      tmnCode: process.env.VNPAY_TMN_CODE || 'DEMO',
-      hashSecret: process.env.VNPAY_HASH_SECRET || 'DEMO_HASH_SECRET',
-      version: process.env.VNPAY_VERSION || '2.1.0',
-      command: process.env.VNPAY_COMMAND || 'pay',
-      currCode: process.env.VNPAY_CURR_CODE || 'VND',
-      locale: process.env.VNPAY_LOCALE || 'vn',
-      orderType: process.env.VNPAY_ORDER_TYPE || 'other',
-      returnUrl: process.env.VNPAY_RETURN_URL || `${appUrl}${apiPrefix}/payments/vnpay/return`,
-      ipnUrl: process.env.VNPAY_IPN_URL || `${appUrl}${apiPrefix}/payments/vnpay/ipn`,
-    },
     payos: {
       clientId: process.env.PAYOS_CLIENT_ID || '',
       apiKey: process.env.PAYOS_API_KEY || '',

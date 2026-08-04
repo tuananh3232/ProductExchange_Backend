@@ -437,7 +437,7 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
     if (order.paymentMethod === 'wallet') {
       cancelUpdate.paymentStatus = PAYMENT_STATUS.UNPAID
     } else {
-      // Thanh toán qua cổng (VNPay/PayOS) → admin xử lý hoàn tiền thủ công
+      // Thanh toán qua cổng PayOS → admin xử lý hoàn tiền thủ công
       cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
     }
   }

@@ -37,7 +37,7 @@ export const clearCart = asyncHandler(async (req, res) => {
 })
 
 export const checkoutCart = asyncHandler(async (req, res) => {
-  const checkout = await cartService.checkoutCart(req.user._id, req.body, req.user, req)
+  const checkout = await cartService.checkoutCart(req.user._id, req.body, req.user)
   return sendSuccess(res, {
     message: MESSAGES.CART.CHECKOUT_CREATED,
     data: checkout,
