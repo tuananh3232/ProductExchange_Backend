@@ -326,12 +326,18 @@ const buildAdminOverview = async (query = {}) => {
     productRows,
     totalShops,
     totalUsers,
+    totalRegisteredUsers,
+    totalOrders,
+    orderCreatorIds,
   ] = await Promise.all([
     getAdminRevenueSummary({ match: paidAtMatch }),
     aggregateStatusSummary(Order, createdAtMatch),
     aggregateStatusSummary(Product, createdAtMatch),
     Shop.countDocuments({ ...createdAtMatch, isActive: true }),
     User.countDocuments({ ...createdAtMatch, isActive: true }),
+    User.countDocuments(createdAtMatch),
+    Order.countDocuments({ ...createdAtMatch, isActive: true }),
+    Order.distinct('buyer', createdAtMatch),
   ])
 
   return {
@@ -339,7 +345,10 @@ const buildAdminOverview = async (query = {}) => {
     totals: {
       shops: totalShops,
       users: totalUsers,
-      orders: await Order.countDocuments({ ...createdAtMatch, isActive: true }),
+      activeUsers: totalUsers,
+      registeredUsers: totalRegisteredUsers,
+      orderCreators: orderCreatorIds.filter(Boolean).length,
+      orders: totalOrders,
       products: await Product.countDocuments({ ...createdAtMatch, isActive: true }),
     },
     orders: fillStatusSummary(Object.values(ORDER_STATUS), orderRows),
