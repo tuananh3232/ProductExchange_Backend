@@ -200,7 +200,6 @@ export const createOrder = async (buyerId, payload) => {
   const reservedProduct = await Product.findOneAndUpdate(
     { _id: product._id, isActive: true, status: 'available', stock: { $gte: quantity } },
     { $inc: { stock: -quantity } },
-    { returnDocument: 'after' }
   )
   if (!reservedProduct) {
     throw new AppError('Sản phẩm vừa được người khác mua hết', HTTP_STATUS.CONFLICT, ERRORS.PRODUCT.UNAVAILABLE)

@@ -7,7 +7,9 @@ const normalizeOrigin = (value) => (value || '').trim().replace(/\/+$/, '')
 export const corsOptions = {
   origin: (origin, callback) => {
     // Cho phép requests không có origin (Postman, mobile apps)
-    const allowedOrigins = env.cors.allowedOrigins.map(normalizeOrigin).filter(Boolean)
+    const allowedOrigins = [...env.cors.allowedOrigins, env.frontendUrl, env.appUrl]
+      .map(normalizeOrigin)
+      .filter(Boolean)
     if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
       callback(null, true)
     } else {

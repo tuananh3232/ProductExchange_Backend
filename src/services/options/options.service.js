@@ -8,6 +8,7 @@ import {
   WITHDRAWAL_STATUS_ENUM,
 } from '../../constants/status.constant.js'
 import * as categoryRepo from '../../repositories/category/category.repository.js'
+import { ensureDefaultCategories } from '../category/category-seed.service.js'
 
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair', 'poor']
 const PRODUCT_LISTING_TYPES = ['sell', 'rental', 'exchange']
@@ -77,6 +78,8 @@ export const getComboOptions = () => ({
 })
 
 export const getProductFilterOptions = async () => {
+  await ensureDefaultCategories()
+
   const rawCategories = await categoryRepo.findMany({ filter: { isActive: true }, limit: 200, sortBy: 'name', sortOrder: 1 })
   return {
     listingTypes: toOptions(PRODUCT_LISTING_TYPES),

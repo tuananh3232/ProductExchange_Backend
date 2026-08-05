@@ -19,6 +19,8 @@ export const createCategory = async (payload) => {
 }
 
 export const getCategories = async (query, pagination) => {
+  await ensureDefaultCategories()
+
   const filter = { isActive: true }
   if (query.search) filter.$text = { $search: query.search }
 
