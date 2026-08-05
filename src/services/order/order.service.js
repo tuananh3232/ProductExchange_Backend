@@ -250,6 +250,11 @@ export const getOrderById = async (orderId, userContext) => {
   }
 
   await ensureOrderReadable(order, userContext)
+
+  if (order.status === ORDER_STATUS.CANCELLED && order.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT) {
+    return orderRepo.updateById(orderId, { paymentStatus: PAYMENT_STATUS.CANCELLED })
+  }
+
   return order
 }
 
@@ -489,6 +494,8 @@ export const cancelOrder = async (orderId, userContext, note = '') => {
       // Thanh toán qua cổng PayOS → admin xử lý hoàn tiền thủ công
       cancelUpdate.paymentStatus = PAYMENT_STATUS.REFUND_PENDING
     }
+  } else if (order.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT) {
+    cancelUpdate.paymentStatus = PAYMENT_STATUS.CANCELLED
   }
 
   const updated = await orderRepo.updateById(orderId, cancelUpdate)
