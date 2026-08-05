@@ -8,7 +8,7 @@ export const getAdminRentalBookings = asyncHandler(async (req, res) => {
   const result = await rentalService.listAdminRentalBookings(req.query, pagination)
 
   sendSuccess(res, {
-    message: 'Lấy danh sách booking cho thuê thành công',
+    message: 'Lấy danh sách đơn thuê thành công',
     data: { rentalBookings: result.rentalBookings },
     meta: result.meta,
   })
@@ -28,7 +28,7 @@ export const getAdminRentalClaims = asyncHandler(async (req, res) => {
   const result = await rentalService.listAdminRentalClaims(req.query, pagination)
 
   sendSuccess(res, {
-    message: 'Lấy danh sách claim cho thuê thành công',
+    message: 'Lấy danh sách yêu cầu bồi thường thành công',
     data: { rentalClaims: result.rentalClaims },
     meta: result.meta,
   })
@@ -38,7 +38,7 @@ export const getAdminRentalClaimById = asyncHandler(async (req, res) => {
   const rentalClaim = await rentalService.getAdminRentalClaimById(req.params.rentalClaimId)
 
   sendSuccess(res, {
-    message: 'Lấy chi tiết claim cho thuê thành công',
+    message: 'Lấy chi tiết yêu cầu bồi thường thành công',
     data: { rentalClaim },
   })
 })
@@ -47,7 +47,7 @@ export const resolveAdminRentalClaim = asyncHandler(async (req, res) => {
   const rentalClaim = await rentalService.resolveAdminRentalClaim(req.params.rentalClaimId, req.body, req.user)
 
   sendSuccess(res, {
-    message: 'Xử lý claim cho thuê thành công',
+    message: 'Xử lý yêu cầu bồi thường thành công',
     data: { rentalClaim },
   })
 })

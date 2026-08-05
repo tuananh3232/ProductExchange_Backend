@@ -201,7 +201,7 @@ const assertBookingParticipantAccess = (booking, userId) => {
   const isRenter = String(booking.renter?._id || booking.renter) === String(userId)
   const isSeller = booking.seller && String(booking.seller?._id || booking.seller) === String(userId)
   if (!isRenter && !isSeller) {
-    throw new AppError('Bạn không thuộc booking cho thuê này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError('Bạn không thuộc đơn thuê này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 }
 
@@ -216,12 +216,12 @@ const isBookingOwnerActor = (booking, userId) => {
 const getBookingByIdOrThrow = async (bookingId) => {
   const booking = await populateChain(RentalBooking.findById(bookingId), RENTAL_BOOKING_POPULATE)
   if (!booking || !booking.isActive) {
-    throw new AppError('Không tìm thấy booking cho thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.BOOKING_NOT_FOUND)
+    throw new AppError('Không tìm thấy đơn thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.BOOKING_NOT_FOUND)
   }
   return booking
 }
 
-const expireBookingIfNeeded = async (booking, note = 'Booking quá hạn thanh toán nên đã tự hủy') => {
+const expireBookingIfNeeded = async (booking, note = 'Đơn thuê quá hạn thanh toán nên đã tự hủy') => {
   if (!booking || !isPaymentWindowExpired(booking)) {
     return booking
   }
@@ -283,7 +283,7 @@ export const runRentalMaintenance = async () => {
 const getClaimByIdOrThrow = async (claimId) => {
   const claim = await populateChain(RentalClaim.findById(claimId), RENTAL_CLAIM_POPULATE)
   if (!claim || !claim.isActive) {
-    throw new AppError('Không tìm thấy claim cho thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
+    throw new AppError('Không tìm thấy yêu cầu bồi thường', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
   }
   return claim
 }
@@ -291,7 +291,7 @@ const getClaimByIdOrThrow = async (claimId) => {
 const getClaimByIdIncludingInactiveOrThrow = async (claimId) => {
   const claim = await populateChain(RentalClaim.findById(claimId), RENTAL_CLAIM_POPULATE)
   if (!claim) {
-    throw new AppError('Không tìm thấy claim cho thuê', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
+    throw new AppError('Không tìm thấy yêu cầu bồi thường', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
   }
   return claim
 }
@@ -315,7 +315,7 @@ const buildBookingDraft = async ({ listing, payload, excludeBookingId = null }) 
   })
 
   if (overlap) {
-    throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
+    throw new AppError('Đã có đơn thuê trùng lịch trong khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
   }
 
   return {
@@ -452,7 +452,7 @@ export const createRentalBooking = async (payload, user) => {
   })
 
   if (overlap) {
-    throw new AppError('Đã có booking trùng lịch cho khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
+    throw new AppError('Đã có đơn thuê trùng lịch trong khoảng thời gian này', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.OVERLAPPING_BOOKING)
   }
 
   const booking = await RentalBooking.create({
@@ -528,7 +528,7 @@ export const updateRentalBooking = async (bookingId, payload, user) => {
   const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
 
   if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
-    throw new AppError('Chỉ người thuê mới được cập nhật booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError('Chỉ người thuê mới được cập nhật đơn thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
   if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
@@ -562,7 +562,7 @@ export const cancelRentalBooking = async (bookingId, payload, user) => {
   const booking = await expireBookingIfNeeded(await getBookingByIdOrThrow(bookingId))
 
   if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
-    throw new AppError('Chỉ người thuê mới được hủy booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError('Chỉ người thuê mới được hủy đơn thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
   if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
@@ -601,7 +601,7 @@ export const payRentalBooking = async (bookingId, user) => {
   }
 
   if (String(booking.renter?._id || booking.renter) !== String(user._id)) {
-    throw new AppError('Chỉ người thuê mới được thanh toán booking', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+    throw new AppError('Chỉ người thuê mới được thanh toán đơn thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
   if (booking.status !== RENTAL_BOOKING_STATUS.PAYMENT_PENDING) {
@@ -618,7 +618,7 @@ export const payRentalBooking = async (bookingId, user) => {
   const renterWallet = await userWalletRepo.deductForExchange(user._id, totalHoldAmount)
 
   if (!renterWallet) {
-    throw new AppError('Số dư ví không đủ để thanh toán booking thuê', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
+    throw new AppError('Số dư ví không đủ để thanh toán đơn thuê', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
   }
 
   const walletTx = await userWalletRepo.createTransaction({
@@ -995,7 +995,7 @@ export const createRentalClaim = async (bookingId, payload, user) => {
   }
 
   if (booking.status !== RENTAL_BOOKING_STATUS.RETURN_PENDING_CONFIRMATION) {
-    throw new AppError('Chỉ được mở khiếu nại khi booking đang chờ xác nhận trả', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+    throw new AppError('Chỉ được gửi yêu cầu bồi thường khi đơn thuê đang chờ xác nhận trả', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
   }
 
   const existingClaim = await RentalClaim.findOne({
@@ -1072,7 +1072,7 @@ export const resolveAdminRentalClaim = async (claimId, payload, adminUser) => {
   }
 
   if (![RENTAL_CLAIM_STATUS.OPEN, RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW, RENTAL_CLAIM_STATUS.WAITING_RENTER_RESPONSE].includes(claim.status)) {
-    throw new AppError('Claim không còn ở trạng thái xử lý', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.DISPUTE_REQUIRED)
+    throw new AppError('Yêu cầu bồi thường này không còn trong thời gian xử lý', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.DISPUTE_REQUIRED)
   }
 
   const booking = await getBookingByIdOrThrow(claim.booking._id || claim.booking)
