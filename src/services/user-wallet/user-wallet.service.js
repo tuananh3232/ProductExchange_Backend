@@ -12,6 +12,7 @@ import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
+import * as userRepo from '../../repositories/user/user.repository.js'
 
 // Trạng thái cho phép thanh toán lại bằng ví: chưa trả, hoặc lần thanh toán qua cổng
 // trước đó đã bị bỏ dở (đang chờ/thất bại/đã hủy). Chỉ chặn khi đơn đã PAID hoặc đang hoàn tiền.
@@ -373,6 +374,7 @@ export const rejectUserWithdrawal = async (withdrawalId, userContext, rejectionR
     }, options)
 
     await userWalletRepo.revertWithdrawal(userId, withdrawal.amount, options)
+
     return updated
   })
 
@@ -424,6 +426,13 @@ export const completeUserWithdrawal = async (withdrawalId, userContext, adminNot
       metadata: { withdrawalId },
     }, options)
 
+    await ledgerService.recordUserWalletWithdrawal({
+      referenceId: withdrawal._id,
+      userId,
+      amount: withdrawal.amount,
+      session,
+    })
+
     return updated
   })
 
@@ -450,12 +459,14 @@ export const creditWalletFromTopup = async (topup) => {
   const existing = await userWalletRepo.findTransactionByTopup(topupId)
   if (existing) return existing
 
-  const walletBefore = await userWalletRepo.findByUser(userId)
+  return runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const walletBefore = await userWalletRepo.findByUser(userId, options)
   const balanceBefore = walletBefore?.balance || 0
 
-  const updatedWallet = await userWalletRepo.creditTopup(userId, amount)
+    const updatedWallet = await userWalletRepo.creditTopup(userId, amount, options)
 
-  return userWalletRepo.createTransaction({
+    const transaction = await userWalletRepo.createTransaction({
     wallet: updatedWallet._id,
     user: userId,
     topup: topupId,
@@ -464,6 +475,72 @@ export const creditWalletFromTopup = async (topup) => {
     balanceBefore,
     balanceAfter: updatedWallet.balance,
     description: `Nạp tiền vào ví ${amount.toLocaleString('vi-VN')} VNĐ`,
-    metadata: { topupId },
+    metadata: { topupId, source: topup.provider || 'payos' },
+    }, options)
+
+  await ledgerService.recordUserWalletTopup({
+    referenceId: topupId,
+    userId,
+    amount,
+    source: topup.provider || 'payos',
+    session,
+    description: 'Tiền nạp đã được ghi nhận vào ví trung gian',
   })
+
+    return transaction
+  })
+}
+
+export const creditWalletByAdmin = async (userId, amount, userContext, note = '') => {
+  const user = await userRepo.findById(userId)
+  if (!user) {
+    throw new AppError('Không tìm thấy người dùng', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  if (amount < USER_WALLET_CONSTANTS.MIN_TOPUP_AMOUNT || amount > USER_WALLET_CONSTANTS.MAX_TOPUP_AMOUNT) {
+    throw new AppError(
+      `Số tiền cộng phải từ ${USER_WALLET_CONSTANTS.MIN_TOPUP_AMOUNT.toLocaleString('vi-VN')} đến ${USER_WALLET_CONSTANTS.MAX_TOPUP_AMOUNT.toLocaleString('vi-VN')} VNĐ`,
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.USER_WALLET.TOPUP_AMOUNT_TOO_HIGH
+    )
+  }
+
+  const result = await runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const walletBefore = await userWalletRepo.findOrCreateByUser(userId, options)
+    const updatedWallet = await userWalletRepo.creditTopup(userId, amount, options)
+    const transaction = await userWalletRepo.createTransaction({
+      wallet: updatedWallet._id,
+      user: userId,
+      type: USER_WALLET_TRANSACTION_TYPE.TOPUP,
+      amount,
+      balanceBefore: walletBefore.balance || 0,
+      balanceAfter: updatedWallet.balance,
+      description: `Admin cộng tiền mặt vào ví ${amount.toLocaleString('vi-VN')} VNĐ`,
+      metadata: { source: 'admin_cash', adminId: userContext._id, note: note.trim() },
+    }, options)
+
+    await ledgerService.recordUserWalletTopup({
+      referenceId: transaction._id,
+      referenceType: 'user_wallet',
+      userId,
+      amount,
+      source: 'admin_cash',
+      description: 'Admin ghi nhận tiền mặt vào ví trung gian',
+      session,
+    })
+
+    return { wallet: updatedWallet, transaction }
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'USER_WALLET_CREDITED',
+    targetType: 'user',
+    targetId: userId,
+    adminNote: note,
+    metadata: { amount, source: 'admin_cash', transactionId: result.transaction._id },
+  })
+
+  return result
 }

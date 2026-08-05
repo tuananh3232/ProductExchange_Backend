@@ -47,6 +47,7 @@ import {
   adminShopsQuerySchema,
   adminUserStatusSchema,
   adminUsersQuerySchema,
+  adminCreditUserWalletSchema,
   adminWithdrawalsQuerySchema,
 } from '../../validations/admin/admin.validation.js'
 import {
@@ -246,6 +247,15 @@ router.get(
   requireAdmin,
   validateObjectId('userId'),
   authController.getAdminUserById
+)
+
+router.post(
+  '/users/:userId/wallet/credit',
+  authenticate,
+  requireAdmin,
+  validateObjectId('userId'),
+  validate(adminCreditUserWalletSchema),
+  userWalletController.adminCreditUserWallet
 )
 
 router.get(

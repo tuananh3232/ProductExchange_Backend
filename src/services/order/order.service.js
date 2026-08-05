@@ -507,6 +507,9 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   if (nextStatus === ORDER_STATUS.DELIVERED) {
     await Order.findByIdAndUpdate(orderId, { inventoryStatus: 'consumed' })
     await Product.findOneAndUpdate({ _id: order.product?._id || order.product, stock: { $lte: 0 } }, { status: 'sold' })
+    if (updated.paymentStatus === PAYMENT_STATUS.PAID && updated.shop) {
+      await ledgerService.releaseOrderSettlement(orderId)
+    }
   }
 
   const typeByStatus = {

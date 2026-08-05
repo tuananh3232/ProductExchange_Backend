@@ -121,3 +121,12 @@ export const completeUserWithdrawal = asyncHandler(async (req, res) => {
   const result = await userWalletService.completeUserWithdrawal(req.params.id, req.user, adminNote, transferProof)
   sendSuccess(res, { message: MESSAGES.USER_WALLET.WITHDRAWAL_COMPLETED, data: result })
 })
+
+export const adminCreditUserWallet = asyncHandler(async (req, res) => {
+  const result = await userWalletService.creditWalletByAdmin(req.params.userId, req.body.amount, req.user, req.body.note)
+  sendSuccess(res, {
+    message: 'Đã cộng tiền vào ví người dùng và ghi nhận vào ví trung gian',
+    data: result,
+    statusCode: HTTP_STATUS.CREATED,
+  })
+})
