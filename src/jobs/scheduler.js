@@ -1,5 +1,6 @@
 import { runRentalMaintenance } from '../services/rental/rental.service.js'
 import { expirePendingOrders, releaseDueOrderSettlements } from '../services/order/order.service.js'
+import { reconcilePendingPayosPayments } from '../services/payment/payment.service.js'
 
 // Chu kỳ chạy tác vụ nền (ms). Mặc định 15 phút, có thể override qua env.
 const RENTAL_MAINTENANCE_INTERVAL_MS =
@@ -21,8 +22,10 @@ const runRentalTick = async () => {
 
 const runOrderTick = async () => {
   try {
+    const { paidCount } = await reconcilePendingPayosPayments()
     const { expiredCount } = await expirePendingOrders()
     const { releasedCount } = await releaseDueOrderSettlements()
+    if (paidCount > 0) console.log(`Đã đối soát tự động ${paidCount} giao dịch PayOS`)
     if (expiredCount > 0) console.log(`Đã tự huỷ ${expiredCount} đơn hàng quá hạn thanh toán`)
     if (releasedCount > 0) console.log(`Đã giải ngân ${releasedCount} đơn hàng sau thời gian giữ tiền`)
   } catch (error) {
