@@ -47,6 +47,6 @@ export const updateAdminCategoryStatus = asyncHandler(async (req, res) => {
 })
 
 export const deleteCategory = asyncHandler(async (req, res) => {
-  await categoryService.deleteCategory(req.params.id)
+  await categoryService.deleteCategory(req.params.id || req.params.categoryId)
   sendSuccess(res, { message: MESSAGES.CATEGORY.DELETED })
 })

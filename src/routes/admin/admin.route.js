@@ -1300,6 +1300,14 @@ router.patch(
   categoryController.updateCategory
 )
 
+router.delete(
+  '/categories/:categoryId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('categoryId'),
+  categoryController.deleteCategory
+)
+
 router.patch(
   '/categories/:categoryId/status',
   authenticate,
