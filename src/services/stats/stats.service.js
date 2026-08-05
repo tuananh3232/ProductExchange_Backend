@@ -4,12 +4,17 @@ import Product from '../../models/product.model.js'
 import Shop from '../../models/shop.model.js'
 import User from '../../models/user.model.js'
 import SubscriptionOrder from '../../models/subscription-order.model.js'
+import Cart from '../../models/cart.model.js'
+import Payment from '../../models/payment.model.js'
+import UserWalletTopup from '../../models/user-wallet-topup.model.js'
+import LedgerTransaction from '../../models/ledger-transaction.model.js'
 import AppError from '../../utils/app-error.util.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import ERRORS from '../../constants/error.constant.js'
 import { PERMISSIONS } from '../../constants/permission.constant.js'
 import { assertShopPermission } from '../../utils/data-scope.util.js'
 import { ORDER_STATUS, PAYMENT_STATUS, PRODUCT_STATUS } from '../../constants/status.constant.js'
+import { LEDGER_TRANSACTION_TYPE } from '../../constants/ledger.constant.js'
 
 const TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -316,6 +321,33 @@ const getTopProducts = async ({ match = {}, shopId = null, limit = 5 }) => {
   return Order.aggregate(pipeline)
 }
 
+const getActiveUserIds = async () => {
+  const [vipUserIds, cartUserIds, topupUserIds, ledgerTopupUserIds, orderBuyerIds, paymentBuyerIds] = await Promise.all([
+    SubscriptionOrder.distinct('user', { status: 'completed' }),
+    Cart.distinct('user', {
+      $or: [
+        { hasAddedItem: true },
+        { 'items.0': { $exists: true } },
+      ],
+    }),
+    UserWalletTopup.distinct('user', { status: 'completed' }),
+    LedgerTransaction.distinct('metadata.userId', {
+      transactionType: LEDGER_TRANSACTION_TYPE.USER_WALLET_TOPUP,
+    }),
+    Order.distinct('buyer', { paymentStatus: PAYMENT_STATUS.PAID, status: { $ne: ORDER_STATUS.CANCELLED } }),
+    Payment.distinct('buyer', { status: PAYMENT_STATUS.PAID }),
+  ])
+
+  return [...new Set([
+    ...vipUserIds,
+    ...cartUserIds,
+    ...topupUserIds,
+    ...ledgerTopupUserIds,
+    ...orderBuyerIds,
+    ...paymentBuyerIds,
+  ].filter(Boolean).map((userId) => userId.toString()))]
+}
+
 const buildAdminOverview = async (query = {}) => {
   const createdAtMatch = parseDateFilter(query, 'createdAt')
   const paidAtMatch = parseDateFilter(query, 'paidAt')
@@ -326,27 +358,35 @@ const buildAdminOverview = async (query = {}) => {
     productRows,
     totalShops,
     totalUsers,
-    totalRegisteredUsers,
     totalOrders,
     orderCreatorIds,
+    activeUserIds,
   ] = await Promise.all([
     getAdminRevenueSummary({ match: paidAtMatch }),
     aggregateStatusSummary(Order, createdAtMatch),
     aggregateStatusSummary(Product, createdAtMatch),
     Shop.countDocuments({ ...createdAtMatch, isActive: true }),
     User.countDocuments({ ...createdAtMatch, isActive: true }),
-    User.countDocuments(createdAtMatch),
     Order.countDocuments({ ...createdAtMatch, isActive: true }),
     Order.distinct('buyer', createdAtMatch),
+    getActiveUserIds(),
   ])
+
+  const customerScope = { ...createdAtMatch, roles: { $nin: ['admin'] } }
+  const activeCustomerIds = await User.find({
+    _id: { $in: activeUserIds },
+    isActive: true,
+    ...customerScope,
+  }).distinct('_id')
+  const registeredCustomers = await User.countDocuments(customerScope)
 
   return {
     revenue: revenueSummary,
     totals: {
       shops: totalShops,
       users: totalUsers,
-      activeUsers: totalUsers,
-      registeredUsers: totalRegisteredUsers,
+      activeUsers: activeCustomerIds.length,
+      registeredUsers: registeredCustomers,
       orderCreators: orderCreatorIds.filter(Boolean).length,
       orders: totalOrders,
       products: await Product.countDocuments({ ...createdAtMatch, isActive: true }),

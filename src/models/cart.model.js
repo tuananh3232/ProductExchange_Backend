@@ -13,6 +13,7 @@ const cartSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
     items: { type: [cartItemSchema], default: [] },
+    hasAddedItem: { type: Boolean, default: false, index: true },
   },
   { timestamps: true, versionKey: false }
 )
