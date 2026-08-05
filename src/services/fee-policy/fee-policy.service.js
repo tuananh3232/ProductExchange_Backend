@@ -317,21 +317,27 @@ export const previewFee = async (payload) => {
   }).preview
 }
 
-export const seedDefaultSaleFeePolicies = async (adminId = null) => {
+export const seedDefaultFeePolicies = async (adminId = null) => {
   const defaults = [
-    { minAmount: 0, maxAmount: 100000, percent: 5 },
-    { minAmount: 100000, maxAmount: 1000000, percent: 8 },
-    { minAmount: 1000000, maxAmount: 5000000, percent: 10 },
-    { minAmount: 5000000, maxAmount: null, percent: 12 },
+    { transactionType: 'SALE', baseAmountType: 'SALE_PRICE', minAmount: 0, maxAmount: 100000, percent: 10 },
+    { transactionType: 'SALE', baseAmountType: 'SALE_PRICE', minAmount: 100000, maxAmount: 1000000, percent: 16 },
+    { transactionType: 'SALE', baseAmountType: 'SALE_PRICE', minAmount: 1000000, maxAmount: 5000000, percent: 20 },
+    { transactionType: 'SALE', baseAmountType: 'SALE_PRICE', minAmount: 5000000, maxAmount: null, percent: 24 },
+    { transactionType: 'RENTAL', baseAmountType: 'RENTAL_ACTUAL_AMOUNT', minAmount: 0, maxAmount: null, percent: 10 },
+    { transactionType: 'EXCHANGE', baseAmountType: 'EXCHANGE_CASH_DIFFERENCE', minAmount: 0, maxAmount: null, percent: 10 },
   ]
 
   return runMongoTransaction(async (session) => {
     const options = session ? { session } : {}
-    await FeePolicy.deleteMany({ transactionType: 'SALE', ownerType: 'ALL', categoryId: null }, options)
+    await FeePolicy.deleteMany({
+      transactionType: { $in: ['SALE', 'RENTAL', 'EXCHANGE'] },
+      ownerType: 'ALL',
+      categoryId: null,
+    }, options)
 
     const created = await FeePolicy.insertMany(
       defaults.map((item) => ({
-        transactionType: 'SALE',
+        transactionType: item.transactionType,
         ownerType: 'ALL',
         categoryId: null,
         minAmount: item.minAmount,
@@ -340,7 +346,7 @@ export const seedDefaultSaleFeePolicies = async (adminId = null) => {
         minFee: 0,
         maxFee: null,
         fixedFee: 0,
-        baseAmountType: 'SALE_PRICE',
+        baseAmountType: item.baseAmountType,
         rounding: 'ROUND',
         status: FEE_POLICY_STATUS.ACTIVE,
         effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
@@ -354,3 +360,6 @@ export const seedDefaultSaleFeePolicies = async (adminId = null) => {
     return created
   })
 }
+
+// Kept as an alias so existing admin integrations using the old service name continue to work.
+export const seedDefaultSaleFeePolicies = seedDefaultFeePolicies

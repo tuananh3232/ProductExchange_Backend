@@ -87,7 +87,7 @@ const buildExchangeFeePreview = async (exchangeTerms, categoryId) => {
       transactionCreatedAt: new Date(),
     })
   } catch {
-    const calculatedFee = Math.round(exchangeTerms.cashDifferenceAmount * 0.05)
+    const calculatedFee = Math.round(exchangeTerms.cashDifferenceAmount * 0.1)
     return {
       feePolicyId: null,
       transactionType: 'EXCHANGE',
@@ -95,7 +95,7 @@ const buildExchangeFeePreview = async (exchangeTerms, categoryId) => {
       categoryId: categoryId || null,
       baseAmountType: FEE_BASE_AMOUNT_TYPE.EXCHANGE_CASH_DIFFERENCE,
       rounding: 'ROUND',
-      percent: 5,
+      percent: 10,
       fixedFee: 0,
       minFee: 0,
       maxFee: null,

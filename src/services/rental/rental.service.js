@@ -164,7 +164,7 @@ const buildRentalFeePreview = async (booking, categoryId) => {
       transactionCreatedAt: new Date(),
     })
   } catch {
-    const calculatedFee = Math.round(Number(booking.actualRentAmount || 0) * 0.05)
+    const calculatedFee = Math.round(Number(booking.actualRentAmount || 0) * 0.1)
     return {
       feePolicyId: null,
       transactionType: 'RENTAL',
@@ -172,7 +172,7 @@ const buildRentalFeePreview = async (booking, categoryId) => {
       categoryId: categoryId || null,
       baseAmountType: 'RENTAL_ACTUAL_AMOUNT',
       rounding: 'ROUND',
-      percent: 5,
+      percent: 10,
       fixedFee: 0,
       minFee: 0,
       maxFee: null,

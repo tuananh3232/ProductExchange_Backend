@@ -424,7 +424,7 @@ export const recordVipSubscriptionRevenue = async (subscriptionOrderId, { paymen
 }
 
 const resolveFallbackFeePreview = (baseAmount, ownerType) => {
-  const percent = ownerType === 'SHOP' ? 5 : 5
+  const percent = ownerType === 'SHOP' ? 10 : 10
   const calculatedFee = Math.round((Number(baseAmount) * percent) / 100)
 
   return {

@@ -186,7 +186,7 @@ const MESSAGES = {
     UPDATED: 'Cập nhật fee policy thành công',
     DISABLED: 'Vô hiệu hóa fee policy thành công',
     PREVIEWED: 'Tính preview phí thành công',
-    SEEDED: 'Seed fee policy mặc định thành công',
+    SEEDED: 'Đã áp dụng chính sách phí mặc định thành công',
   },
 }
 

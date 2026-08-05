@@ -1129,7 +1129,7 @@ router.post(
   '/fee-policies/seed',
   authenticate,
   requireAdmin,
-  adminFeePolicyController.seedDefaultSaleFeePolicies
+  adminFeePolicyController.seedDefaultFeePolicies
 )
 
 router.get(

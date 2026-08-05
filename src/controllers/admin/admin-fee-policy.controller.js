@@ -56,8 +56,8 @@ export const previewFee = asyncHandler(async (req, res) => {
   })
 })
 
-export const seedDefaultSaleFeePolicies = asyncHandler(async (req, res) => {
-  const feePolicies = await feePolicyService.seedDefaultSaleFeePolicies(req.user?._id || null)
+export const seedDefaultFeePolicies = asyncHandler(async (req, res) => {
+  const feePolicies = await feePolicyService.seedDefaultFeePolicies(req.user?._id || null)
   sendSuccess(res, {
     message: MESSAGES.FEE_POLICY.SEEDED,
     data: { feePolicies },
