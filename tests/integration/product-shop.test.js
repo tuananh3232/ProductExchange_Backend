@@ -7,6 +7,7 @@ import { ROLES } from '../../src/constants/role.constant.js'
 import { PRODUCT_STATUS, SHOP_STATUS } from '../../src/constants/status.constant.js'
 import { PRODUCT_OWNER_TYPES } from '../../src/models/product.model.js'
 import PERMISSIONS from '../../src/constants/permission.constant.js'
+import Category from '../../src/models/category.model.js'
 import Shop from '../../src/models/shop.model.js'
 import User from '../../src/models/user.model.js'
 import { resetTestDatabase } from '../setup/test-db.js'
@@ -32,6 +33,15 @@ beforeEach(async () => {
 })
 
 describe('product and shop integration', () => {
+  it('seeds default product categories when filter options are empty', async () => {
+    const response = await request(app).get(`${api}/products/filter-options`)
+    const activeCategoryCount = await Category.countDocuments({ isActive: true })
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.categories.length).toBeGreaterThan(0)
+    expect(activeCategoryCount).toBe(response.body.data.categories.length)
+  })
+
   it('does not allow a member without approved KYC to create a shop draft', async () => {
     const { token } = await loginMember()
 
@@ -285,6 +295,19 @@ describe('product and shop integration', () => {
       .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SELLER, category: category._id.toString() }))
 
     expect(response.status).toBe(403)
+  })
+
+  it('does not allow creating a product with an inactive category', async () => {
+    const { token } = await loginSeller()
+    const category = await createSampleCategory({ isActive: false })
+
+    const response = await request(app)
+      .post(`${api}/products`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(productPayload({ ownerType: PRODUCT_OWNER_TYPES.SELLER, category: category._id.toString() }))
+
+    expect(response.status).toBe(400)
+    expect(response.body.error).toBe(ERRORS.GENERAL.NOT_FOUND)
   })
 
   it('only returns active available products in the public list by default', async () => {

@@ -1,4 +1,5 @@
 import * as productRepo from '../../repositories/product/product.repository.js'
+import * as categoryRepo from '../../repositories/category/category.repository.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -346,6 +347,7 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
 
   if (publicOnly) {
     filter.isActive = true
+    filter.stock = { $gt: 0 }
   } else if (query.isActive !== undefined) {
     filter.isActive = query.isActive === 'true' || query.isActive === true
   }
@@ -429,6 +431,15 @@ const assertTransactionModeForOwnership = (transactionMode, ownerType) => {
   }
 }
 
+const ensureActiveCategory = async (categoryId) => {
+  const category = await categoryRepo.findById(categoryId)
+  if (!category || !category.isActive) {
+    throw new AppError('Danh mục không tồn tại hoặc đã bị tắt', HTTP_STATUS.BAD_REQUEST, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  return category
+}
+
 export const getProducts = async (query, pagination) => {
   const pag = normalizeProductSort(pagination)
   const filter = await applyTransactionModeFilter(query, buildFilter(query))
@@ -501,6 +512,7 @@ export const createProduct = async (userContext, productData, files = []) => {
   const safeProductData = { ...productData }
   delete safeProductData.ownerType
   assertTransactionModeForOwnership(safeProductData.transactionMode || PRODUCT_TRANSACTION_MODES.SELL, ownership.ownerType)
+  await ensureActiveCategory(safeProductData.category)
 
   const uploadedImages = files.length ? await Promise.all(files.map((f) => uploadBuffer(f.buffer, 'products'))) : []
   const images = normalizeImages(uploadedImages)
@@ -524,6 +536,9 @@ export const updateProduct = async (productId, userContext, updateData) => {
   const nextUpdateData = await normalizeUpdateOwnership(product, updateData, userContext)
   if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'transactionMode')) {
     assertTransactionModeForOwnership(nextUpdateData.transactionMode, product.ownerType)
+  }
+  if (Object.prototype.hasOwnProperty.call(nextUpdateData, 'category')) {
+    await ensureActiveCategory(nextUpdateData.category)
   }
   if (Object.prototype.hasOwnProperty.call(updateData, 'location') && updateData.location) {
     nextUpdateData.location = {
