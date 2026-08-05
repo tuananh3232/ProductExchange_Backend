@@ -24,7 +24,8 @@ const ORDER_TRANSITIONS = {
   [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.PROCESSING, ORDER_STATUS.CANCELLED],
   [ORDER_STATUS.PROCESSING]: [ORDER_STATUS.SHIPPED, ORDER_STATUS.CANCELLED],
   [ORDER_STATUS.SHIPPED]: [ORDER_STATUS.DELIVERED],
-  [ORDER_STATUS.DELIVERED]: [],
+  [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.COMPLETED],
+  [ORDER_STATUS.COMPLETED]: [],
   [ORDER_STATUS.CANCELLED]: [],
 }
 
@@ -413,6 +414,46 @@ export const confirmOrder = async (orderId, userContext) => {
   return updated
 }
 
+export const confirmOrderReceived = async (orderId, userContext) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+
+  const buyerId = order.buyer?._id?.toString() || order.buyer?.toString()
+  if (buyerId !== userContext._id.toString()) {
+    throw new AppError('Bạn không có quyền xác nhận đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+  if (order.status !== ORDER_STATUS.DELIVERED) {
+    throw new AppError('Chỉ có thể xác nhận sau khi đơn hàng đã giao thành công', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    throw new AppError('Đơn hàng chưa được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
+  }
+
+  const customerReceivedAt = new Date()
+  const deliveredHistory = [...(order.history || [])].reverse().find((entry) => entry.status === ORDER_STATUS.DELIVERED)
+  const deliveredAt = order.deliveredAt || deliveredHistory?.updatedAt || customerReceivedAt
+  const shopSettlementReleaseAt = new Date(new Date(deliveredAt).getTime() + 7 * 24 * 60 * 60 * 1000)
+  const updated = await orderRepo.updateById(orderId, {
+    status: ORDER_STATUS.COMPLETED,
+    customerReceivedAt,
+    shopSettlementReleaseAt,
+    $push: {
+      history: {
+        status: ORDER_STATUS.COMPLETED,
+        note: 'Người mua xác nhận đã nhận được hàng',
+        updatedBy: userContext._id,
+        updatedAt: customerReceivedAt,
+      },
+    },
+  })
+
+  await ledgerService.recognizeOrderRevenue(orderId)
+  await notifyOrderUser(getOrderSellerRecipient(updated), NOTIFICATION_TYPES.ORDER_DELIVERED, updated, 'Người mua đã xác nhận nhận được hàng', userContext._id)
+  return updated
+}
+
 export const cancelOrder = async (orderId, userContext, note = '') => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
@@ -488,6 +529,10 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_UPDATE_STATUS)
   ensureTransitionAllowed(order.status, nextStatus)
 
+  if (nextStatus === ORDER_STATUS.COMPLETED) {
+    throw new AppError('Đơn hàng chỉ được hoàn tất khi người mua xác nhận đã nhận hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+
   if (nextStatus === ORDER_STATUS.CANCELLED) {
     return cancelOrder(orderId, userContext, note)
   }
@@ -505,11 +550,8 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
   })
 
   if (nextStatus === ORDER_STATUS.DELIVERED) {
-    await Order.findByIdAndUpdate(orderId, { inventoryStatus: 'consumed' })
+    await Order.findByIdAndUpdate(orderId, { inventoryStatus: 'consumed', deliveredAt: new Date() })
     await Product.findOneAndUpdate({ _id: order.product?._id || order.product, stock: { $lte: 0 } }, { status: 'sold' })
-    if (updated.paymentStatus === PAYMENT_STATUS.PAID && updated.shop) {
-      await ledgerService.releaseOrderSettlement(orderId)
-    }
   }
 
   const typeByStatus = {
@@ -538,6 +580,53 @@ export const updateAdminOrderStatus = async (orderId, userContext, { status, rea
     reason,
     adminNote,
   })
+  return updated
+}
+
+export const confirmOrderReceivedByAdmin = async (orderId, userContext, { evidence = '', adminNote = '' } = {}) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+  if (order.status !== ORDER_STATUS.DELIVERED) {
+    throw new AppError('Chỉ có thể xác nhận hoàn tất từ trạng thái đã giao', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    throw new AppError('Đơn hàng chưa được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
+  }
+
+  const normalizedEvidence = evidence.trim()
+  const customerReceivedAt = new Date()
+  const deliveredHistory = [...(order.history || [])].reverse().find((entry) => entry.status === ORDER_STATUS.DELIVERED)
+  const deliveredAt = order.deliveredAt || deliveredHistory?.updatedAt || customerReceivedAt
+  const shopSettlementReleaseAt = new Date(new Date(deliveredAt).getTime() + 7 * 24 * 60 * 60 * 1000)
+  const updated = await orderRepo.updateById(orderId, {
+    status: ORDER_STATUS.COMPLETED,
+    customerReceivedAt,
+    shopSettlementReleaseAt,
+    $push: {
+      history: {
+        status: ORDER_STATUS.COMPLETED,
+        note: 'Admin xác nhận hoàn tất dựa trên bằng chứng giao hàng',
+        updatedBy: userContext._id,
+        updatedAt: customerReceivedAt,
+      },
+    },
+  })
+
+  await ledgerService.recognizeOrderRevenue(orderId, { source: 'admin_confirmed_delivery' })
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'ORDER_DELIVERY_CONFIRMED_BY_ADMIN',
+    targetType: 'order',
+    targetId: updated._id,
+    previousStatus: order.status,
+    newStatus: ORDER_STATUS.COMPLETED,
+    reason: normalizedEvidence,
+    adminNote,
+    metadata: { evidence: normalizedEvidence, shopSettlementReleaseAt },
+  })
+  await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_DELIVERED, updated, 'Admin đã xác nhận đơn hàng hoàn tất', userContext._id)
   return updated
 }
 
@@ -658,4 +747,21 @@ export const releaseInventoryForOrder = async (orderId) => {
   if (!order) return false
   await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity } })
   return true
+}
+
+export const releaseDueOrderSettlements = async () => {
+  const candidates = await Order.find({
+    isActive: true,
+    status: ORDER_STATUS.COMPLETED,
+    paymentStatus: PAYMENT_STATUS.PAID,
+    settlementStatus: { $in: ['held', 'pending'] },
+    shopSettlementReleaseAt: { $lte: new Date() },
+  }).select('_id')
+
+  let releasedCount = 0
+  for (const order of candidates) {
+    const released = await ledgerService.releaseOrderSettlement(order._id)
+    if (released?.settlementStatus === 'settled') releasedCount += 1
+  }
+  return { releasedCount }
 }

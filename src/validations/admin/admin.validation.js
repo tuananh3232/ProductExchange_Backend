@@ -159,6 +159,11 @@ export const adminOrderStatusSchema = Joi.object({
   adminNote: Joi.string().trim().max(1000).allow('').optional(),
 })
 
+export const adminConfirmOrderDeliverySchema = Joi.object({
+  evidence: Joi.string().trim().min(1).max(1000).required(),
+  adminNote: Joi.string().trim().max(1000).allow('').optional(),
+})
+
 export const adminOrderActionSchema = Joi.object({
   reason: Joi.string().trim().max(500).allow('').optional(),
   adminNote: Joi.string().trim().max(1000).allow('').optional(),

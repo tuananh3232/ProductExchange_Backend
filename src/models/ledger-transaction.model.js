@@ -57,6 +57,19 @@ const ledgerTransactionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    revenueRecognizedAt: {
+      type: Date,
+      default: null,
+    },
+    shopSettlementReleaseAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    shopSettledAt: {
+      type: Date,
+      default: null,
+    },
     source: {
       type: String,
       default: '',
