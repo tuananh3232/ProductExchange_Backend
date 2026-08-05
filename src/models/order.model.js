@@ -99,6 +99,23 @@ const orderSchema = new mongoose.Schema(
       default: SETTLEMENT_STATUS.PENDING,
       index: true,
     },
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
+    customerReceivedAt: {
+      type: Date,
+      default: null,
+    },
+    shopSettlementReleaseAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    shopSettledAt: {
+      type: Date,
+      default: null,
+    },
     feeSnapshotId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'FeeSnapshot',

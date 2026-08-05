@@ -9,18 +9,18 @@ import { TOPUP_STATUS, WITHDRAWAL_STATUS } from '../../constants/status.constant
 export const findByUser = (userId, options = {}) =>
   UserWallet.findOne({ user: userId }, null, options)
 
-export const findOrCreateByUser = (userId) =>
+export const findOrCreateByUser = (userId, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     {},
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, ...options }
   )
 
-export const creditTopup = (userId, amount) =>
+export const creditTopup = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     { $inc: { balance: amount, totalTopUp: amount } },
-    { returnDocument: 'after', upsert: true }
+    { returnDocument: 'after', upsert: true, ...options }
   )
 
 export const creditExchangeSettlement = (userId, amount, options = {}) =>

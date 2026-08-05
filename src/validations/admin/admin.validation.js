@@ -142,6 +142,11 @@ export const adminUserStatusSchema = Joi.object({
   adminNote: Joi.string().trim().max(1000).allow('').optional(),
 })
 
+export const adminCreditUserWalletSchema = Joi.object({
+  amount: Joi.number().integer().min(10000).max(50000000).required(),
+  note: Joi.string().trim().max(500).allow('').optional(),
+})
+
 export const adminProductStatusSchema = Joi.object({
   status: Joi.string().valid(...PRODUCT_STATUS_ENUM, 'active', 'inactive').required(),
   reason: Joi.string().trim().min(1).max(500).required(),
@@ -151,6 +156,11 @@ export const adminProductStatusSchema = Joi.object({
 export const adminOrderStatusSchema = Joi.object({
   status: Joi.string().valid(...ORDER_STATUS_ENUM).required(),
   reason: Joi.string().trim().max(500).allow('').optional(),
+  adminNote: Joi.string().trim().max(1000).allow('').optional(),
+})
+
+export const adminConfirmOrderDeliverySchema = Joi.object({
+  evidence: Joi.string().trim().min(1).max(1000).required(),
   adminNote: Joi.string().trim().max(1000).allow('').optional(),
 })
 

@@ -32,6 +32,7 @@ import {
   adminCategoryStatusSchema,
   adminCategoryUpdateSchema,
   adminOrderActionSchema,
+  adminConfirmOrderDeliverySchema,
   adminOrdersQuerySchema,
   adminOrderStatusSchema,
   adminPaymentsQuerySchema,
@@ -47,6 +48,7 @@ import {
   adminShopsQuerySchema,
   adminUserStatusSchema,
   adminUsersQuerySchema,
+  adminCreditUserWalletSchema,
   adminWithdrawalsQuerySchema,
 } from '../../validations/admin/admin.validation.js'
 import {
@@ -246,6 +248,15 @@ router.get(
   requireAdmin,
   validateObjectId('userId'),
   authController.getAdminUserById
+)
+
+router.post(
+  '/users/:userId/wallet/credit',
+  authenticate,
+  requireAdmin,
+  validateObjectId('userId'),
+  validate(adminCreditUserWalletSchema),
+  userWalletController.adminCreditUserWallet
 )
 
 router.get(
@@ -970,6 +981,15 @@ router.patch(
   validateObjectId('orderId'),
   validate(adminOrderStatusSchema),
   orderController.updateAdminOrderStatus
+)
+
+router.patch(
+  '/orders/:orderId/confirm-delivery',
+  authenticate,
+  requireAdmin,
+  validateObjectId('orderId'),
+  validate(adminConfirmOrderDeliverySchema),
+  orderController.confirmAdminOrderDelivery
 )
 
 router.patch(

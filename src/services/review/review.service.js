@@ -39,8 +39,8 @@ export const createReview = async (userId, payload, files = []) => {
     throw new AppError('Bạn chỉ có thể đánh giá đơn hàng của chính mình', HTTP_STATUS.FORBIDDEN, ERRORS.REVIEW.NOT_BUYER)
   }
 
-  if (order.status !== ORDER_STATUS.DELIVERED) {
-    throw new AppError('Đơn hàng phải được giao thành công trước khi đánh giá', HTTP_STATUS.BAD_REQUEST, ERRORS.REVIEW.ORDER_NOT_DELIVERED)
+  if (order.status !== ORDER_STATUS.COMPLETED) {
+    throw new AppError('Người mua phải xác nhận đã nhận hàng trước khi đánh giá', HTTP_STATUS.BAD_REQUEST, ERRORS.REVIEW.ORDER_NOT_DELIVERED)
   }
 
   if (idString(order.product) !== String(productId)) {

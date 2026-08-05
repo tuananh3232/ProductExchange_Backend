@@ -445,7 +445,14 @@ export const handleTopupWebhook = async (webhookData) => {
   }
 
   if (topup.status !== TOPUP_STATUS.PENDING) {
+    if (topup.status === TOPUP_STATUS.COMPLETED) {
+      await userWalletService.creditWalletFromTopup(topup)
+    }
     return { topup, status: topup.status }
+  }
+
+  if (webhookData.code === '00' && Number(verifiedData.amount) !== Number(topup.amount)) {
+    throw new AppError('Số tiền PayOS nhận được không khớp với phiên nạp tiền', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
   }
 
   const nextStatus = webhookData.code === '00' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.FAILED
@@ -480,11 +487,15 @@ export const handleTopupReturn = async (query, callerId = null) => {
 
   // Không cập nhật nếu đã xử lý xong (tránh ghi đè kết quả từ webhook)
   if (topup.status !== TOPUP_STATUS.PENDING) {
+    if (topup.status === TOPUP_STATUS.COMPLETED) {
+      await userWalletService.creditWalletFromTopup(topup)
+    }
     return { topupId: topup._id, status: topup.status }
   }
 
   // Xác minh trực tiếp từ PayOS API thay vì tin vào query params
   let paymentStatus
+  let receivedAmount
   try {
     const payos = getPayosClient()
     const paymentInfo = await withTimeout(
@@ -493,6 +504,7 @@ export const handleTopupReturn = async (query, callerId = null) => {
       PAYOS_TIMEOUT_OPTS
     )
     paymentStatus = paymentInfo.status // 'PAID' | 'CANCELLED' | 'EXPIRED' | 'PENDING' | 'PROCESSING'
+    receivedAmount = paymentInfo.amount
   } catch {
     // Fallback về query params khi không gọi được PayOS
     const isCancelled = cancel === 'true' || cancel === true
@@ -504,6 +516,10 @@ export const handleTopupReturn = async (query, callerId = null) => {
   // Chưa có kết quả cuối → không cập nhật
   if (paymentStatus === 'PENDING' || paymentStatus === 'PROCESSING') {
     return { topupId: topup._id, status: TOPUP_STATUS.PENDING }
+  }
+
+  if (paymentStatus === 'PAID' && receivedAmount !== undefined && Number(receivedAmount) !== Number(topup.amount)) {
+    throw new AppError('Số tiền PayOS nhận được không khớp với phiên nạp tiền', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
   }
 
   const nextStatus = paymentStatus === 'PAID' ? TOPUP_STATUS.COMPLETED : TOPUP_STATUS.CANCELLED
