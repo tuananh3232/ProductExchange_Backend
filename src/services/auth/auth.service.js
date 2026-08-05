@@ -587,7 +587,9 @@ export const unbanUser = async (userId, actor = null) => {
 }
 
 export const getAdminUsers = async (query, pagination) => {
-  const filter = {}
+  const filter = {
+    roles: { $nin: [ROLES.ADMIN] },
+  }
 
   if (query.search) {
     const escapedSearch = escapeRegex(query.search)
@@ -599,7 +601,7 @@ export const getAdminUsers = async (query, pagination) => {
 
   const roleFilter = query.role || query.roles
   if (roleFilter) {
-    filter.roles = { $in: String(roleFilter).split(',').map((role) => role.trim()).filter(Boolean) }
+    filter.roles.$in = String(roleFilter).split(',').map((role) => role.trim()).filter(Boolean)
   }
 
   if (query.isActive !== undefined) {
