@@ -23,6 +23,7 @@ import analyticsRoutes from './analytics/analytics.route.js'
 import exchangeRoutes from './exchange/exchange.route.js'
 import rentalRoutes from './rental/rental.route.js'
 import reviewRoutes from './review/review.route.js'
+import feePolicyRoutes from './fee-policy/fee-policy.route.js'
 
 const router = Router()
 
@@ -59,5 +60,6 @@ router.use('/analytics', analyticsRoutes)
 router.use('/exchanges', exchangeRoutes)
 router.use('/rentals', rentalRoutes)
 router.use('/reviews', reviewRoutes)
+router.use('/fee-policies', feePolicyRoutes)
 
 export default router

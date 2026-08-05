@@ -213,6 +213,41 @@ export const getFeePolicyById = async (feePolicyId) => {
   return feePolicy
 }
 
+export const getPublicActiveFeePolicies = async () => {
+  const now = new Date()
+  const policies = await FeePolicy.find({
+    status: FEE_POLICY_STATUS.ACTIVE,
+    effectiveFrom: { $lte: now },
+    $or: [{ effectiveTo: null }, { effectiveTo: { $gte: now } }],
+  })
+    .select('transactionType ownerType categoryId minAmount maxAmount percent minFee maxFee fixedFee baseAmountType rounding effectiveFrom effectiveTo')
+    .populate('categoryId', 'name slug')
+    .sort({ transactionType: 1, minAmount: 1, effectiveFrom: -1 })
+    .lean()
+
+  return policies.map((policy) => {
+    const category = policy.categoryId && typeof policy.categoryId === 'object' ? policy.categoryId : null
+
+    return {
+      id: String(policy._id),
+      transactionType: policy.transactionType,
+      ownerType: policy.ownerType,
+      categoryId: category ? String(category._id) : policy.categoryId ? String(policy.categoryId) : null,
+      category: category ? { name: category.name, slug: category.slug } : null,
+      minAmount: policy.minAmount,
+      maxAmount: policy.maxAmount,
+      percent: policy.percent,
+      minFee: policy.minFee,
+      maxFee: policy.maxFee,
+      fixedFee: policy.fixedFee,
+      baseAmountType: policy.baseAmountType,
+      rounding: policy.rounding,
+      effectiveFrom: policy.effectiveFrom,
+      effectiveTo: policy.effectiveTo,
+    }
+  })
+}
+
 export const createFeePolicy = async (payload, adminId) => {
   await assertNoRangeConflict({ payload })
 
