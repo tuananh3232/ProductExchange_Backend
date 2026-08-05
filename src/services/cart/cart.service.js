@@ -257,6 +257,12 @@ export const checkoutCart = async (userId, payload = {}, userContext) => {
   }
 
   if (paymentMethod && createdOrders.length > 1) {
+    if (paymentMethod === 'PAYOS') {
+      const paymentResult = await paymentService.createPayosPaymentForOrders(createdOrders.map((order) => order._id), userContext)
+      paymentUrl = paymentResult.paymentUrl || null
+      payment = paymentResult.payment || null
+    }
+
     await Promise.all(
       createdOrders.map((order) =>
         Order.findByIdAndUpdate(order._id, {

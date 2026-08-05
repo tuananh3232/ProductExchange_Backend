@@ -257,7 +257,76 @@ export const createPayosPayment = async (orderId, userContext) => {
     payos.paymentRequests.create({
       orderCode,
       amount,
-      description: `Thanh toan #${shortId}`,
+      description: `DONHANG ${shortId}`,
+      returnUrl: env.payment.payos.returnUrl,
+      cancelUrl: env.payment.payos.cancelUrl,
+    }),
+    PAYOS_TIMEOUT_MS,
+    PAYOS_TIMEOUT_OPTS
+  )
+
+  return { payment, paymentUrl: paymentLink.checkoutUrl }
+}
+
+export const createPayosPaymentForOrders = async (orderIds, userContext) => {
+  const normalizedOrderIds = [...new Set(orderIds.map((id) => id.toString()))]
+  if (normalizedOrderIds.length <= 1) {
+    return createPayosPayment(normalizedOrderIds[0], userContext)
+  }
+
+  const orders = await Order.find({ _id: { $in: normalizedOrderIds }, isActive: true }).populate('buyer', 'name email')
+  if (orders.length !== normalizedOrderIds.length) {
+    throw new AppError('Không tìm thấy một hoặc nhiều đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+
+  const buyerId = orders[0].buyer?._id?.toString() || orders[0].buyer?.toString()
+  if (!orders.every((order) => (order.buyer?._id?.toString() || order.buyer?.toString()) === buyerId)) {
+    throw new AppError('Các đơn hàng phải thuộc cùng một người mua', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.MIXED_BUYERS)
+  }
+  if (!orders.every((order) => order.status === ORDER_STATUS.PENDING && order.paymentStatus !== PAYMENT_STATUS.PAID)) {
+    throw new AppError('Chỉ có thể thanh toán các đơn hàng đang chờ xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
+  }
+  if (!isBuyerOrAdmin(orders[0], userContext)) {
+    throw new AppError('Bạn không có quyền thanh toán các đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  const payos = getPayosClient()
+  const existingPayment = await paymentRepo.findBatchByOrders(normalizedOrderIds)
+  const orderCode = existingPayment?.transactionRef
+    ? parseInt(existingPayment.transactionRef.replace('PAYOS_', ''), 10)
+    : Date.now() % 1000000000
+  const transactionRef = `PAYOS_${orderCode}`
+  const amount = Math.round(orders.reduce((sum, order) => sum + Number(order.totalAmount), 0))
+  const paymentPayload = {
+    order: null,
+    orders: normalizedOrderIds,
+    buyer: buyerId,
+    amount,
+    provider: 'payos',
+    method: 'payos',
+    status: PAYMENT_STATUS.PENDING_PAYMENT,
+    transactionRef,
+  }
+
+  const payment = existingPayment
+    ? await paymentRepo.updateById(existingPayment._id, paymentPayload)
+    : await paymentRepo.create(paymentPayload)
+
+  await Order.updateMany(
+    { _id: { $in: normalizedOrderIds } },
+    {
+      paymentStatus: PAYMENT_STATUS.PENDING_PAYMENT,
+      paymentMethod: 'payos',
+      paymentProvider: 'payos',
+      paymentRef: transactionRef,
+    }
+  )
+
+  const paymentLink = await withTimeout(
+    payos.paymentRequests.create({
+      orderCode,
+      amount,
+      description: `DONHANG ${orderCode}`,
       returnUrl: env.payment.payos.returnUrl,
       cancelUrl: env.payment.payos.cancelUrl,
     }),
@@ -567,14 +636,20 @@ export const handlePayosReturn = async (query) => {
     if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
     const isBatchReturn = updatedPayment.orders?.length > 0
     if (isBatchReturn) {
-      await Order.updateMany({ _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } }, orderUpdate)
+      const orderFilter = nextStatus === PAYMENT_STATUS.PAID
+        ? { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } }
+        : { _id: { $in: updatedPayment.orders } }
+      await Order.updateMany(orderFilter, orderUpdate)
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
       } else {
         await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
       }
     } else {
-      await Order.findOneAndUpdate({ _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } }, orderUpdate)
+      const orderFilter = nextStatus === PAYMENT_STATUS.PAID
+        ? { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } }
+        : { _id: payment.order }
+      await Order.findOneAndUpdate(orderFilter, orderUpdate)
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
       } else {
@@ -590,6 +665,10 @@ export const handlePayosReturn = async (query) => {
   }
 
   const isBatch = payment.orders?.length > 0
+  if (payment.status !== PAYMENT_STATUS.PAID) {
+    const orderIds = isBatch ? payment.orders : [payment.order]
+    await Order.updateMany({ _id: { $in: orderIds }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } }, { paymentStatus: payment.status })
+  }
   return {
     orderIds: isBatch ? payment.orders : [payment.order],
     status: payment.status,

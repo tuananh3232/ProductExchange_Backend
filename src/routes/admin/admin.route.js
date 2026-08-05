@@ -1129,7 +1129,7 @@ router.post(
   '/fee-policies/seed',
   authenticate,
   requireAdmin,
-  adminFeePolicyController.seedDefaultSaleFeePolicies
+  adminFeePolicyController.seedDefaultFeePolicies
 )
 
 router.get(
@@ -1298,6 +1298,14 @@ router.patch(
   validateObjectId('categoryId'),
   validate(adminCategoryUpdateSchema),
   categoryController.updateCategory
+)
+
+router.delete(
+  '/categories/:categoryId',
+  authenticate,
+  requireAdmin,
+  validateObjectId('categoryId'),
+  categoryController.deleteCategory
 )
 
 router.patch(

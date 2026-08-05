@@ -5,7 +5,7 @@ import ERRORS from '../../constants/error.constant.js'
 import { paginate } from '../../utils/pagination.util.js'
 import { normalizeSlug } from '../../utils/slug.util.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
-import { ensureDefaultCategories } from './category-seed.service.js'
+import * as productRepo from '../../repositories/product/product.repository.js'
 
 export const createCategory = async (payload) => {
   const slug = normalizeSlug(payload.slug || payload.name)
@@ -29,7 +29,7 @@ export const getCategories = async (query, pagination) => {
 }
 
 export const getAdminCategories = async (query, pagination) => {
-  const filter = {}
+  const filter = { deletedAt: null }
   if (query.search) filter.$text = { $search: query.search }
   if (query.isActive !== undefined) filter.isActive = query.isActive === true || query.isActive === 'true'
   if (query.status) {
@@ -82,8 +82,20 @@ export const updateCategory = async (id, payload) => {
 
 export const deleteCategory = async (id) => {
   const category = await categoryRepo.findById(id)
-  if (!category) return null
-  return categoryRepo.deleteById(id)
+  if (!category) {
+    throw new AppError('Không tìm thấy danh mục', HTTP_STATUS.NOT_FOUND, ERRORS.GENERAL.NOT_FOUND)
+  }
+
+  const productCount = await productRepo.countMany({ category: id })
+  if (productCount > 0) {
+    throw new AppError(
+      'Không thể xoá danh mục vì đang có sản phẩm sử dụng. Hãy chuyển sản phẩm sang danh mục khác hoặc ẩn danh mục.',
+      HTTP_STATUS.CONFLICT,
+      ERRORS.CATEGORY.PRODUCTS_EXIST,
+    )
+  }
+
+  return categoryRepo.hardDeleteById(id)
 }
 
 export const updateAdminCategoryStatus = async (id, { isActive, reason = '', adminNote = '' }, actor) => {

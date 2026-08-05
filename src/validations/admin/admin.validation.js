@@ -281,7 +281,7 @@ export const adminActivityQuerySchema = Joi.object({
 
 export const adminReportExportQuerySchema = Joi.object({
   type: Joi.string()
-    .valid('users', 'shops', 'orders', 'payments', 'withdrawals', 'user_withdrawals', 'categories', 'platform_ledger', 'vip_subscriptions', 'rental_claims', 'exchange_disputes')
+    .valid('orders', 'users', 'shops', 'withdrawals', 'platform_ledger', 'vip_subscriptions')
     .required(),
   fromDate: Joi.date().iso().required(),
   toDate: Joi.date().iso().min(Joi.ref('fromDate')).required(),
