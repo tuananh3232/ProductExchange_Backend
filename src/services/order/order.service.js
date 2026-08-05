@@ -251,7 +251,10 @@ export const getOrderById = async (orderId, userContext) => {
 
   await ensureOrderReadable(order, userContext)
 
-  if (order.status === ORDER_STATUS.CANCELLED && order.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT) {
+  if (
+    order.status === ORDER_STATUS.CANCELLED &&
+    [PAYMENT_STATUS.UNPAID, PAYMENT_STATUS.PENDING_PAYMENT].includes(order.paymentStatus)
+  ) {
     return orderRepo.updateById(orderId, { paymentStatus: PAYMENT_STATUS.CANCELLED })
   }
 
@@ -259,6 +262,7 @@ export const getOrderById = async (orderId, userContext) => {
 }
 
 export const getOrders = async (userContext, query, { page, limit, skip, sortBy, sortOrder }) => {
+  await normalizeCancelledPaymentStatuses()
   const filter = { isActive: true }
 
   const scope = query.scope || 'buyer'
@@ -293,6 +297,7 @@ export const getOrders = async (userContext, query, { page, limit, skip, sortBy,
 }
 
 export const getAdminOrders = async (query, { page, limit, skip, sortBy, sortOrder }) => {
+  await normalizeCancelledPaymentStatuses()
   const filter = { isActive: true }
 
   if (query.orderCode) {
@@ -699,6 +704,30 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
   return updated
 }
 
+const normalizeCancelledPaymentStatuses = async () => {
+  const pendingCancelledOrders = await Order.find({
+    isActive: true,
+    status: ORDER_STATUS.PENDING,
+    paymentStatus: PAYMENT_STATUS.CANCELLED,
+  }).select('_id')
+
+  let normalizedCount = 0
+  for (const order of pendingCancelledOrders) {
+    if (await releaseInventoryForOrder(order._id)) normalizedCount += 1
+  }
+
+  const result = await Order.updateMany(
+    {
+      isActive: true,
+      status: ORDER_STATUS.CANCELLED,
+      paymentStatus: { $in: [PAYMENT_STATUS.UNPAID, PAYMENT_STATUS.PENDING_PAYMENT] },
+    },
+    { $set: { paymentStatus: PAYMENT_STATUS.CANCELLED } },
+  )
+
+  return normalizedCount + (result.modifiedCount ?? result.nModified ?? 0)
+}
+
 export const expirePendingOrders = async ({ olderThanMs = 15 * 60 * 1000 } = {}) => {
   const cutoff = new Date(Date.now() - olderThanMs)
   const candidates = await Order.find({
@@ -736,23 +765,63 @@ export const expirePendingOrders = async ({ olderThanMs = 15 * 60 * 1000 } = {})
     expiredCount += 1
     await notifyOrderUser(order.buyer, NOTIFICATION_TYPES.ORDER_CANCELLED_BY_BUYER, updated, 'Đơn hàng đã hết thời gian thanh toán và được huỷ')
   }
+  await normalizeCancelledPaymentStatuses()
   return { expiredCount }
 }
 
 export const releaseInventoryForOrder = async (orderId) => {
-  const order = await Order.findOneAndUpdate(
-    { _id: orderId, inventoryStatus: 'reserved' },
+  const now = new Date()
+  const releasedOrder = await Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      isActive: true,
+      status: { $ne: ORDER_STATUS.CANCELLED },
+      paymentStatus: { $ne: PAYMENT_STATUS.PAID },
+      inventoryStatus: 'reserved',
+    },
     {
       $set: {
         inventoryStatus: 'released',
-        inventoryReleasedAt: new Date(),
+        inventoryReleasedAt: now,
         status: ORDER_STATUS.CANCELLED,
+      },
+      $push: {
+        history: {
+          status: ORDER_STATUS.CANCELLED,
+          note: 'Thanh toán không thành công hoặc đã bị huỷ',
+          updatedAt: now,
+        },
       },
     },
     { returnDocument: 'after' }
   )
-  if (!order) return false
-  await Product.findByIdAndUpdate(order.product, { $inc: { stock: order.quantity } })
+
+  if (releasedOrder) {
+    await Product.findByIdAndUpdate(releasedOrder.product, { $inc: { stock: releasedOrder.quantity } })
+    return true
+  }
+
+  const cancelledOrder = await Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      isActive: true,
+      status: { $ne: ORDER_STATUS.CANCELLED },
+      paymentStatus: { $ne: PAYMENT_STATUS.PAID },
+    },
+    {
+      $set: { status: ORDER_STATUS.CANCELLED },
+      $push: {
+        history: {
+          status: ORDER_STATUS.CANCELLED,
+          note: 'Thanh toán không thành công hoặc đã bị huỷ',
+          updatedAt: now,
+        },
+      },
+    },
+    { returnDocument: 'after' },
+  )
+
+  if (!cancelledOrder) return false
   return true
 }
 
