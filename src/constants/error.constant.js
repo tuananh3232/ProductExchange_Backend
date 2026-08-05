@@ -52,6 +52,10 @@ const ERRORS = {
     CANNOT_INVITE_SELF: 'Cannot invite yourself to your own shop',
   },
 
+  CATEGORY: {
+    PRODUCTS_EXIST: 'Category still has products',
+  },
+
   ORDER: {
     NOT_FOUND: 'Order not found',
     PRODUCT_NOT_SELLABLE: 'Product is not sellable',
