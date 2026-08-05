@@ -15,3 +15,5 @@ export const updateById = (id, data) => Category.findByIdAndUpdate(id, data, { r
 
 export const deleteById = (id) =>
   Category.findByIdAndUpdate(id, { isActive: false, deletedAt: new Date() }, { returnDocument: 'after', runValidators: true })
+
+export const hardDeleteById = (id) => Category.findByIdAndDelete(id)

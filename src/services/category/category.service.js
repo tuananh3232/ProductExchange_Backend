@@ -27,7 +27,7 @@ export const getCategories = async (query, pagination) => {
 }
 
 export const getAdminCategories = async (query, pagination) => {
-  const filter = {}
+  const filter = { deletedAt: null }
   if (query.search) filter.$text = { $search: query.search }
   if (query.isActive !== undefined) filter.isActive = query.isActive === true || query.isActive === 'true'
   if (query.status) {
@@ -93,7 +93,7 @@ export const deleteCategory = async (id) => {
     )
   }
 
-  return categoryRepo.deleteById(id)
+  return categoryRepo.hardDeleteById(id)
 }
 
 export const updateAdminCategoryStatus = async (id, { isActive, reason = '', adminNote = '' }, actor) => {
