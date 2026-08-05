@@ -57,6 +57,14 @@ const toRentalInfo = (listing) => {
 
 const normalizeProductDocument = (product) => (typeof product?.toObject === 'function' ? product.toObject() : { ...product })
 
+const isDeletedProduct = (product) => Boolean(
+  product?.deletedAt || (
+    product?.isActive === false &&
+    !product?.hiddenBy &&
+    !product?.moderationBy
+  )
+)
+
 const getOwnerKycStatus = (product) => {
   const sellerKycStatus = product?.seller && typeof product.seller === 'object' ? product.seller.kyc?.status : null
   const ownerKycStatus = product?.owner && typeof product.owner === 'object' ? product.owner.kyc?.status : null
@@ -130,6 +138,7 @@ const attachProductReadModel = async (product, exchangeCountMap = new Map()) => 
   if (!product) return product
 
   const normalizedProduct = normalizeProductDocument(product)
+  normalizedProduct.isDeleted = isDeletedProduct(normalizedProduct)
   const populatedRentalListing =
     normalizedProduct.activeRentalListing && typeof normalizedProduct.activeRentalListing === 'object'
       ? normalizedProduct.activeRentalListing
@@ -352,7 +361,20 @@ const buildFilter = (query, { publicOnly = true } = {}) => {
     filter.isActive = query.isActive === 'true' || query.isActive === true
   }
 
-  if (query.status) filter.status = query.status
+  if (query.status === 'deleted') {
+    filter.isActive = false
+    filter.$or = [
+      { deletedAt: { $ne: null } },
+      { hiddenBy: null, moderationBy: null },
+    ]
+  } else if (query.status === 'banned') {
+    filter.isActive = false
+    filter.deletedAt = null
+    filter.$or = [
+      { hiddenBy: { $ne: null } },
+      { moderationBy: { $ne: null } },
+    ]
+  } else if (query.status) filter.status = query.status
   else if (publicOnly) filter.status = 'available' // Mặc định chỉ lấy sản phẩm còn bán
 
   const categoryId = normalizeQueryId(query.category)
@@ -562,7 +584,13 @@ export const deleteProduct = async (productId, userContext) => {
   await assertProductAccess(product, userContext, PERMISSIONS.SHOP_PRODUCT_DELETE, 'Bạn không có quyền xóa sản phẩm này')
 
   // Soft delete thay vì xóa thật
-  await productRepo.updateById(productId, { isActive: false })
+  await productRepo.updateById(productId, {
+    isActive: false,
+    deletedAt: new Date(),
+    deletedBy: userContext._id,
+    hiddenBy: null,
+    hiddenAt: null,
+  })
 }
 
 export const updateProductStatus = async (productId, userContext, nextStatus) => {
@@ -668,6 +696,8 @@ export const hideAdminProduct = async (productId, userContext, { reason = '', ad
 
   const updatedProduct = await productRepo.updateById(productId, {
     isActive: false,
+    deletedAt: null,
+    deletedBy: null,
     hiddenBy: userContext._id,
     hiddenAt: new Date(),
     moderationBy: userContext._id,
@@ -698,6 +728,8 @@ export const restoreAdminProduct = async (productId, userContext, { reason = '',
 
   const updatedProduct = await productRepo.updateById(productId, {
     isActive: true,
+    deletedAt: null,
+    deletedBy: null,
     restoredBy: userContext._id,
     restoredAt: new Date(),
     moderationBy: userContext._id,

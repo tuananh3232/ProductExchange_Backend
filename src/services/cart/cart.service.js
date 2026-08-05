@@ -120,6 +120,7 @@ export const addCombo = async (userId, items) => {
     }
   }
 
+  cart.hasAddedItem = true
   await cart.save()
   await populateCart(cart)
   return { cart: formatCart(cart) }

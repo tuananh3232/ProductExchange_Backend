@@ -56,7 +56,7 @@ export const adminUsersQuerySchema = Joi.object({
 
 export const adminProductsQuerySchema = Joi.object({
   ...pagination(['createdAt', 'updatedAt', 'title', 'price', 'status', 'stock']),
-  status: Joi.string().valid(...PRODUCT_STATUS_ENUM),
+  status: Joi.string().valid(...PRODUCT_STATUS_ENUM, 'banned', 'deleted'),
   transactionMode: Joi.string().valid('sell', 'rental', 'exchange'),
   isActive: Joi.boolean(),
   ownerId: objectId,

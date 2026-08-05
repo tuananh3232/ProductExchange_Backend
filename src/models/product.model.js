@@ -120,6 +120,12 @@ const productSchema = new mongoose.Schema(
       default: null,
     },
     hiddenAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     restoredBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
