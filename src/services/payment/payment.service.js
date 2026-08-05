@@ -1,5 +1,6 @@
 import { PayOS } from '@payos/node'
 import Order from '../../models/order.model.js'
+import Product from '../../models/product.model.js'
 import AppError from '../../utils/app-error.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
@@ -38,6 +39,49 @@ const isBuyerOrAdmin = (order, userContext) => {
   if ((userContext?.roles || []).includes('admin')) return true
 
   return order.buyer?._id?.toString() === userId || order.buyer?.toString() === userId
+}
+
+const restoreAutoCancelledOrderForPaidPayment = async (orderId, paidAt) => {
+  const order = await Order.findById(orderId).select('status paymentStatus inventoryStatus product quantity history buyer')
+  if (!order || order.status !== ORDER_STATUS.CANCELLED || order.paymentStatus === PAYMENT_STATUS.PAID) return
+
+  const autoCancellation = [...(order.history || [])]
+    .reverse()
+    .find((entry) => entry.status === ORDER_STATUS.CANCELLED && entry.note?.includes('thời gian thanh toán'))
+  if (!autoCancellation) return
+
+  const paymentTime = paidAt instanceof Date && !Number.isNaN(paidAt.getTime()) ? paidAt : new Date()
+  if (autoCancellation.updatedAt && paymentTime > new Date(autoCancellation.updatedAt)) return
+
+  const reservedProduct = await Product.findOneAndUpdate(
+    { _id: order.product, stock: { $gte: order.quantity } },
+    { $inc: { stock: -order.quantity } },
+    { returnDocument: 'after' }
+  )
+  if (!reservedProduct) {
+    throw new AppError('Không thể giữ lại tồn kho cho đơn đã thanh toán', HTTP_STATUS.CONFLICT, ERRORS.PAYMENT.ORDER_NOT_ELIGIBLE)
+  }
+
+  await Order.updateOne(
+    { _id: order._id, status: ORDER_STATUS.CANCELLED, paymentStatus: { $ne: PAYMENT_STATUS.PAID }, inventoryStatus: 'released' },
+    {
+      $set: {
+        status: ORDER_STATUS.PENDING,
+        paymentStatus: PAYMENT_STATUS.PAID,
+        paidAt: paymentTime,
+        inventoryStatus: 'reserved',
+        inventoryReleasedAt: null,
+      },
+      $push: {
+        history: {
+          status: ORDER_STATUS.PENDING,
+          note: 'Khôi phục đơn sau khi xác minh thanh toán thành công từ PayOS.',
+          updatedBy: order.buyer,
+          updatedAt: paymentTime,
+        },
+      },
+    }
+  )
 }
 
 const notifyPaymentResult = (payment, status) => {
@@ -358,12 +402,15 @@ export const handlePayosWebhook = async (webhookData) => {
   }
 
   const nextStatus = webhookData.code === '00' ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.FAILED
+  const webhookPaidAt = nextStatus === PAYMENT_STATUS.PAID && verifiedData.transactionDateTime
+    ? new Date(verifiedData.transactionDateTime)
+    : new Date()
 
   const updatedPayment = await paymentRepo.updateById(payment._id, {
     status: nextStatus,
     responseCode: webhookData.code || '',
     rawCallbackData: webhookData,
-    paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
+    paidAt: nextStatus === PAYMENT_STATUS.PAID ? webhookPaidAt : null,
   })
 
   const orderUpdate = {
@@ -374,11 +421,14 @@ export const handlePayosWebhook = async (webhookData) => {
   }
 
   if (nextStatus === PAYMENT_STATUS.PAID) {
-    orderUpdate.paidAt = new Date()
+    orderUpdate.paidAt = webhookPaidAt
   }
 
   const isBatchWebhook = updatedPayment.orders?.length > 0
   if (isBatchWebhook) {
+    if (nextStatus === PAYMENT_STATUS.PAID) {
+      await Promise.all(updatedPayment.orders.map((orderId) => restoreAutoCancelledOrderForPaidPayment(orderId, webhookPaidAt)))
+    }
     // Không ghi đè đơn đã được thanh toán bằng phương thức khác (vd ví)
     await Order.updateMany(
       { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
@@ -390,6 +440,9 @@ export const handlePayosWebhook = async (webhookData) => {
       await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
     }
   } else {
+    if (nextStatus === PAYMENT_STATUS.PAID) {
+      await restoreAutoCancelledOrderForPaidPayment(payment.order, webhookPaidAt)
+    }
     await Order.findOneAndUpdate(
       { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
       orderUpdate
@@ -606,7 +659,7 @@ export const handleTopupReturn = async (query, callerId = null) => {
 }
 
 export const handlePayosReturn = async (query) => {
-  const { orderCode, cancel, code } = query
+  const { orderCode, cancel } = query
   if (!orderCode) {
     throw new AppError('Thiếu thông tin callback PayOS', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.NOT_FOUND)
   }
@@ -619,23 +672,58 @@ export const handlePayosReturn = async (query) => {
 
   // Chỉ cập nhật nếu vẫn đang pending (tránh ghi đè kết quả từ webhook)
   if (payment.status === PAYMENT_STATUS.PENDING_PAYMENT) {
-    const isCancelled = cancel === 'true' || cancel === true
-    const nextStatus = isCancelled
-      ? PAYMENT_STATUS.CANCELLED
-      : code === '00'
-        ? PAYMENT_STATUS.PAID
+    let providerStatus = 'PENDING'
+    let receivedAmount
+    let providerPaidAt = new Date()
+
+    try {
+      const payos = getPayosClient()
+      const paymentInfo = await withTimeout(
+        payos.paymentRequests.get(Number(orderCode)),
+        PAYOS_TIMEOUT_MS,
+        PAYOS_TIMEOUT_OPTS
+      )
+      providerStatus = paymentInfo.status
+      receivedAmount = paymentInfo.amount
+      const transactionDateTime = paymentInfo.transactions?.[0]?.transactionDateTime
+      if (transactionDateTime && !Number.isNaN(new Date(transactionDateTime).getTime())) {
+        providerPaidAt = new Date(transactionDateTime)
+      }
+    } catch {
+      // Không dùng code=00 để tự đánh dấu đã thanh toán khi chưa xác minh được từ PayOS.
+      providerStatus = cancel === 'true' || cancel === true ? 'CANCELLED' : 'PENDING'
+    }
+
+    if (providerStatus === 'PENDING' || providerStatus === 'PROCESSING') {
+      return {
+        orderIds: payment.orders?.length > 0 ? payment.orders : [payment.order],
+        status: PAYMENT_STATUS.PENDING_PAYMENT,
+      }
+    }
+
+    if (providerStatus === 'PAID' && receivedAmount !== undefined && Number(receivedAmount) !== Number(payment.amount)) {
+      throw new AppError('Số tiền PayOS nhận được không khớp với đơn hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.AMOUNT_MISMATCH)
+    }
+
+    const nextStatus = providerStatus === 'PAID'
+      ? PAYMENT_STATUS.PAID
+      : ['CANCELLED', 'EXPIRED'].includes(providerStatus)
+        ? PAYMENT_STATUS.CANCELLED
         : PAYMENT_STATUS.FAILED
 
     const updatedPayment = await paymentRepo.updateById(payment._id, {
       status: nextStatus,
-      responseCode: code || '',
-      paidAt: nextStatus === PAYMENT_STATUS.PAID ? new Date() : null,
+      responseCode: nextStatus === PAYMENT_STATUS.PAID ? '00' : '',
+      paidAt: nextStatus === PAYMENT_STATUS.PAID ? providerPaidAt : null,
     })
 
     const orderUpdate = { paymentStatus: nextStatus }
-    if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = new Date()
+    if (nextStatus === PAYMENT_STATUS.PAID) orderUpdate.paidAt = providerPaidAt
     const isBatchReturn = updatedPayment.orders?.length > 0
     if (isBatchReturn) {
+      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await Promise.all(updatedPayment.orders.map((orderId) => restoreAutoCancelledOrderForPaidPayment(orderId, providerPaidAt)))
+      }
       const orderFilter = nextStatus === PAYMENT_STATUS.PAID
         ? { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } }
         : { _id: { $in: updatedPayment.orders } }
@@ -646,6 +734,9 @@ export const handlePayosReturn = async (query) => {
         await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
       }
     } else {
+      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await restoreAutoCancelledOrderForPaidPayment(payment.order, providerPaidAt)
+      }
       const orderFilter = nextStatus === PAYMENT_STATUS.PAID
         ? { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } }
         : { _id: payment.order }
@@ -673,4 +764,28 @@ export const handlePayosReturn = async (query) => {
     orderIds: isBatch ? payment.orders : [payment.order],
     status: payment.status,
   }
+}
+
+export const reconcilePendingPayosPayments = async ({ limit = 20 } = {}) => {
+  const createdAfter = new Date(Date.now() - 30 * 60 * 1000)
+  const pendingPayments = await paymentRepo.findPendingPayos({ limit, createdAfter })
+  let paidCount = 0
+  let cancelledCount = 0
+  let errorCount = 0
+
+  for (const payment of pendingPayments) {
+    const orderCode = Number(String(payment.transactionRef || '').replace('PAYOS_', ''))
+    if (!Number.isInteger(orderCode) || orderCode <= 0) continue
+
+    try {
+      const result = await handlePayosReturn({ orderCode: String(orderCode) })
+      if (result.status === PAYMENT_STATUS.PAID) paidCount += 1
+      if (result.status === PAYMENT_STATUS.CANCELLED) cancelledCount += 1
+    } catch (error) {
+      errorCount += 1
+      console.error(`PayOS reconciliation failed for ${payment.transactionRef}:`, error.message)
+    }
+  }
+
+  return { checkedCount: pendingPayments.length, paidCount, cancelledCount, errorCount }
 }

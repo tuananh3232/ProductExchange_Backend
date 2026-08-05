@@ -6,6 +6,19 @@ export const findByOrder = (orderId) => Payment.findOne({ order: orderId })
 
 export const findByTransactionRef = (transactionRef) => Payment.findOne({ transactionRef })
 
+export const findPendingPayos = ({ limit = 50, createdAfter } = {}) => {
+  const filter = {
+    provider: 'payos',
+    status: 'pending_payment',
+  }
+
+  if (createdAfter) {
+    filter.createdAt = { $gte: createdAfter }
+  }
+
+  return Payment.find(filter).sort({ createdAt: 1 }).limit(limit)
+}
+
 export const updateById = (id, data) => Payment.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true })
 
 export const findBatchByOrders = (orderIds) =>

@@ -100,7 +100,8 @@ const buildMonitoringForTransaction = (transaction, entries = []) => {
     reconciliationIssues.push('missing_clearing_entry')
   }
 
-  if ((transaction.platformFee > 0 || isVipRevenue) && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.REVENUE)) {
+  const revenueWasRecognized = Boolean(transaction.revenueRecognizedAt)
+  if ((isVipRevenue || (revenueWasRecognized && transaction.platformFee > 0)) && !entries.some((entry) => entry.walletKey === PLATFORM_WALLET_KEYS.REVENUE)) {
     reconciliationIssues.push('missing_revenue_entry')
   }
 
