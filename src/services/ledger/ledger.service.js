@@ -250,6 +250,97 @@ const mutatePlatformWallet = async (walletKey, direction, amount, session = null
   )
 }
 
+const recordUserWalletPlatformFlow = async ({
+  transactionType,
+  referenceType,
+  referenceId,
+  userId,
+  amount,
+  source,
+  description,
+  direction,
+  session = null,
+}) => {
+  const filter = { referenceType, referenceId, transactionType }
+  const existing = session
+    ? await LedgerTransaction.findOne(filter).session(session).lean()
+    : await LedgerTransaction.findOne(filter).lean()
+  if (existing) return existing
+
+  if (direction === LEDGER_ENTRY_DIRECTION.DEBIT) {
+    const clearingWallet = await getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, session)
+    if (Number(clearingWallet.balance) < Number(amount)) {
+      throw new AppError('Số dư ví trung gian không đủ để thực hiện giao dịch', HTTP_STATUS.BAD_REQUEST, ERRORS.WALLET.INSUFFICIENT_BALANCE)
+    }
+  }
+
+  const options = session ? { session } : {}
+  const [transaction] = await LedgerTransaction.create([
+    {
+      transactionType,
+      referenceType,
+      referenceId,
+      grossAmount: amount,
+      platformFee: 0,
+      netSettlementAmount: amount,
+      settlementStatus: SETTLEMENT_STATUS.SETTLED,
+      source,
+      description,
+      metadata: { userId, walletFlow: true },
+    },
+  ], options)
+
+  const wallet = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, direction, amount, session)
+  await LedgerEntry.create([
+    {
+      ledgerTransaction: transaction._id,
+      walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+      direction,
+      amount,
+      balanceAfter: wallet.balance,
+      counterpartyType: 'user_wallet',
+      counterpartyId: userId,
+      note: description,
+      metadata: { source },
+    },
+  ], options)
+
+  return transaction
+}
+
+export const recordUserWalletTopup = async ({
+  referenceId,
+  userId,
+  amount,
+  source = 'user_wallet_topup',
+  description = 'Nạp tiền vào ví người dùng',
+  referenceType = LEDGER_REFERENCE_TYPE.USER_WALLET_TOPUP,
+  session = null,
+}) => recordUserWalletPlatformFlow({
+  transactionType: LEDGER_TRANSACTION_TYPE.USER_WALLET_TOPUP,
+  referenceType,
+  referenceId,
+  userId,
+  amount,
+  source,
+  description,
+  direction: LEDGER_ENTRY_DIRECTION.CREDIT,
+  session,
+})
+
+export const recordUserWalletWithdrawal = async ({ referenceId, userId, amount, source = 'user_wallet_withdrawal', session = null }) =>
+  recordUserWalletPlatformFlow({
+    transactionType: LEDGER_TRANSACTION_TYPE.USER_WALLET_WITHDRAWAL,
+    referenceType: LEDGER_REFERENCE_TYPE.USER_WALLET,
+    referenceId,
+    userId,
+    amount,
+    source,
+    description: 'Chi tiền từ ví trung gian cho người dùng',
+    direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+    session,
+  })
+
 /**
  * Ghi nhận doanh thu bán gói VIP vào ví doanh thu nền tảng.
  * Mỗi subscription order chỉ được ghi nhận một lần nhờ khóa duy nhất
@@ -416,12 +507,14 @@ const createLedgerTransactionDetails = async ({
   preview,
   source,
   session,
+  releaseSettlement = false,
 }) => {
   const grossAmount = Math.round(Number(order.totalAmount))
   const platformFee = Math.round(Number(preview.calculatedFee))
   const netSettlementAmount = Math.max(0, grossAmount - platformFee)
   const canSettleToShopWallet = Boolean(order.shop)
-  const settlementStatus = canSettleToShopWallet ? SETTLEMENT_STATUS.SETTLED : SETTLEMENT_STATUS.HELD
+  const isUserWalletPayment = order.paymentMethod === 'wallet' || order.paymentProvider === 'wallet'
+  const settlementStatus = releaseSettlement && canSettleToShopWallet ? SETTLEMENT_STATUS.SETTLED : SETTLEMENT_STATUS.HELD
 
   const ledgerTransaction = await LedgerTransaction.create(
     [
@@ -450,24 +543,38 @@ const createLedgerTransactionDetails = async ({
   const tx = ledgerTransaction[0]
   const entries = []
 
-  const clearingAfterGross = await mutatePlatformWallet(
-    PLATFORM_WALLET_KEYS.CLEARING,
-    LEDGER_ENTRY_DIRECTION.CREDIT,
-    grossAmount,
-    session
-  )
-  entries.push({
-    ledgerTransaction: tx._id,
-    walletKey: PLATFORM_WALLET_KEYS.CLEARING,
-    direction: LEDGER_ENTRY_DIRECTION.CREDIT,
-    amount: grossAmount,
-    balanceAfter: clearingAfterGross.balance,
-    counterpartyType: 'buyer_payment',
-    counterpartyId: order.buyer?._id || order.buyer || null,
-    note: 'Gross payment captured into platform clearing wallet',
-  })
+  if (isUserWalletPayment) {
+    const clearingWallet = await getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, session)
+    entries.push({
+      ledgerTransaction: tx._id,
+      walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+      direction: LEDGER_ENTRY_DIRECTION.CREDIT,
+      amount: 0,
+      balanceAfter: clearingWallet.balance,
+      counterpartyType: 'user_wallet_payment',
+      counterpartyId: order.buyer?._id || order.buyer || null,
+      note: 'Thanh toán từ ví người dùng; ví trung gian không thay đổi',
+    })
+  } else {
+    const clearingAfterGross = await mutatePlatformWallet(
+      PLATFORM_WALLET_KEYS.CLEARING,
+      LEDGER_ENTRY_DIRECTION.CREDIT,
+      grossAmount,
+      session
+    )
+    entries.push({
+      ledgerTransaction: tx._id,
+      walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+      direction: LEDGER_ENTRY_DIRECTION.CREDIT,
+      amount: grossAmount,
+      balanceAfter: clearingAfterGross.balance,
+      counterpartyType: 'buyer_payment',
+      counterpartyId: order.buyer?._id || order.buyer || null,
+      note: 'Gross payment captured into platform clearing wallet',
+    })
+  }
 
-  if (platformFee > 0) {
+  if (releaseSettlement && platformFee > 0) {
     const clearingAfterFee = await mutatePlatformWallet(
       PLATFORM_WALLET_KEYS.CLEARING,
       LEDGER_ENTRY_DIRECTION.DEBIT,
@@ -501,7 +608,7 @@ const createLedgerTransactionDetails = async ({
     })
   }
 
-  if (canSettleToShopWallet && netSettlementAmount > 0) {
+  if (releaseSettlement && canSettleToShopWallet && netSettlementAmount > 0) {
     const clearingAfterNet = await mutatePlatformWallet(
       PLATFORM_WALLET_KEYS.CLEARING,
       LEDGER_ENTRY_DIRECTION.DEBIT,
@@ -589,6 +696,129 @@ export const settlePaidOrder = async (orderId, { source = 'payment_callback' } =
   )
 }
 
+export const recognizeOrderRevenue = async (orderId, { source = 'buyer_confirmed_received' } = {}) => {
+  const settlement = await LedgerTransaction.findOne({
+    referenceType: LEDGER_REFERENCE_TYPE.ORDER,
+    referenceId: orderId,
+    transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
+  })
+  if (!settlement || settlement.revenueRecognizedAt) return settlement
+
+  const order = await resolveOrderForSettlement(orderId)
+  if (order.status !== ORDER_STATUS.COMPLETED) {
+    throw new AppError('Chỉ ghi nhận doanh thu khi người mua đã xác nhận nhận hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+
+  return runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const feeAmount = Number(settlement.platformFee || 0)
+    const entries = []
+    if (!settlement.revenueRecognizedAt && feeAmount > 0) {
+      const clearingAfterFee = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.DEBIT, feeAmount, session)
+      const revenueAfterFee = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.REVENUE, LEDGER_ENTRY_DIRECTION.CREDIT, feeAmount, session)
+      entries.push(
+        {
+          ledgerTransaction: settlement._id,
+          walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+          direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+          amount: feeAmount,
+          balanceAfter: clearingAfterFee.balance,
+          counterpartyType: 'platform_revenue',
+          note: 'Trích hoa hồng vào ví doanh thu sau khi người mua xác nhận nhận hàng',
+        },
+        {
+          ledgerTransaction: settlement._id,
+          walletKey: PLATFORM_WALLET_KEYS.REVENUE,
+          direction: LEDGER_ENTRY_DIRECTION.CREDIT,
+          amount: feeAmount,
+          balanceAfter: revenueAfterFee.balance,
+          counterpartyType: 'platform_fee',
+          note: 'Ghi nhận hoa hồng là doanh thu cuối của nền tảng',
+        }
+      )
+    }
+    if (entries.length) await LedgerEntry.insertMany(entries, options)
+
+    const recognizedAt = new Date()
+    await LedgerTransaction.findByIdAndUpdate(settlement._id, {
+      revenueRecognizedAt: recognizedAt,
+      shopSettlementReleaseAt: order.shopSettlementReleaseAt || new Date(recognizedAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+      source,
+    }, options)
+    return LedgerTransaction.findById(settlement._id, null, options)
+  })
+}
+
+export const releaseOrderSettlement = async (orderId, { source = 'shop_settlement_release' } = {}) => {
+  let settlement = await LedgerTransaction.findOne({
+    referenceType: LEDGER_REFERENCE_TYPE.ORDER,
+    referenceId: orderId,
+    transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
+  })
+  if (!settlement || settlement.settlementStatus === SETTLEMENT_STATUS.SETTLED) return settlement
+
+  const order = await resolveOrderForSettlement(orderId)
+  if (order.status !== ORDER_STATUS.COMPLETED) {
+    throw new AppError('Chỉ được quyết toán khi người mua đã xác nhận nhận hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+  if (!order.shop) return settlement
+  if (!settlement.revenueRecognizedAt) {
+    settlement = await recognizeOrderRevenue(orderId)
+    if (!settlement) return null
+  }
+  const releaseAt = settlement.shopSettlementReleaseAt || order.shopSettlementReleaseAt
+  if (releaseAt && new Date(releaseAt) > new Date()) return settlement
+
+  return runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const entries = []
+    const feeAmount = Number(settlement.platformFee || 0)
+    const netAmount = Number(settlement.netSettlementAmount || 0)
+
+    if (netAmount > 0) {
+      const clearingAfterNet = await mutatePlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, LEDGER_ENTRY_DIRECTION.DEBIT, netAmount, session)
+      const wallet = await walletRepo.incrementBalance(order.shop._id || order.shop, netAmount, options)
+      await walletRepo.createTransaction(
+        {
+          wallet: wallet._id,
+          shop: order.shop._id || order.shop,
+          order: order._id,
+          type: 'credit',
+          grossAmount: settlement.grossAmount,
+          platformFee: feeAmount,
+          netAmount,
+          description: `Nhận tiền ròng đơn hàng #${order._id}`,
+          metadata: { orderId: order._id, ledgerTransactionId: settlement._id, source },
+        },
+        options
+      )
+      entries.push({
+        ledgerTransaction: settlement._id,
+        walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+        direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+        amount: netAmount,
+        balanceAfter: clearingAfterNet.balance,
+        counterpartyType: 'shop_wallet',
+        counterpartyId: order.shop._id || order.shop,
+        note: 'Giải ngân tiền thực nhận cho shop sau khi giao hàng hoàn tất',
+      })
+    }
+
+    if (entries.length) await LedgerEntry.insertMany(entries, options)
+    const shopSettledAt = new Date()
+    await LedgerTransaction.findByIdAndUpdate(settlement._id, {
+      settlementStatus: SETTLEMENT_STATUS.SETTLED,
+      shopSettledAt,
+      source,
+    }, options)
+    await Order.findByIdAndUpdate(order._id, {
+      settlementStatus: SETTLEMENT_STATUS.SETTLED,
+      shopSettledAt,
+    }, options)
+    return LedgerTransaction.findById(settlement._id, null, options)
+  })
+}
+
 export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', reason = '' } = {}) => {
   const settlement = await LedgerTransaction.findOne({
     referenceType: 'order',
@@ -636,6 +866,48 @@ export const reverseOrderSettlement = async (orderId, { source = 'refund_flow', 
 
     const reversal = reversalDocs[0]
     const entries = []
+
+    if (settlement.settlementStatus === SETTLEMENT_STATUS.HELD) {
+      const isUserWalletPayment = order.paymentMethod === 'wallet' || order.paymentProvider === 'wallet' || settlement.metadata?.paymentMethod === 'wallet'
+      if (isUserWalletPayment) {
+        const clearingWallet = await getPlatformWallet(PLATFORM_WALLET_KEYS.CLEARING, session)
+        entries.push({
+          ledgerTransaction: reversal._id,
+          walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+          direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+          amount: 0,
+          balanceAfter: clearingWallet.balance,
+          counterpartyType: 'user_wallet_refund',
+          counterpartyId: order.buyer?._id || order.buyer,
+          note: 'Hoàn tiền về ví người dùng; ví trung gian không thay đổi',
+        })
+      } else {
+        const clearingAfterRefund = await mutatePlatformWallet(
+          PLATFORM_WALLET_KEYS.CLEARING,
+          LEDGER_ENTRY_DIRECTION.DEBIT,
+          settlement.grossAmount,
+          session
+        )
+        entries.push({
+          ledgerTransaction: reversal._id,
+          walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+          direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+          amount: settlement.grossAmount,
+          balanceAfter: clearingAfterRefund.balance,
+          counterpartyType: 'refund_destination',
+          counterpartyId: order.buyer?._id || order.buyer,
+          note: 'Hoàn phần tiền đang giữ trước khi đơn hàng được giao',
+        })
+      }
+
+      await LedgerEntry.insertMany(entries, session ? { session } : {})
+      await Order.findByIdAndUpdate(
+        order._id,
+        { settlementStatus: SETTLEMENT_STATUS.REFUNDED },
+        session ? { session } : {}
+      )
+      return reversal
+    }
 
     if (settlement.netSettlementAmount > 0 && order.shop) {
       const updatedWallet = await walletRepo.decrementBalance(order.shop?._id || order.shop, settlement.netSettlementAmount, session ? { session } : {})

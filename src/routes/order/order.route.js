@@ -20,6 +20,7 @@ router.post('/', validate(createOrderSchema), orderController.createOrder)
 router.get('/', validate(orderQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST), orderController.getOrders)
 router.get('/:id', validateObjectId('id'), orderController.getOrderById)
 router.patch('/:id/confirm', validateObjectId('id'), orderController.confirmOrder)
+router.patch('/:id/confirm-received', validateObjectId('id'), orderController.confirmOrderReceived)
 router.patch('/:id/cancel', validateObjectId('id'), validate(cancelOrderSchema), orderController.cancelOrder)
 router.patch(
   '/:id/status',

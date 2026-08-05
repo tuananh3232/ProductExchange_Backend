@@ -15,6 +15,8 @@ export const LEDGER_TRANSACTION_TYPE = {
   RENTAL_RETURN_SETTLEMENT: 'rental_return_settlement',
   RENTAL_CLAIM_SETTLEMENT: 'rental_claim_settlement',
   VIP_SUBSCRIPTION_PAYMENT: 'vip_subscription_payment',
+  USER_WALLET_TOPUP: 'user_wallet_topup',
+  USER_WALLET_WITHDRAWAL: 'user_wallet_withdrawal',
 }
 
 export const LEDGER_TRANSACTION_TYPE_ENUM = Object.values(LEDGER_TRANSACTION_TYPE)
@@ -25,6 +27,8 @@ export const LEDGER_REFERENCE_TYPE = {
   RENTAL_BOOKING: 'rental_booking',
   RENTAL_CLAIM: 'rental_claim',
   SUBSCRIPTION_ORDER: 'subscription_order',
+  USER_WALLET: 'user_wallet',
+  USER_WALLET_TOPUP: 'user_wallet_topup',
 }
 
 export const LEDGER_REFERENCE_TYPE_ENUM = Object.values(LEDGER_REFERENCE_TYPE)

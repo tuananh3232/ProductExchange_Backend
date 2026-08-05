@@ -35,12 +35,6 @@ const buildDateRange = ({ fromDate, toDate, field = 'createdAt', requireRange = 
   const start = fromDate ? parseDate(fromDate, 'fromDate') : null
   const end = toDate ? parseDate(toDate, 'toDate') : null
 
-  if (start) range.$gte = start
-  if (end) {
-    end.setHours(23, 59, 59, 999)
-    range.$lte = end
-  }
-
   if (start && end && start > end) {
     throw new AppError('fromDate không được lớn hơn toDate', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
   }
@@ -50,6 +44,12 @@ const buildDateRange = ({ fromDate, toDate, field = 'createdAt', requireRange = 
     if (durationDays > MAX_EXPORT_DAYS) {
       throw new AppError(`Khoảng thời gian xuất báo cáo tối đa là ${MAX_EXPORT_DAYS} ngày`, HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
     }
+  }
+
+  if (start) range.$gte = start
+  if (end) {
+    end.setHours(23, 59, 59, 999)
+    range.$lte = end
   }
 
   return { [field]: range }

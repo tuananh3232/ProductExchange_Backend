@@ -989,7 +989,14 @@ export const confirmRentalReturn = async (bookingId, payload, user) => {
 
 export const createRentalClaim = async (bookingId, payload, user) => {
   const booking = await getBookingByIdOrThrow(bookingId)
-  assertBookingParticipantAccess(booking, user._id)
+
+  if (!isBookingOwnerActor(booking, user._id)) {
+    throw new AppError('Chỉ bên cho thuê mới được mở khiếu nại thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if (booking.status !== RENTAL_BOOKING_STATUS.RETURN_PENDING_CONFIRMATION) {
+    throw new AppError('Chỉ được mở khiếu nại khi booking đang chờ xác nhận trả', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
 
   const existingClaim = await RentalClaim.findOne({
     booking: booking._id,
@@ -1070,6 +1077,10 @@ export const resolveAdminRentalClaim = async (claimId, payload, adminUser) => {
 
   const booking = await getBookingByIdOrThrow(claim.booking._id || claim.booking)
   const approvedAmount = Math.max(0, Math.min(payload.approvedAmount ?? 0, booking.depositAmount))
+
+  if (approvedAmount > claim.requestedAmount) {
+    throw new AppError('Số tiền duyệt không được lớn hơn số tiền yêu cầu', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
 
   claim.approvedAmount = approvedAmount
   claim.resolutionNote = payload.note || ''

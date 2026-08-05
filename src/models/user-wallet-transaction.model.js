@@ -73,6 +73,8 @@ const userWalletTransactionSchema = new mongoose.Schema(
   }
 )
 
+userWalletTransactionSchema.index({ topup: 1 }, { unique: true, sparse: true })
+
 const UserWalletTransaction = mongoose.model('UserWalletTransaction', userWalletTransactionSchema)
 
 export default UserWalletTransaction
