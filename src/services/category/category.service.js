@@ -6,6 +6,7 @@ import { paginate } from '../../utils/pagination.util.js'
 import { normalizeSlug } from '../../utils/slug.util.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as productRepo from '../../repositories/product/product.repository.js'
+import { ensureDefaultCategories } from './category-seed.service.js'
 
 export const createCategory = async (payload) => {
   const slug = normalizeSlug(payload.slug || payload.name)
