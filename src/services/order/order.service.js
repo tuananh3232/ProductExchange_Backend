@@ -600,7 +600,7 @@ export const refundAdminOrder = async (orderId, userContext, { reason = '', admi
   return updated
 }
 
-export const expirePendingOrders = async ({ olderThanMs = 30 * 60 * 1000 } = {}) => {
+export const expirePendingOrders = async ({ olderThanMs = 15 * 60 * 1000 } = {}) => {
   const cutoff = new Date(Date.now() - olderThanMs)
   const candidates = await Order.find({
     isActive: true,
