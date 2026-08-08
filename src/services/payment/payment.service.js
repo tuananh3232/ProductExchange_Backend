@@ -11,7 +11,6 @@ import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import * as userWalletRepo from '../../repositories/user-wallet/user-wallet.repository.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
-import { releaseInventoryForOrder } from '../order/order.service.js'
 import { notifySafely } from '../notification/notification.service.js'
 import { NOTIFICATION_TARGET_TYPES, NOTIFICATION_TYPES } from '../../constants/notification.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
@@ -101,6 +100,24 @@ const notifyPaymentResult = (payment, status) => {
     data: { orderId: primaryOrderId, paymentId: payment._id },
   })
 }
+
+const resetPendingOrdersAfterPayosAttempt = async (orderIds) =>
+  Order.updateMany(
+    {
+      _id: { $in: orderIds },
+      status: ORDER_STATUS.PENDING,
+      paymentStatus: { $ne: PAYMENT_STATUS.PAID },
+    },
+    {
+      $set: {
+        paymentStatus: PAYMENT_STATUS.UNPAID,
+        paymentMethod: '',
+        paymentProvider: '',
+        paymentRef: '',
+        paidAt: null,
+      },
+    }
+  )
 
 const sanitizeAdminPayment = (payment, { includeCallback = false } = {}) => {
   const value = typeof payment?.toObject === 'function' ? payment.toObject() : { ...payment }
@@ -268,7 +285,7 @@ export const createPayosPayment = async (orderId, userContext) => {
 
   const existingPayment = await paymentRepo.findByOrder(order._id)
   // PayOS orderCode phải là số nguyên dương, tối đa 9 chữ số
-  const orderCode = existingPayment?.transactionRef
+  const orderCode = existingPayment?.status === PAYMENT_STATUS.PENDING_PAYMENT && existingPayment.transactionRef
     ? parseInt(existingPayment.transactionRef.replace('PAYOS_', ''), 10)
     : Date.now() % 1000000000
   const transactionRef = `PAYOS_${orderCode}`
@@ -336,7 +353,7 @@ export const createPayosPaymentForOrders = async (orderIds, userContext) => {
 
   const payos = getPayosClient()
   const existingPayment = await paymentRepo.findBatchByOrders(normalizedOrderIds)
-  const orderCode = existingPayment?.transactionRef
+  const orderCode = existingPayment?.status === PAYMENT_STATUS.PENDING_PAYMENT && existingPayment.transactionRef
     ? parseInt(existingPayment.transactionRef.replace('PAYOS_', ''), 10)
     : Date.now() % 1000000000
   const transactionRef = `PAYOS_${orderCode}`
@@ -437,7 +454,7 @@ export const handlePayosWebhook = async (webhookData) => {
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_webhook' })))
     } else {
-      await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
+      await resetPendingOrdersAfterPayosAttempt(updatedPayment.orders)
     }
   } else {
     if (nextStatus === PAYMENT_STATUS.PAID) {
@@ -450,7 +467,7 @@ export const handlePayosWebhook = async (webhookData) => {
     if (nextStatus === PAYMENT_STATUS.PAID) {
       await ledgerService.settlePaidOrder(payment.order, { source: 'payos_webhook' })
     } else {
-      await releaseInventoryForOrder(payment.order)
+      await resetPendingOrdersAfterPayosAttempt([payment.order])
     }
   }
   await notifyPaymentResult(updatedPayment, nextStatus)
@@ -723,28 +740,24 @@ export const handlePayosReturn = async (query) => {
     if (isBatchReturn) {
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await Promise.all(updatedPayment.orders.map((orderId) => restoreAutoCancelledOrderForPaidPayment(orderId, providerPaidAt)))
-      }
-      const orderFilter = nextStatus === PAYMENT_STATUS.PAID
-        ? { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } }
-        : { _id: { $in: updatedPayment.orders } }
-      await Order.updateMany(orderFilter, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await Order.updateMany(
+          { _id: { $in: updatedPayment.orders }, status: { $ne: ORDER_STATUS.CANCELLED } },
+          orderUpdate
+        )
         await Promise.all(updatedPayment.orders.map((orderId) => ledgerService.settlePaidOrder(orderId, { source: 'payos_return' })))
       } else {
-        await Promise.all(updatedPayment.orders.map((orderId) => releaseInventoryForOrder(orderId)))
+        await resetPendingOrdersAfterPayosAttempt(updatedPayment.orders)
       }
     } else {
       if (nextStatus === PAYMENT_STATUS.PAID) {
         await restoreAutoCancelledOrderForPaidPayment(payment.order, providerPaidAt)
-      }
-      const orderFilter = nextStatus === PAYMENT_STATUS.PAID
-        ? { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } }
-        : { _id: payment.order }
-      await Order.findOneAndUpdate(orderFilter, orderUpdate)
-      if (nextStatus === PAYMENT_STATUS.PAID) {
+        await Order.findOneAndUpdate(
+          { _id: payment.order, status: { $ne: ORDER_STATUS.CANCELLED } },
+          orderUpdate
+        )
         await ledgerService.settlePaidOrder(payment.order, { source: 'payos_return' })
       } else {
-        await releaseInventoryForOrder(payment.order)
+        await resetPendingOrdersAfterPayosAttempt([payment.order])
       }
     }
     await notifyPaymentResult(updatedPayment, nextStatus)
@@ -756,12 +769,17 @@ export const handlePayosReturn = async (query) => {
   }
 
   const isBatch = payment.orders?.length > 0
-  if (payment.status !== PAYMENT_STATUS.PAID) {
-    const orderIds = isBatch ? payment.orders : [payment.order]
-    await Order.updateMany({ _id: { $in: orderIds }, paymentStatus: { $ne: PAYMENT_STATUS.PAID } }, { paymentStatus: payment.status })
+  const orderIds = isBatch ? payment.orders : [payment.order]
+  if ([PAYMENT_STATUS.CANCELLED, PAYMENT_STATUS.FAILED].includes(payment.status)) {
+    await resetPendingOrdersAfterPayosAttempt(orderIds)
+  } else if (payment.status !== PAYMENT_STATUS.PAID) {
+    await Order.updateMany(
+      { _id: { $in: orderIds }, status: ORDER_STATUS.PENDING, paymentStatus: { $ne: PAYMENT_STATUS.PAID } },
+      { paymentStatus: payment.status }
+    )
   }
   return {
-    orderIds: isBatch ? payment.orders : [payment.order],
+    orderIds,
     status: payment.status,
   }
 }

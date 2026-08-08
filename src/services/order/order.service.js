@@ -18,6 +18,7 @@ import { ROLES } from '../../constants/role.constant.js'
 import * as paymentRepo from '../../repositories/payment/payment.repository.js'
 import { writeAuditLog } from '../audit/audit-log.service.js'
 import * as ledgerService from '../ledger/ledger.service.js'
+import { deleteImage, uploadBuffer } from '../../utils/cloudinary.util.js'
 
 const ORDER_TRANSITIONS = {
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
@@ -463,6 +464,67 @@ export const confirmOrderReceived = async (orderId, userContext) => {
   return updated
 }
 
+export const submitDeliveryReport = async (orderId, userContext, { note = '' } = {}, evidenceFiles = []) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+
+  await ensureShopManageOrder(order, userContext, PERMISSIONS.SHOP_ORDER_UPDATE_STATUS)
+
+  if (order.status !== ORDER_STATUS.DELIVERED) {
+    throw new AppError('Chỉ có thể báo cáo giao hàng sau khi đơn đã được giao', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    throw new AppError('Đơn hàng chưa được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
+  }
+  if (order.deliveryReport?.status === 'submitted') {
+    throw new AppError('Báo cáo giao hàng đang chờ quản trị viên kiểm tra', HTTP_STATUS.CONFLICT, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+  if (!evidenceFiles.length) {
+    throw new AppError('Vui lòng tải lên ít nhất một ảnh bằng chứng giao hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+
+  const uploadedImages = []
+  try {
+    for (const file of evidenceFiles) {
+      const image = await uploadBuffer(file.buffer, 'anh-decor/orders/delivery-evidence')
+      uploadedImages.push({ url: image.url, publicId: image.publicId })
+    }
+
+    const previousImageIds = (order.deliveryReport?.evidenceImages || []).map((image) => image.publicId).filter(Boolean)
+    const submittedAt = new Date()
+    const updated = await orderRepo.updateById(orderId, {
+      $set: {
+        deliveryReport: {
+          status: 'submitted',
+          submittedBy: userContext._id,
+          note: note.trim(),
+          evidenceImages: uploadedImages,
+          submittedAt,
+          reviewedBy: null,
+          reviewedAt: null,
+          adminNote: '',
+        },
+      },
+      $push: {
+        history: {
+          status: ORDER_STATUS.DELIVERED,
+          note: 'Shop đã gửi bằng chứng giao hàng để quản trị viên kiểm tra',
+          updatedBy: userContext._id,
+          updatedAt: submittedAt,
+        },
+      },
+    })
+
+    await Promise.allSettled(previousImageIds.map((publicId) => deleteImage(publicId)))
+    return updated
+  } catch (error) {
+    await Promise.allSettled(uploadedImages.map((image) => deleteImage(image.publicId)))
+    throw error
+  }
+}
+
 export const cancelOrder = async (orderId, userContext, note = '') => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
@@ -594,7 +656,7 @@ export const updateAdminOrderStatus = async (orderId, userContext, { status, rea
   return updated
 }
 
-export const confirmOrderReceivedByAdmin = async (orderId, userContext, { evidence = '', adminNote = '' } = {}) => {
+export const confirmOrderReceivedByAdmin = async (orderId, userContext, { adminNote = '' } = {}) => {
   const order = await orderRepo.findById(orderId)
   if (!order || !order.isActive) {
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
@@ -606,15 +668,24 @@ export const confirmOrderReceivedByAdmin = async (orderId, userContext, { eviden
     throw new AppError('Đơn hàng chưa được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
   }
 
-  const normalizedEvidence = evidence.trim()
+  if (order.deliveryReport?.status !== 'submitted' || !order.deliveryReport.evidenceImages?.length) {
+    throw new AppError('Shop chưa gửi bằng chứng giao hàng hợp lệ để kiểm tra', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+
   const customerReceivedAt = new Date()
   const deliveredHistory = [...(order.history || [])].reverse().find((entry) => entry.status === ORDER_STATUS.DELIVERED)
   const deliveredAt = order.deliveredAt || deliveredHistory?.updatedAt || customerReceivedAt
   const shopSettlementReleaseAt = new Date(new Date(deliveredAt).getTime() + 7 * 24 * 60 * 60 * 1000)
   const updated = await orderRepo.updateById(orderId, {
-    status: ORDER_STATUS.COMPLETED,
-    customerReceivedAt,
-    shopSettlementReleaseAt,
+    $set: {
+      status: ORDER_STATUS.COMPLETED,
+      customerReceivedAt,
+      shopSettlementReleaseAt,
+      'deliveryReport.status': 'approved',
+      'deliveryReport.reviewedBy': userContext._id,
+      'deliveryReport.reviewedAt': customerReceivedAt,
+      'deliveryReport.adminNote': adminNote.trim(),
+    },
     $push: {
       history: {
         status: ORDER_STATUS.COMPLETED,
@@ -633,11 +704,51 @@ export const confirmOrderReceivedByAdmin = async (orderId, userContext, { eviden
     targetId: updated._id,
     previousStatus: order.status,
     newStatus: ORDER_STATUS.COMPLETED,
-    reason: normalizedEvidence,
+    reason: 'Duyệt báo cáo giao hàng của shop',
     adminNote,
-    metadata: { evidence: normalizedEvidence, shopSettlementReleaseAt },
+    metadata: { evidenceImageCount: order.deliveryReport.evidenceImages.length, shopSettlementReleaseAt },
   })
   await notifyOrderUser(updated.buyer?._id || updated.buyer, NOTIFICATION_TYPES.ORDER_DELIVERED, updated, 'Admin đã xác nhận đơn hàng hoàn tất', userContext._id)
+  return updated
+}
+
+export const rejectOrderDeliveryReportByAdmin = async (orderId, userContext, { adminNote = '' } = {}) => {
+  const order = await orderRepo.findById(orderId)
+  if (!order || !order.isActive) {
+    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
+  }
+  if (order.status !== ORDER_STATUS.DELIVERED || order.deliveryReport?.status !== 'submitted') {
+    throw new AppError('Không có báo cáo giao hàng đang chờ kiểm tra', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.INVALID_STATUS_TRANSITION)
+  }
+
+  const reviewedAt = new Date()
+  const updated = await orderRepo.updateById(orderId, {
+    $set: {
+      'deliveryReport.status': 'rejected',
+      'deliveryReport.reviewedBy': userContext._id,
+      'deliveryReport.reviewedAt': reviewedAt,
+      'deliveryReport.adminNote': adminNote.trim(),
+    },
+    $push: {
+      history: {
+        status: ORDER_STATUS.DELIVERED,
+        note: 'Quản trị viên yêu cầu bổ sung bằng chứng giao hàng',
+        updatedBy: userContext._id,
+        updatedAt: reviewedAt,
+      },
+    },
+  })
+
+  await writeAuditLog({
+    adminId: userContext._id,
+    action: 'ORDER_DELIVERY_REPORT_REJECTED',
+    targetType: 'order',
+    targetId: updated._id,
+    previousStatus: order.status,
+    newStatus: order.status,
+    adminNote: adminNote.trim(),
+  })
+  await notifyOrderUser(getOrderSellerRecipient(updated), NOTIFICATION_TYPES.REPORT_RESOLVED, updated, 'Quản trị viên yêu cầu bổ sung bằng chứng giao hàng', userContext._id)
   return updated
 }
 

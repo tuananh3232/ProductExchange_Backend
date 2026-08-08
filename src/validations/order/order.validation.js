@@ -23,3 +23,7 @@ export const updateOrderStatusSchema = Joi.object({
   status: Joi.string().valid(...ORDER_STATUS_ENUM).required(),
   note: Joi.string().max(500).allow('').optional(),
 })
+
+export const submitDeliveryReportSchema = Joi.object({
+  note: Joi.string().trim().max(1000).allow('').optional(),
+})
