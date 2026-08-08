@@ -43,7 +43,7 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
 export const confirmOrderReceived = asyncHandler(async (req, res) => {
   const order = await orderService.confirmOrderReceived(req.params.id, req.user)
-  sendSuccess(res, { message: 'Đã xác nhận nhận hàng. Tiền shop sẽ được giải ngân sau 7 ngày.', data: { order } })
+  sendSuccess(res, { message: 'Đã xác nhận nhận hàng thành công.', data: { order } })
 })
 
 export const submitDeliveryReport = asyncHandler(async (req, res) => {
