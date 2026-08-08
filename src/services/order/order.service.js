@@ -610,6 +610,14 @@ export const updateOrderStatus = async (orderId, userContext, nextStatus, note =
     return cancelOrder(orderId, userContext, note)
   }
 
+  if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
+    throw new AppError(
+      'Đơn hàng chưa được thanh toán, không thể chuyển sang trạng thái xử lý hoặc giao hàng',
+      HTTP_STATUS.BAD_REQUEST,
+      ERRORS.ORDER.PAYMENT_REQUIRED
+    )
+  }
+
   const updated = await orderRepo.updateById(orderId, {
     status: nextStatus,
     $push: {

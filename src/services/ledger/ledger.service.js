@@ -446,8 +446,8 @@ const resolveFallbackFeePreview = (baseAmount, ownerType) => {
   }
 }
 
-const resolveOrderForSettlement = async (orderId) => {
-  const order = await Order.findById(orderId)
+const resolveOrderForSettlement = async (orderId, session = null) => {
+  const query = Order.findById(orderId)
     .populate('buyer', 'name email')
     .populate('shop', 'name slug owner')
     .populate('seller', 'name email')
@@ -456,6 +456,8 @@ const resolveOrderForSettlement = async (orderId) => {
       populate: { path: 'category', select: 'name slug' },
       select: 'title category ownerType shop seller',
     })
+  if (session) query.session(session)
+  const order = await query
 
   if (!order || !order.isActive) {
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
@@ -668,33 +670,37 @@ const createLedgerTransactionDetails = async ({
   return tx
 }
 
-export const settlePaidOrder = async (orderId, { source = 'payment_callback' } = {}) => {
-  const existing = await LedgerTransaction.findOne({
+export const settlePaidOrder = async (orderId, { source = 'payment_callback', session = null } = {}) => {
+  const existingQuery = LedgerTransaction.findOne({
     referenceType: 'order',
     referenceId: orderId,
     transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
   })
+  if (session) existingQuery.session(session)
+  const existing = await existingQuery
 
   if (existing) {
     return existing
   }
 
-  const order = await resolveOrderForSettlement(orderId)
+  const order = await resolveOrderForSettlement(orderId, session)
   if (order.paymentStatus !== PAYMENT_STATUS.PAID) {
     throw new AppError('Đơn hàng chưa ở trạng thái đã thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.ORDER.PAYMENT_REQUIRED)
   }
 
   const preview = await loadFeePreviewForOrder(order)
 
-  return runMongoTransaction(async (session) =>
+  const createSettlement = (activeSession) =>
     createLedgerTransactionDetails({
       transactionType: LEDGER_TRANSACTION_TYPE.ORDER_PAYMENT_SETTLEMENT,
       order,
       preview,
       source,
-      session,
+      session: activeSession,
     })
-  )
+
+  if (session) return createSettlement(session)
+  return runMongoTransaction((activeSession) => createSettlement(activeSession))
 }
 
 export const recognizeOrderRevenue = async (orderId, { source = 'buyer_confirmed_received' } = {}) => {

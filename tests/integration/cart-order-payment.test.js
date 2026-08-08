@@ -192,6 +192,28 @@ describe('cart, order, and payment integration', () => {
     expect(deliveredOrder.inventoryStatus).toBe('consumed')
   })
 
+  it('prevents unpaid orders from moving to fulfillment statuses', async () => {
+    const [{ token }, { token: adminToken }] = await Promise.all([loginMember(), loginAdmin()])
+    const product = await createSampleProduct({ stock: 1, status: PRODUCT_STATUS.AVAILABLE })
+    const orderResponse = await request(app)
+      .post(`${api}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: product._id.toString(), quantity: 1, shippingAddress })
+
+    const orderId = orderResponse.body.data.order._id
+    const response = await request(app)
+      .patch(`${api}/orders/${orderId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: ORDER_STATUS.CONFIRMED })
+
+    const order = await Order.findById(orderId)
+
+    expect(response.status).toBe(400)
+    expect(order.status).toBe(ORDER_STATUS.PENDING)
+    expect(order.paymentStatus).toBe(PAYMENT_STATUS.UNPAID)
+    expect(order.inventoryStatus).toBe('reserved')
+  })
+
   it('handles PayOS cancel callback without calling a real payment provider', async () => {
     const response = await request(app).get(`${api}/payments/payos/cancel`).query({
       code: '00',
