@@ -89,7 +89,7 @@ const dispatchVerificationOtp = async (user, otp) => {
     otp,
   })
 
-  if (!sent && env.nodeEnv === 'production') {
+  if (!sent) {
     throw new AppError(
       'Chưa cấu hình gửi email xác minh',
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -106,7 +106,7 @@ const dispatchPasswordOtp = async (user, otp, purpose) => {
     purpose,
   })
 
-  if (!sent && env.nodeEnv === 'production') {
+  if (!sent) {
     throw new AppError(
       'Chưa cấu hình gửi email đặt lại mật khẩu',
       HTTP_STATUS.INTERNAL_SERVER_ERROR,
@@ -145,13 +145,7 @@ export const register = async ({ name, email, password }) => {
 
   await dispatchVerificationOtp(user, verificationOtp)
 
-  const result = { user: user.toPublicJSON() }
-
-  if (env.nodeEnv !== 'production') {
-    result.debugOtp = verificationOtp
-  }
-
-  return result
+  return { user: user.toPublicJSON() }
 }
 
 export const login = async ({ email, password }) => {
@@ -749,10 +743,6 @@ export const forgotPassword = async ({ email }) => {
 
   await dispatchPasswordOtp(user, rawToken, 'đặt lại mật khẩu')
 
-  if (env.nodeEnv !== 'production') {
-    return { issued: true, debugOtp: rawToken }
-  }
-
   return { issued: true }
 }
 
@@ -801,10 +791,6 @@ export const sendVerificationEmail = async ({ email }) => {
   await user.save()
 
   await dispatchVerificationOtp(user, verificationOtp)
-
-  if (env.nodeEnv !== 'production') {
-    return { issued: true, debugOtp: verificationOtp }
-  }
 
   return { issued: true }
 }

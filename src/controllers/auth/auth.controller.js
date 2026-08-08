@@ -8,14 +8,10 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 
 export const register = asyncHandler(async (req, res) => {
   const result = await authService.register(req.body)
-  const data = { user: toUserResponse(result.user) }
-  if (result.debugOtp) {
-    data.debugOtp = result.debugOtp
-  }
 
   sendSuccess(res, {
     message: MESSAGES.AUTH.REGISTER_SUCCESS,
-    data,
+    data: { user: toUserResponse(result.user) },
     statusCode: HTTP_STATUS.CREATED,
   })
 })
@@ -89,9 +85,8 @@ export const updateAdminUserStatus = asyncHandler(async (req, res) => {
 })
 
 export const forgotPassword = asyncHandler(async (req, res) => {
-  const result = await authService.forgotPassword(req.body)
-  const data = result.debugOtp ? { debugOtp: result.debugOtp } : null
-  sendSuccess(res, { message: MESSAGES.AUTH.FORGOT_PASSWORD_SENT, data })
+  await authService.forgotPassword(req.body)
+  sendSuccess(res, { message: MESSAGES.AUTH.FORGOT_PASSWORD_SENT })
 })
 
 export const resetPassword = asyncHandler(async (req, res) => {
@@ -104,8 +99,7 @@ export const sendVerificationEmail = asyncHandler(async (req, res) => {
   if (result.alreadyVerified) {
     return sendSuccess(res, { message: MESSAGES.AUTH.EMAIL_ALREADY_VERIFIED })
   }
-  const data = result.debugOtp ? { debugOtp: result.debugOtp } : null
-  return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT, data })
+  return sendSuccess(res, { message: MESSAGES.AUTH.VERIFICATION_EMAIL_SENT })
 })
 
 export const adminGetAllKyc = asyncHandler(async (req, res) => {
