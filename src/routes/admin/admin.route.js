@@ -33,6 +33,7 @@ import {
   adminCategoryUpdateSchema,
   adminOrderActionSchema,
   adminConfirmOrderDeliverySchema,
+  adminRejectOrderDeliveryReportSchema,
   adminOrdersQuerySchema,
   adminOrderStatusSchema,
   adminPaymentsQuerySchema,
@@ -990,6 +991,15 @@ router.patch(
   validateObjectId('orderId'),
   validate(adminConfirmOrderDeliverySchema),
   orderController.confirmAdminOrderDelivery
+)
+
+router.patch(
+  '/orders/:orderId/delivery-report/reject',
+  authenticate,
+  requireAdmin,
+  validateObjectId('orderId'),
+  validate(adminRejectOrderDeliveryReportSchema),
+  orderController.rejectAdminOrderDeliveryReport
 )
 
 router.patch(

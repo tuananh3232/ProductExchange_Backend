@@ -11,6 +11,8 @@ export const findById = (id) =>
       populate: { path: 'owner', select: 'name email avatar' },
     })
     .populate('seller', 'name email avatar')
+    .populate('deliveryReport.submittedBy', 'name email avatar')
+    .populate('deliveryReport.reviewedBy', 'name email avatar')
     .populate({
       path: 'product',
       select: 'title price stock status images owner ownerType shop seller',
@@ -33,6 +35,8 @@ export const findMany = ({ filter = {}, skip = 0, limit = 10, sortBy = 'createdA
       populate: { path: 'owner', select: 'name email avatar' },
     })
     .populate('seller', 'name email avatar')
+    .populate('deliveryReport.submittedBy', 'name email avatar')
+    .populate('deliveryReport.reviewedBy', 'name email avatar')
     .populate('product', 'title price status images')
     .sort({ [sortBy]: sortOrder })
     .skip(skip)
@@ -50,6 +54,8 @@ export const updateById = (id, data) =>
       populate: { path: 'owner', select: 'name email avatar' },
     })
     .populate('seller', 'name email avatar')
+    .populate('deliveryReport.submittedBy', 'name email avatar')
+    .populate('deliveryReport.reviewedBy', 'name email avatar')
     .populate({
       path: 'product',
       select: 'title price stock status images owner ownerType shop seller',

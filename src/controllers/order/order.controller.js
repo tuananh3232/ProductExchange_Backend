@@ -43,7 +43,12 @@ export const confirmOrder = asyncHandler(async (req, res) => {
 
 export const confirmOrderReceived = asyncHandler(async (req, res) => {
   const order = await orderService.confirmOrderReceived(req.params.id, req.user)
-  sendSuccess(res, { message: 'Đã xác nhận nhận hàng. Tiền shop sẽ được giải ngân sau 7 ngày.', data: { order } })
+  sendSuccess(res, { message: 'Đã xác nhận nhận hàng thành công.', data: { order } })
+})
+
+export const submitDeliveryReport = asyncHandler(async (req, res) => {
+  const order = await orderService.submitDeliveryReport(req.params.id, req.user, req.body, req.files || [])
+  sendSuccess(res, { message: 'Đã gửi bằng chứng giao hàng để quản trị viên kiểm tra', data: { order } })
 })
 
 export const cancelOrder = asyncHandler(async (req, res) => {
@@ -64,6 +69,11 @@ export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
 export const confirmAdminOrderDelivery = asyncHandler(async (req, res) => {
   const order = await orderService.confirmOrderReceivedByAdmin(req.params.orderId, req.user, req.body)
   sendSuccess(res, { message: 'Admin đã xác nhận đơn hàng hoàn tất', data: { order } })
+})
+
+export const rejectAdminOrderDeliveryReport = asyncHandler(async (req, res) => {
+  const order = await orderService.rejectOrderDeliveryReportByAdmin(req.params.orderId, req.user, req.body)
+  sendSuccess(res, { message: 'Đã yêu cầu shop bổ sung bằng chứng giao hàng', data: { order } })
 })
 
 export const cancelAdminOrder = asyncHandler(async (req, res) => {

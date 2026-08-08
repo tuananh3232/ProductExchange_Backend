@@ -459,7 +459,8 @@ export const creditWalletFromTopup = async (topup) => {
   const existing = await userWalletRepo.findTransactionByTopup(topupId)
   if (existing) return existing
 
-  return runMongoTransaction(async (session) => {
+  try {
+    return await runMongoTransaction(async (session) => {
     const options = session ? { session } : {}
     const walletBefore = await userWalletRepo.findByUser(userId, options)
   const balanceBefore = walletBefore?.balance || 0
@@ -488,7 +489,17 @@ export const creditWalletFromTopup = async (topup) => {
   })
 
     return transaction
-  })
+    })
+  } catch (error) {
+    // Webhook và callback PayOS có thể xác nhận cùng một lần nạp đồng thời.
+    // Nếu giao dịch idempotent đã được tạo, trả lại giao dịch đó thay vì báo lỗi trùng topup.
+    if (error?.code === 11000 && error?.keyPattern?.topup) {
+      const existing = await userWalletRepo.findTransactionByTopup(topupId)
+      if (existing) return existing
+    }
+
+    throw error
+  }
 }
 
 export const creditWalletByAdmin = async (userId, amount, userContext, note = '') => {

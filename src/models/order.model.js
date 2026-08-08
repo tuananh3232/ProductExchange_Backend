@@ -26,6 +26,57 @@ const orderHistorySchema = new mongoose.Schema(
   { _id: false }
 )
 
+const deliveryEvidenceImageSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    publicId: { type: String, required: true },
+  },
+  { _id: false }
+)
+
+const deliveryReportSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ['submitted', 'approved', 'rejected'],
+      default: 'submitted',
+    },
+    submittedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    note: {
+      type: String,
+      default: '',
+      maxlength: [1000, 'Ghi chú báo cáo giao hàng không được vượt quá 1.000 ký tự'],
+    },
+    evidenceImages: {
+      type: [deliveryEvidenceImageSchema],
+      validate: [(images) => images.length > 0, 'Báo cáo giao hàng cần có ít nhất một ảnh bằng chứng'],
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+    adminNote: {
+      type: String,
+      default: '',
+      maxlength: [1000, 'Ghi chú của quản trị viên không được vượt quá 1.000 ký tự'],
+    },
+  },
+  { _id: false }
+)
+
 const orderSchema = new mongoose.Schema(
   {
     buyer: {
@@ -169,6 +220,10 @@ const orderSchema = new mongoose.Schema(
     history: {
       type: [orderHistorySchema],
       default: [],
+    },
+    deliveryReport: {
+      type: deliveryReportSchema,
+      default: null,
     },
     isActive: {
       type: Boolean,

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import * as orderController from '../../controllers/order/order.controller.js'
 import * as optionsController from '../../controllers/options/options.controller.js'
 import { authenticate } from '../../middlewares/auth.middleware.js'
+import { uploadDeliveryEvidenceImages } from '../../middlewares/upload.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
 import { orderQuerySchema } from '../../validations/admin/admin.validation.js'
@@ -9,6 +10,7 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 import {
   cancelOrderSchema,
   createOrderSchema,
+  submitDeliveryReportSchema,
   updateOrderStatusSchema,
 } from '../../validations/order/order.validation.js'
 const router = Router()
@@ -21,6 +23,13 @@ router.get('/', validate(orderQuerySchema, 'query', HTTP_STATUS.BAD_REQUEST), or
 router.get('/:id', validateObjectId('id'), orderController.getOrderById)
 router.patch('/:id/confirm', validateObjectId('id'), orderController.confirmOrder)
 router.patch('/:id/confirm-received', validateObjectId('id'), orderController.confirmOrderReceived)
+router.post(
+  '/:id/delivery-report',
+  validateObjectId('id'),
+  uploadDeliveryEvidenceImages,
+  validate(submitDeliveryReportSchema),
+  orderController.submitDeliveryReport
+)
 router.patch('/:id/cancel', validateObjectId('id'), validate(cancelOrderSchema), orderController.cancelOrder)
 router.patch(
   '/:id/status',
