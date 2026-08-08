@@ -8,6 +8,8 @@ import { PAYMENT_STATUS, ORDER_STATUS } from '../../src/constants/status.constan
 import Order from '../../src/models/order.model.js'
 import UserWallet from '../../src/models/user-wallet.model.js'
 import UserWalletTransaction from '../../src/models/user-wallet-transaction.model.js'
+import LedgerTransaction from '../../src/models/ledger-transaction.model.js'
+import FeeSnapshot from '../../src/models/fee-snapshot.model.js'
 
 const api = env.apiPrefix
 
@@ -202,6 +204,22 @@ describe('POST /user-wallet/me/pay-orders — success', () => {
     for (const tx of txs) {
       expect(tx.amount).toBe(80000)
     }
+  })
+
+  it('creates a settlement and fee snapshot for every paid order', async () => {
+    const { user, token, orders } = await makeOrders(2, 80000)
+    await fundWallet(user._id, 300000)
+    const orderIds = orders.map((order) => order._id)
+
+    const response = await postPayOrders(token, orderIds.map(String))
+    const [settlements, snapshots] = await Promise.all([
+      LedgerTransaction.find({ order: { $in: orderIds } }),
+      FeeSnapshot.find({ sourceType: 'order', sourceId: { $in: orderIds } }),
+    ])
+
+    expect(response.status).toBe(200)
+    expect(settlements).toHaveLength(2)
+    expect(snapshots).toHaveLength(2)
   })
 
   it('wallet balance does not go below zero', async () => {

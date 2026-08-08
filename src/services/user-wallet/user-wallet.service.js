@@ -67,10 +67,10 @@ export const getMyActivity = async (userId, pagination) => {
 
 // ─── Pay order with wallet ───────────────────────────────────────────────────
 
-export const payOrderWithWallet = async (orderId, userContext) => {
-  const userId = userContext._id
-
-  const order = await Order.findById(orderId).populate('buyer', '_id')
+const assertWalletPayableOrder = async (orderId, userId, session = null) => {
+  const query = Order.findById(orderId).populate('buyer', '_id')
+  if (session) query.session(session)
+  const order = await query
   if (!order || !order.isActive) {
     throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
   }
@@ -79,50 +79,56 @@ export const payOrderWithWallet = async (orderId, userContext) => {
   if (buyerId !== userId.toString()) {
     throw new AppError('Bạn không có quyền thanh toán đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
-
   if (order.status !== ORDER_STATUS.PENDING) {
     throw new AppError('Chỉ có thể thanh toán đơn hàng ở trạng thái chờ xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ORDER_NOT_PAYABLE)
   }
-
   if (order.paymentStatus === PAYMENT_STATUS.PAID) {
     throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)
   }
-
   if (!WALLET_PAYABLE_STATUSES.includes(order.paymentStatus)) {
     throw new AppError('Đơn hàng đang được xử lý bởi phương thức thanh toán khác', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ALREADY_PAID_BY_OTHER)
   }
 
-  const amount = Math.round(Number(order.totalAmount))
+  return order
+}
 
-  // Atomic deduct — bảo vệ race condition, trả về null nếu không đủ số dư
-  const wallet = await userWalletRepo.findByUser(userId)
-  const balanceBefore = wallet?.balance || 0
+export const payOrderWithWallet = async (orderId, userContext) => {
+  const userId = userContext._id
+  const result = await runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const order = await assertWalletPayableOrder(orderId, userId, session)
+    const amount = Math.round(Number(order.totalAmount))
+    const wallet = await userWalletRepo.findByUser(userId, options)
+    const balanceBefore = wallet?.balance || 0
+    const updatedWallet = await userWalletRepo.deductForOrder(userId, amount, options)
+    if (!updatedWallet) {
+      throw new AppError('Số dư ví không đủ để thanh toán đơn hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
+    }
 
-  const updatedWallet = await userWalletRepo.deductForOrder(userId, amount)
-  if (!updatedWallet) {
-    throw new AppError('Số dư ví không đủ để thanh toán đơn hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
-  }
+    const paidAt = new Date()
+    const paidOrder = await Order.findOneAndUpdate(
+      { _id: orderId, status: ORDER_STATUS.PENDING, paymentStatus: { $in: WALLET_PAYABLE_STATUSES } },
+      { paymentStatus: PAYMENT_STATUS.PAID, paymentMethod: 'wallet', paymentProvider: 'wallet', paymentRef: `WALLET_${userId}_${Date.now()}`, paidAt },
+      { returnDocument: 'after', ...options }
+    )
+    if (!paidOrder) {
+      throw new AppError('Trạng thái đơn hàng đã thay đổi, vui lòng thử lại', HTTP_STATUS.CONFLICT, ERRORS.USER_WALLET.ORDER_NOT_PAYABLE)
+    }
 
-  const paidAt = new Date()
+    const transaction = await userWalletRepo.createTransaction({
+      wallet: updatedWallet._id,
+      user: userId,
+      order: orderId,
+      type: USER_WALLET_TRANSACTION_TYPE.PAYMENT,
+      amount,
+      balanceBefore,
+      balanceAfter: updatedWallet.balance,
+      description: `Thanh toán đơn hàng #${orderId.toString().slice(-8)}`,
+      metadata: { orderId },
+    }, options)
 
-  await Order.findByIdAndUpdate(orderId, {
-    paymentStatus: PAYMENT_STATUS.PAID,
-    paymentMethod: 'wallet',
-    paymentProvider: 'wallet',
-    paymentRef: `WALLET_${userId}_${Date.now()}`,
-    paidAt,
-  })
-
-  const tx = await userWalletRepo.createTransaction({
-    wallet: updatedWallet._id,
-    user: userId,
-    order: orderId,
-    type: USER_WALLET_TRANSACTION_TYPE.PAYMENT,
-    amount,
-    balanceBefore,
-    balanceAfter: updatedWallet.balance,
-    description: `Thanh toán đơn hàng #${orderId.toString().slice(-8)}`,
-    metadata: { orderId },
+    await ledgerService.settlePaidOrder(orderId, { source: 'user_wallet', session })
+    return { wallet: updatedWallet, transaction }
   })
 
   await notifySafely({
@@ -133,12 +139,10 @@ export const payOrderWithWallet = async (orderId, userContext) => {
     targetType: NOTIFICATION_TARGET_TYPES.ORDER,
     targetId: orderId,
     actionUrl: `/orders/${orderId}`,
-    data: { orderId, transactionId: tx._id },
+    data: { orderId, transactionId: result.transaction._id },
   })
 
-  await ledgerService.settlePaidOrder(orderId, { source: 'user_wallet' })
-
-  return { wallet: updatedWallet, transaction: tx }
+  return result
 }
 
 // ─── Pay multiple orders with wallet ─────────────────────────────────────────
@@ -147,79 +151,73 @@ export const payOrdersWithWallet = async (orderIds, userContext) => {
   const userId = userContext._id
   const uniqueIds = [...new Set(orderIds.map(String))]
 
-  const orders = await Order.find({ _id: { $in: uniqueIds }, isActive: true })
-  if (orders.length !== uniqueIds.length) {
-    throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
-  }
-
-  for (const order of orders) {
-    const buyerId = order.buyer?._id?.toString() || order.buyer?.toString()
-    if (buyerId !== userId.toString()) {
-      throw new AppError('Bạn không có quyền thanh toán đơn hàng này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  const result = await runMongoTransaction(async (session) => {
+    const options = session ? { session } : {}
+    const ordersQuery = Order.find({ _id: { $in: uniqueIds }, isActive: true })
+    if (session) ordersQuery.session(session)
+    const orders = await ordersQuery
+    if (orders.length !== uniqueIds.length) {
+      throw new AppError('Không tìm thấy đơn hàng', HTTP_STATUS.NOT_FOUND, ERRORS.ORDER.NOT_FOUND)
     }
-    if (order.status !== ORDER_STATUS.PENDING) {
-      throw new AppError('Chỉ có thể thanh toán đơn hàng ở trạng thái chờ xác nhận', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ORDER_NOT_PAYABLE)
+    for (const order of orders) {
+      await assertWalletPayableOrder(order._id, userId, session)
     }
-    if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-      throw new AppError('Đơn hàng đã được thanh toán', HTTP_STATUS.BAD_REQUEST, ERRORS.PAYMENT.ALREADY_PAID)
+
+    const totalAmount = Math.round(orders.reduce((sum, order) => sum + Number(order.totalAmount), 0))
+    const wallet = await userWalletRepo.findByUser(userId, options)
+    const balanceBefore = wallet?.balance || 0
+    const updatedWallet = await userWalletRepo.deductForOrder(userId, totalAmount, options)
+    if (!updatedWallet) {
+      throw new AppError('Số dư ví không đủ để thanh toán các đơn hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
     }
-    if (!WALLET_PAYABLE_STATUSES.includes(order.paymentStatus)) {
-      throw new AppError('Đơn hàng đang được xử lý bởi phương thức thanh toán khác', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.ALREADY_PAID_BY_OTHER)
+
+    const paidAt = new Date()
+    const paymentRef = `WALLET_${userId}_${Date.now()}`
+    const paidOrders = await Order.updateMany(
+      { _id: { $in: uniqueIds }, status: ORDER_STATUS.PENDING, paymentStatus: { $in: WALLET_PAYABLE_STATUSES } },
+      { paymentStatus: PAYMENT_STATUS.PAID, paymentMethod: 'wallet', paymentProvider: 'wallet', paymentRef, paidAt },
+      options
+    )
+    if (paidOrders.modifiedCount !== orders.length) {
+      throw new AppError('Trạng thái đơn hàng đã thay đổi, vui lòng thử lại', HTTP_STATUS.CONFLICT, ERRORS.USER_WALLET.ORDER_NOT_PAYABLE)
     }
-  }
 
-  const totalAmount = Math.round(orders.reduce((sum, o) => sum + Number(o.totalAmount), 0))
+    let runningBalance = balanceBefore
+    const transactions = []
+    for (const order of orders) {
+      const amount = Math.round(Number(order.totalAmount))
+      const balanceAfter = runningBalance - amount
+      const transaction = await userWalletRepo.createTransaction({
+        wallet: updatedWallet._id,
+        user: userId,
+        order: order._id,
+        type: USER_WALLET_TRANSACTION_TYPE.PAYMENT,
+        amount,
+        balanceBefore: runningBalance,
+        balanceAfter,
+        description: `Thanh toán đơn hàng #${order._id.toString().slice(-8)}`,
+        metadata: { orderId: order._id },
+      }, options)
+      transactions.push(transaction)
+      runningBalance = balanceAfter
+      await ledgerService.settlePaidOrder(order._id, { source: 'user_wallet_batch', session })
+    }
 
-  const wallet = await userWalletRepo.findByUser(userId)
-  const balanceBefore = wallet?.balance || 0
-
-  const updatedWallet = await userWalletRepo.deductForOrder(userId, totalAmount)
-  if (!updatedWallet) {
-    throw new AppError('Số dư ví không đủ để thanh toán các đơn hàng', HTTP_STATUS.BAD_REQUEST, ERRORS.USER_WALLET.INSUFFICIENT_BALANCE)
-  }
-
-  const paidAt = new Date()
-  const paymentRef = `WALLET_${userId}_${Date.now()}`
-
-  await Order.updateMany(
-    { _id: { $in: uniqueIds } },
-    { paymentStatus: PAYMENT_STATUS.PAID, paymentMethod: 'wallet', paymentProvider: 'wallet', paymentRef, paidAt }
-  )
-
-  let runningBalance = balanceBefore
-  const transactions = []
-  for (const order of orders) {
-    const amount = Math.round(Number(order.totalAmount))
-    const balanceAfter = runningBalance - amount
-    const tx = await userWalletRepo.createTransaction({
-      wallet: updatedWallet._id,
-      user: userId,
-      order: order._id,
-      type: USER_WALLET_TRANSACTION_TYPE.PAYMENT,
-      amount,
-      balanceBefore: runningBalance,
-      balanceAfter,
-      description: `Thanh toán đơn hàng #${order._id.toString().slice(-8)}`,
-      metadata: { orderId: order._id },
-    })
-    transactions.push(tx)
-    runningBalance = balanceAfter
-  }
+    return { wallet: updatedWallet, transactions, orderCount: orders.length, totalAmount, firstOrderId: orders[0]._id }
+  })
 
   await notifySafely({
     recipient: userId,
     type: NOTIFICATION_TYPES.PAYMENT_SUCCESS,
     title: 'Thanh toán thành công',
-    message: `${orders.length} đơn hàng đã được thanh toán bằng ví`,
+    message: `${result.orderCount} đơn hàng đã được thanh toán bằng ví`,
     targetType: NOTIFICATION_TARGET_TYPES.ORDER,
-    targetId: orders[0]._id,
+    targetId: result.firstOrderId,
     actionUrl: '/orders',
-    data: { orderIds: uniqueIds, totalAmount },
+    data: { orderIds: uniqueIds, totalAmount: result.totalAmount },
   })
 
-  await Promise.all(uniqueIds.map((id) => ledgerService.settlePaidOrder(id, { source: 'user_wallet_batch' })))
-
-  return { wallet: updatedWallet, transactions, orderCount: orders.length, totalAmount }
+  return result
 }
 
 // ─── Refund to wallet (called internally on order cancel) ────────────────────

@@ -30,11 +30,11 @@ export const creditExchangeSettlement = (userId, amount, options = {}) =>
     { returnDocument: 'after', upsert: true, ...options }
   )
 
-export const deductForOrder = (userId, amount) =>
+export const deductForOrder = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId, balance: { $gte: amount } },
     { $inc: { balance: -amount, totalSpent: amount } },
-    { returnDocument: 'after' }
+    { returnDocument: 'after', ...options }
   )
 
 export const deductForExchange = (userId, amount, options = {}) =>
@@ -44,11 +44,11 @@ export const deductForExchange = (userId, amount, options = {}) =>
     { returnDocument: 'after', ...options }
   )
 
-export const refundFromOrder = (userId, amount) =>
+export const refundFromOrder = (userId, amount, options = {}) =>
   UserWallet.findOneAndUpdate(
     { user: userId },
     { $inc: { balance: amount, totalSpent: -amount } },
-    { returnDocument: 'after', upsert: true }
+    { returnDocument: 'after', upsert: true, ...options }
   )
 
 export const refundFromExchange = (userId, amount, options = {}) =>
