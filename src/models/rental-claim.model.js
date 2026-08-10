@@ -1,6 +1,14 @@
 import mongoose from 'mongoose'
 import { RENTAL_CLAIM_STATUS_ENUM } from '../constants/status.constant.js'
 
+const evidenceImageSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    publicId: { type: String, default: '' },
+  },
+  { _id: false }
+)
+
 const rentalClaimSchema = new mongoose.Schema(
   {
     booking: {
@@ -49,6 +57,25 @@ const rentalClaimSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 2000,
+    },
+    claimType: {
+      type: String,
+      enum: ['deposit_damage', 'delivery_failure'],
+      default: 'deposit_damage',
+      index: true,
+    },
+    claimantEvidenceImages: {
+      type: [evidenceImageSchema],
+      default: [],
+    },
+    ownerEvidenceImages: {
+      type: [evidenceImageSchema],
+      default: [],
+    },
+    ownerEvidenceNote: {
+      type: String,
+      default: '',
       maxlength: 2000,
     },
     requestedAmount: {

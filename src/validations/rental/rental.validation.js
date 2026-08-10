@@ -77,7 +77,11 @@ export const rentalInspectionActionSchema = Joi.object({
 
 export const createRentalClaimSchema = Joi.object({
   reason: Joi.string().trim().min(1).max(2000).required(),
-  requestedAmount: Joi.number().min(0).required(),
+  requestedAmount: Joi.number().min(0).optional(),
+})
+
+export const submitRentalClaimEvidenceSchema = Joi.object({
+  note: Joi.string().trim().max(2000).allow('').optional(),
 })
 
 export const adminRentalBookingsQuerySchema = Joi.object({

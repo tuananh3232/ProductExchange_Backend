@@ -8,6 +8,7 @@ import RentalClaim from '../../models/rental-claim.model.js'
 import RentalInspection from '../../models/rental-inspection.model.js'
 import RentalListing from '../../models/rental-listing.model.js'
 import AppError from '../../utils/app-error.util.js'
+import { uploadBuffer } from '../../utils/cloudinary.util.js'
 import ERRORS from '../../constants/error.constant.js'
 import HTTP_STATUS from '../../constants/http-status.constant.js'
 import { buildPaginationMeta } from '../../utils/pagination.util.js'
@@ -33,10 +34,25 @@ const ACTIVE_BOOKING_STATUSES = [
   RENTAL_BOOKING_STATUS.DISPUTED,
 ]
 
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
+
+const getVietnamDateKey = (value) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value))
+  const values = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+const hasRentalStartDateArrived = (startDate) => getVietnamDateKey(startDate) <= getVietnamDateKey(new Date())
+
 const RENTAL_LISTING_POPULATE = [
   { path: 'product', populate: [{ path: 'category', select: 'name slug' }, { path: 'seller', select: 'name email avatar kyc' }, { path: 'shop', select: 'name slug owner' }] },
   { path: 'seller', select: 'name email avatar' },
-  { path: 'shop', select: 'name slug owner' },
+  { path: 'shop', select: 'name slug owner staff' },
 ]
 
 const RENTAL_BOOKING_POPULATE = [
@@ -44,7 +60,7 @@ const RENTAL_BOOKING_POPULATE = [
   { path: 'product', select: 'title price status images ownerType seller shop category' },
   { path: 'renter', select: 'name email avatar' },
   { path: 'seller', select: 'name email avatar' },
-  { path: 'shop', select: 'name slug owner' },
+  { path: 'shop', select: 'name slug owner staff' },
 ]
 
 const RENTAL_CLAIM_POPULATE = [
@@ -207,7 +223,12 @@ const assertBookingParticipantAccess = (booking, userId) => {
 
 const isBookingOwnerActor = (booking, userId) => {
   if (booking.ownerType === 'SHOP') {
-    return String(booking.shop?.owner?._id || booking.shop?.owner || '') === String(userId)
+    const isShopOwner = String(booking.shop?.owner?._id || booking.shop?.owner || '') === String(userId)
+    const isShopStaff = (booking.shop?.staff || []).some(
+      (staffId) => String(staffId?._id || staffId || '') === String(userId)
+    )
+
+    return isShopOwner || isShopStaff
   }
 
   return String(booking.seller?._id || booking.seller || '') === String(userId)
@@ -680,11 +701,7 @@ export const handoverRentalBooking = async (bookingId, payload, user) => {
     throw new AppError('Booking chưa sẵn sàng bàn giao', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
   }
 
-  const ownerId =
-    booking.ownerType === 'SHOP'
-      ? booking.shop?.owner?._id || booking.shop?.owner
-      : booking.seller?._id || booking.seller
-  if (String(ownerId) !== String(user._id)) {
+  if (!isBookingOwnerActor(booking, user._id)) {
     throw new AppError('Chỉ bên cho thuê mới được xác nhận bàn giao', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
@@ -987,15 +1004,24 @@ export const confirmRentalReturn = async (bookingId, payload, user) => {
   return getBookingByIdOrThrow(booking._id)
 }
 
-export const createRentalClaim = async (bookingId, payload, user) => {
-  const booking = await getBookingByIdOrThrow(bookingId)
+const uploadRentalClaimEvidence = async (files = []) =>
+  Promise.all(files.map(async (file) => {
+    const image = await uploadBuffer(file.buffer, 'anh-decor/rentals/claims')
+    return { url: image.url, publicId: image.publicId }
+  }))
 
-  if (!isBookingOwnerActor(booking, user._id)) {
-    throw new AppError('Chỉ bên cho thuê mới được mở khiếu nại thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+export const createRentalClaim = async (bookingId, payload, files, user) => {
+  if (!user) {
+    user = files
+    files = []
   }
 
-  if (booking.status !== RENTAL_BOOKING_STATUS.RETURN_PENDING_CONFIRMATION) {
-    throw new AppError('Chỉ được gửi yêu cầu bồi thường khi đơn thuê đang chờ xác nhận trả', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  const booking = await getBookingByIdOrThrow(bookingId)
+  const isRenter = String(booking.renter?._id || booking.renter) === String(user._id)
+  const isOwner = isBookingOwnerActor(booking, user._id)
+
+  if (!isRenter && !isOwner) {
+    throw new AppError('Bạn không có quyền gửi khiếu nại cho đơn thuê này', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
   }
 
   const existingClaim = await RentalClaim.findOne({
@@ -1008,6 +1034,48 @@ export const createRentalClaim = async (bookingId, payload, user) => {
     return getClaimByIdOrThrow(existingClaim._id)
   }
 
+  if (isRenter) {
+    if (booking.status !== RENTAL_BOOKING_STATUS.IN_RENTAL || !hasRentalStartDateArrived(booking.startDate)) {
+      throw new AppError('Chỉ có thể báo cáo chưa nhận hàng khi đã đến ngày thuê và shop đã xác nhận bàn giao', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+    }
+
+    if (!files?.length) {
+      throw new AppError('Vui lòng gửi ít nhất một ảnh bằng chứng chưa nhận được sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+    }
+
+    const totalHeldAmount = Number(booking.rentAmount || 0) + Number(booking.depositAmount || 0)
+    const claimantEvidenceImages = await uploadRentalClaimEvidence(files)
+    const claim = await RentalClaim.create({
+      booking: booking._id,
+      listing: booking.listing._id || booking.listing,
+      claimant: user._id,
+      renter: booking.renter._id || booking.renter,
+      ownerType: booking.ownerType,
+      seller: booking.seller?._id || booking.seller || null,
+      shop: booking.shop?._id || booking.shop || null,
+      reason: payload.reason,
+      claimType: 'delivery_failure',
+      requestedAmount: totalHeldAmount,
+      claimantEvidenceImages,
+      status: RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW,
+    })
+
+    booking.status = RENTAL_BOOKING_STATUS.DISPUTED
+    booking.disputedAt = new Date()
+    appendTimeline(booking, RENTAL_BOOKING_STATUS.DISPUTED, user._id, `Khách báo chưa nhận được sản phẩm: ${payload.reason}`)
+    await booking.save()
+
+    return getAdminRentalClaimById(claim._id)
+  }
+
+  if (!isOwner) {
+    throw new AppError('Chỉ bên cho thuê mới được mở khiếu nại thuê', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if (booking.status !== RENTAL_BOOKING_STATUS.RETURN_PENDING_CONFIRMATION) {
+    throw new AppError('Chỉ được gửi yêu cầu bồi thường khi đơn thuê đang chờ xác nhận trả', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
+
   const claim = await RentalClaim.create({
     booking: booking._id,
     listing: booking.listing._id || booking.listing,
@@ -1017,7 +1085,8 @@ export const createRentalClaim = async (bookingId, payload, user) => {
     seller: booking.seller?._id || booking.seller || null,
     shop: booking.shop?._id || booking.shop || null,
     reason: payload.reason,
-    requestedAmount: Math.min(payload.requestedAmount, booking.depositAmount),
+    claimType: 'deposit_damage',
+    requestedAmount: Math.min(payload.requestedAmount ?? 0, booking.depositAmount),
     status: RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW,
   })
 
@@ -1025,6 +1094,40 @@ export const createRentalClaim = async (bookingId, payload, user) => {
   booking.disputedAt = new Date()
   appendTimeline(booking, RENTAL_BOOKING_STATUS.DISPUTED, user._id, payload.reason)
   await booking.save()
+
+  return getAdminRentalClaimById(claim._id)
+}
+
+export const submitRentalClaimEvidence = async (bookingId, payload, files, user) => {
+  const booking = await getBookingByIdOrThrow(bookingId)
+
+  if (!isBookingOwnerActor(booking, user._id)) {
+    throw new AppError('Chỉ bên cho thuê mới được gửi bằng chứng giao sản phẩm', HTTP_STATUS.FORBIDDEN, ERRORS.AUTH.FORBIDDEN)
+  }
+
+  if (booking.status !== RENTAL_BOOKING_STATUS.DISPUTED) {
+    throw new AppError('Đơn thuê chưa có báo cáo cần shop phản hồi', HTTP_STATUS.BAD_REQUEST, ERRORS.RENTAL.INVALID_STATUS_TRANSITION)
+  }
+
+  if (!files?.length) {
+    throw new AppError('Vui lòng gửi ít nhất một ảnh bằng chứng giao sản phẩm', HTTP_STATUS.BAD_REQUEST, ERRORS.VALIDATION.INVALID_FORMAT)
+  }
+
+  const claim = await RentalClaim.findOne({
+    booking: booking._id,
+    claimType: 'delivery_failure',
+    isActive: true,
+    status: { $in: [RENTAL_CLAIM_STATUS.OPEN, RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW, RENTAL_CLAIM_STATUS.WAITING_RENTER_RESPONSE] },
+  })
+
+  if (!claim) {
+    throw new AppError('Không tìm thấy báo cáo giao hàng đang chờ xử lý', HTTP_STATUS.NOT_FOUND, ERRORS.RENTAL.CLAIM_NOT_FOUND)
+  }
+
+  claim.ownerEvidenceImages = await uploadRentalClaimEvidence(files)
+  claim.ownerEvidenceNote = payload.note || ''
+  claim.status = RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW
+  await claim.save()
 
   return getAdminRentalClaimById(claim._id)
 }
@@ -1064,6 +1167,127 @@ export const listAdminRentalClaims = async (query, { page, limit, skip, sortBy, 
 
 export const getAdminRentalClaimById = async (claimId) => withRentalRiskSummary(await getClaimByIdIncludingInactiveOrThrow(claimId))
 
+const resolveDeliveryFailureClaim = async (claim, booking, payload, adminUser) => {
+  const totalHeldAmount = Number(booking.rentAmount || 0) + Number(booking.depositAmount || 0)
+  const approvedRefundAmount = Math.max(0, Math.min(payload.approvedAmount ?? 0, totalHeldAmount))
+  const ownerSettlementAmount = Math.max(0, totalHeldAmount - approvedRefundAmount)
+  const renterId = booking.renter._id || booking.renter
+  const ownerId = booking.ownerType === 'SHOP' ? booking.shop?.owner?._id || booking.shop?.owner : booking.seller?._id || booking.seller
+
+  claim.approvedAmount = approvedRefundAmount
+  claim.resolutionNote = payload.note || ''
+  claim.reviewedByAdmin = adminUser._id
+  claim.reviewedAt = new Date()
+  claim.status = approvedRefundAmount <= 0 ? RENTAL_CLAIM_STATUS.REJECTED : approvedRefundAmount >= totalHeldAmount ? RENTAL_CLAIM_STATUS.APPROVED : RENTAL_CLAIM_STATUS.PARTIALLY_APPROVED
+  claim.closedAt = new Date()
+  claim.isActive = false
+  await claim.save()
+
+  const releaseDocs = await LedgerTransaction.create([{
+    transactionType: LEDGER_TRANSACTION_TYPE.RENTAL_CLAIM_SETTLEMENT,
+    referenceType: LEDGER_REFERENCE_TYPE.RENTAL_CLAIM,
+    referenceId: claim._id,
+    grossAmount: totalHeldAmount,
+    platformFee: 0,
+    netSettlementAmount: ownerSettlementAmount,
+    settlementStatus: 'settled',
+    source: 'admin_rental_delivery_claim_resolution',
+    description: `Xử lý báo cáo chưa nhận hàng cho đơn thuê ${booking._id}`,
+    metadata: { rentalBookingId: booking._id, approvedRefundAmount, ownerSettlementAmount },
+  }])
+
+  const transaction = releaseDocs[0]
+  const entries = []
+
+  if (approvedRefundAmount > 0) {
+    const walletBefore = await userWalletRepo.findByUser(renterId)
+    const balanceBefore = walletBefore?.balance || 0
+    const renterWallet = await userWalletRepo.refundFromExchange(renterId, approvedRefundAmount)
+    await userWalletRepo.createTransaction({
+      wallet: renterWallet._id,
+      user: renterId,
+      type: USER_WALLET_TRANSACTION_TYPE.RENTAL_UNUSED_REFUND,
+      amount: approvedRefundAmount,
+      balanceBefore,
+      balanceAfter: renterWallet.balance,
+      description: `Hoàn tiền đơn thuê ${booking._id} sau khi xử lý báo cáo giao hàng`,
+      metadata: { rentalBookingId: booking._id, rentalClaimId: claim._id },
+    })
+    entries.push({
+      ledgerTransaction: transaction._id,
+      walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+      direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+      amount: approvedRefundAmount,
+      balanceAfter: 0,
+      counterpartyType: 'rental_delivery_claim_renter_refund',
+      counterpartyId: renterId,
+      note: 'Hoàn tiền cho người thuê theo kết quả xử lý báo cáo giao hàng',
+      metadata: { rentalBookingId: booking._id, rentalClaimId: claim._id },
+    })
+  }
+
+  if (ownerSettlementAmount > 0) {
+    const walletBefore = await userWalletRepo.findByUser(ownerId)
+    const balanceBefore = walletBefore?.balance || 0
+    const ownerWallet = await userWalletRepo.creditExchangeSettlement(ownerId, ownerSettlementAmount)
+    await userWalletRepo.createTransaction({
+      wallet: ownerWallet._id,
+      user: ownerId,
+      type: USER_WALLET_TRANSACTION_TYPE.RENTAL_OWNER_SETTLEMENT,
+      amount: ownerSettlementAmount,
+      balanceBefore,
+      balanceAfter: ownerWallet.balance,
+      description: `Quyết toán đơn thuê ${booking._id} sau khi xử lý báo cáo giao hàng`,
+      metadata: { rentalBookingId: booking._id, rentalClaimId: claim._id },
+    })
+    entries.push({
+      ledgerTransaction: transaction._id,
+      walletKey: PLATFORM_WALLET_KEYS.CLEARING,
+      direction: LEDGER_ENTRY_DIRECTION.DEBIT,
+      amount: ownerSettlementAmount,
+      balanceAfter: 0,
+      counterpartyType: 'rental_delivery_claim_owner_settlement',
+      counterpartyId: ownerId,
+      note: 'Quyết toán phần còn lại cho bên cho thuê theo kết quả xử lý',
+      metadata: { rentalBookingId: booking._id, rentalClaimId: claim._id },
+    })
+  }
+
+  const clearingWallet = await PlatformWallet.findOne({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }).lean()
+  let runningBalance = clearingWallet?.balance || 0
+  for (const entry of entries) {
+    runningBalance -= entry.amount
+    entry.balanceAfter = runningBalance
+  }
+  if (entries.length) {
+    await LedgerEntry.insertMany(entries)
+    await PlatformWallet.findOneAndUpdate({ walletKey: PLATFORM_WALLET_KEYS.CLEARING }, { balance: runningBalance })
+  }
+
+  booking.unusedRentRefundAmount = approvedRefundAmount
+  booking.ownerSettlementAmount = ownerSettlementAmount
+  booking.depositReleasedAmount = 0
+  booking.claimDeductionAmount = 0
+  booking.status = RENTAL_BOOKING_STATUS.CANCELLED
+  booking.cancelledAt = new Date()
+  booking.completedAt = null
+  appendTimeline(booking, RENTAL_BOOKING_STATUS.CANCELLED, adminUser._id, payload.note || 'Đã đóng đơn thuê sau khi xử lý báo cáo chưa nhận hàng')
+  await booking.save()
+
+  await writeAuditLog({
+    adminId: adminUser._id,
+    action: 'rental_delivery_claim_resolve',
+    targetType: 'rental_claim',
+    targetId: claim._id,
+    previousStatus: String(RENTAL_CLAIM_STATUS.UNDER_ADMIN_REVIEW),
+    newStatus: claim.status,
+    adminNote: payload.note || '',
+    metadata: { rentalBookingId: booking._id, approvedRefundAmount, ownerSettlementAmount },
+  })
+
+  return getClaimByIdIncludingInactiveOrThrow(claim._id)
+}
+
 export const resolveAdminRentalClaim = async (claimId, payload, adminUser) => {
   const claim = await getClaimByIdIncludingInactiveOrThrow(claimId)
 
@@ -1076,6 +1300,10 @@ export const resolveAdminRentalClaim = async (claimId, payload, adminUser) => {
   }
 
   const booking = await getBookingByIdOrThrow(claim.booking._id || claim.booking)
+  if (claim.claimType === 'delivery_failure') {
+    return resolveDeliveryFailureClaim(claim, booking, payload, adminUser)
+  }
+
   const approvedAmount = Math.max(0, Math.min(payload.approvedAmount ?? 0, booking.depositAmount))
 
   if (approvedAmount > claim.requestedAmount) {
