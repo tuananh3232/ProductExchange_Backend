@@ -10,6 +10,7 @@ import { ORDER_STATUS, PAYMENT_STATUS } from '../../constants/status.constant.js
 import * as orderService from '../order/order.service.js'
 import * as paymentService from '../payment/payment.service.js'
 import * as userWalletService from '../user-wallet/user-wallet.service.js'
+import { PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 
 const mergeItems = (items) => {
   const quantities = new Map()
@@ -95,6 +96,16 @@ const assertProductCheckoutable = (product, quantity, userId) => {
   }
 }
 
+const getCartEligibilityReason = (product, quantity, userId) => {
+  const availabilityReason = getUnavailableReason(product, quantity)
+  if (availabilityReason) return availabilityReason
+  if ((product.transactionMode || PRODUCT_TRANSACTION_MODES.SELL) !== PRODUCT_TRANSACTION_MODES.SELL) return 'not_for_sale'
+  if (product.owner?.toString?.() === userId.toString()) return 'self_order'
+  if (product.ownerType === 'SHOP' && !product.shop) return 'shop_missing'
+  if (product.ownerType === 'SELLER' && !product.seller) return 'seller_missing'
+  return null
+}
+
 export const addCombo = async (userId, items) => {
   const mergedItems = mergeItems(items)
   const products = await Product.find({ _id: { $in: mergedItems.map((item) => item.productId) } })
@@ -104,7 +115,7 @@ export const addCombo = async (userId, items) => {
 
   const errors = mergedItems.flatMap(({ productId, quantity }) => {
     const product = productById.get(productId)
-    const reason = getUnavailableReason(product, quantity + (existingQuantities.get(productId) || 0))
+    const reason = getCartEligibilityReason(product, quantity + (existingQuantities.get(productId) || 0), userId)
     return reason ? [{ productId, reason }] : []
   })
   if (errors.length) return { errors }

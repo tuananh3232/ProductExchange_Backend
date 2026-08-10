@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import Product from '../../models/product.model.js'
+import Product, { PRODUCT_TRANSACTION_MODES } from '../../models/product.model.js'
 import { COMBO_TYPES, DECOR_ROLES } from '../../constants/combo.constant.js'
 import { createPrng } from '../../utils/seeded-random.util.js'
 
@@ -151,6 +151,7 @@ const buildBaseFilter = (criteria) => ({
   isActive: true,
   status: 'available',
   stock: { $gt: 0 },
+  transactionMode: { $in: [PRODUCT_TRANSACTION_MODES.SELL, null] },
   price: { $lte: criteria.budget },
   decorRole: { $in: DECOR_ROLES },
 })
@@ -224,6 +225,7 @@ const buildAlternativesBaseFilter = (query, excludeProductIds) => {
     isActive: true,
     status: 'available',
     stock: { $gt: 0 },
+    transactionMode: { $in: [PRODUCT_TRANSACTION_MODES.SELL, null] },
     decorRole: query.decorRole,
   }
 

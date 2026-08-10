@@ -7,9 +7,12 @@ import HTTP_STATUS from '../../constants/http-status.constant.js'
 export const addCombo = asyncHandler(async (req, res) => {
   const result = await cartService.addCombo(req.user._id, req.body.items)
   if (result.errors) {
+    const onlyNonPurchasableProducts = result.errors.every((error) => error.reason === 'not_for_sale')
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
       success: false,
-      message: MESSAGES.CART.SOME_PRODUCTS_UNAVAILABLE,
+      message: onlyNonPurchasableProducts
+        ? 'Sản phẩm cho thuê hoặc trao đổi không thể thêm vào giỏ mua'
+        : MESSAGES.CART.SOME_PRODUCTS_UNAVAILABLE,
       errors: result.errors,
     })
   }
