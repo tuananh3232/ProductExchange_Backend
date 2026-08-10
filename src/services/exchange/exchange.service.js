@@ -124,10 +124,12 @@ const getLastTimelineActorId = (exchangeOffer) => {
   return timeline[timeline.length - 1]?.updatedBy || null
 }
 
-const isParticipant = (exchangeOffer, userId) =>
-  [exchangeOffer.requesterSeller, exchangeOffer.receiverSeller].some((value) => String(value) === String(userId))
+const resolveEntityId = (value) => value?._id || value?.id || value
 
-const isRequester = (exchangeOffer, userId) => String(exchangeOffer.requesterSeller) === String(userId)
+const isParticipant = (exchangeOffer, userId) =>
+  [exchangeOffer.requesterSeller, exchangeOffer.receiverSeller].some((value) => String(resolveEntityId(value)) === String(userId))
+
+const isRequester = (exchangeOffer, userId) => String(resolveEntityId(exchangeOffer.requesterSeller)) === String(userId)
 const getExchangeOfferOrThrow = async (exchangeOfferId) => {
   const exchangeOffer = await ExchangeOffer.findById(exchangeOfferId)
 
@@ -696,7 +698,14 @@ export const markExchangeShipped = async (exchangeOfferId, userContext) => {
     throw new AppError('Giao dịch trao đổi chưa hoàn tất bước thanh toán tiền bù', HTTP_STATUS.BAD_REQUEST, ERRORS.EXCHANGE.PAYMENT_REQUIRED)
   }
 
-  if (isRequester(exchangeOffer, userContext._id)) {
+  const requesterIsCurrentUser = isRequester(exchangeOffer, userContext._id)
+  const alreadyShipped = requesterIsCurrentUser ? exchangeOffer.requesterShippedAt : exchangeOffer.receiverShippedAt
+
+  if (alreadyShipped) {
+    throw new AppError('Bạn đã xác nhận gửi hàng cho giao dịch này', HTTP_STATUS.CONFLICT, ERRORS.EXCHANGE.INVALID_STATUS_TRANSITION)
+  }
+
+  if (requesterIsCurrentUser) {
     exchangeOffer.requesterShippedAt = exchangeOffer.requesterShippedAt || new Date()
   } else {
     exchangeOffer.receiverShippedAt = exchangeOffer.receiverShippedAt || new Date()
@@ -709,7 +718,7 @@ export const markExchangeShipped = async (exchangeOfferId, userContext) => {
   appendTimeline(exchangeOffer, exchangeOffer.status, userContext._id, 'Đã xác nhận gửi hàng trao đổi')
   await exchangeOffer.save()
 
-  const recipient = isRequester(exchangeOffer, userContext._id) ? exchangeOffer.receiverSeller : exchangeOffer.requesterSeller
+  const recipient = requesterIsCurrentUser ? exchangeOffer.receiverSeller : exchangeOffer.requesterSeller
   await notifyExchange(recipient, NOTIFICATION_TYPES.EXCHANGE_SHIPPED, exchangeOffer, 'Đối tác đã xác nhận gửi hàng trao đổi', userContext._id)
 
   return getPopulatedExchangeOfferById(exchangeOffer._id)
