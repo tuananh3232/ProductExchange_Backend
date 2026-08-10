@@ -77,7 +77,7 @@ describe('cart, order, and payment integration', () => {
     expect(cart).toBeNull()
   })
 
-  it('rejects rental products in cart checkout and direct order creation', async () => {
+  it('does not allow rental products to be added to a purchase cart', async () => {
     const [{ token }, { user: seller }] = await Promise.all([loginMember(), loginSeller()])
     const rentalProduct = await createSampleProduct({
       owner: seller._id,
@@ -94,14 +94,8 @@ describe('cart, order, and payment integration', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ items: [{ productId: rentalProduct._id.toString(), quantity: 1 }] })
 
-    expect(addToCartResponse.status).toBe(200)
-
-    const checkoutResponse = await request(app)
-      .post(`${api}/cart/checkout`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ selectedProductIds: [rentalProduct._id.toString()] })
-
-    expect(checkoutResponse.status).toBe(400)
+    expect(addToCartResponse.status).toBe(400)
+    expect(addToCartResponse.body.errors[0].reason).toBe('not_for_sale')
 
     const directOrderResponse = await request(app)
       .post(`${api}/orders`)

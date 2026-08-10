@@ -112,6 +112,13 @@ describe('exchange integration', () => {
 
     const exchangeOfferId = createResponse.body.data.exchangeOffer._id
 
+    const receiverDetailResponse = await request(app)
+      .get(`${api}/exchanges/offers/${exchangeOfferId}`)
+      .set('Authorization', `Bearer ${receiverToken}`)
+
+    expect(receiverDetailResponse.status).toBe(200)
+    expect(receiverDetailResponse.body.data.exchangeOffer._id).toBe(exchangeOfferId)
+
     const acceptResponse = await request(app)
       .post(`${api}/exchanges/offers/${exchangeOfferId}/accept`)
       .set('Authorization', `Bearer ${receiverToken}`)
@@ -144,12 +151,26 @@ describe('exchange integration', () => {
     expect(holdEntries[0].direction).toBe(LEDGER_ENTRY_DIRECTION.CREDIT)
     expect(holdEntries[0].amount).toBe(320000)
 
-    await request(app)
+    const firstShipResponse = await request(app)
       .post(`${api}/exchanges/offers/${exchangeOfferId}/ship`)
       .set('Authorization', `Bearer ${requesterToken}`)
-    await request(app)
+
+    expect(firstShipResponse.status).toBe(200)
+    expect(firstShipResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.PAID)
+    expect(firstShipResponse.body.data.exchangeOffer.requesterShippedAt).toBeTruthy()
+
+    const duplicateShipResponse = await request(app)
+      .post(`${api}/exchanges/offers/${exchangeOfferId}/ship`)
+      .set('Authorization', `Bearer ${requesterToken}`)
+
+    expect(duplicateShipResponse.status).toBe(409)
+
+    const secondShipResponse = await request(app)
       .post(`${api}/exchanges/offers/${exchangeOfferId}/ship`)
       .set('Authorization', `Bearer ${receiverToken}`)
+
+    expect(secondShipResponse.status).toBe(200)
+    expect(secondShipResponse.body.data.exchangeOffer.status).toBe(EXCHANGE_STATUS.SHIPPED)
 
     const firstConfirmResponse = await request(app)
       .post(`${api}/exchanges/offers/${exchangeOfferId}/confirm-received`)
