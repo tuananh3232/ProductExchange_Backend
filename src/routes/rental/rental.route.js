@@ -2,11 +2,13 @@ import { Router } from 'express'
 import { authenticate } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
 import { validateObjectId } from '../../middlewares/object-id.middleware.js'
+import { uploadRentalClaimEvidenceImages } from '../../middlewares/upload.middleware.js'
 import * as rentalController from '../../controllers/rental/rental.controller.js'
 import {
   cancelRentalBookingSchema,
   createRentalBookingSchema,
   createRentalClaimSchema,
+  submitRentalClaimEvidenceSchema,
   createRentalListingSchema,
   rentalBookingsQuerySchema,
   rentalInspectionActionSchema,
@@ -93,8 +95,18 @@ router.post(
   '/bookings/:rentalBookingId/claims',
   authenticate,
   validateObjectId('rentalBookingId'),
+  uploadRentalClaimEvidenceImages,
   validate(createRentalClaimSchema),
   rentalController.createRentalClaim
+)
+
+router.post(
+  '/bookings/:rentalBookingId/claims/evidence',
+  authenticate,
+  validateObjectId('rentalBookingId'),
+  uploadRentalClaimEvidenceImages,
+  validate(submitRentalClaimEvidenceSchema),
+  rentalController.submitRentalClaimEvidence
 )
 
 export default router

@@ -127,11 +127,20 @@ export const confirmRentalReturn = asyncHandler(async (req, res) => {
 })
 
 export const createRentalClaim = asyncHandler(async (req, res) => {
-  const rentalClaim = await rentalService.createRentalClaim(req.params.rentalBookingId, req.body, req.user)
+  const rentalClaim = await rentalService.createRentalClaim(req.params.rentalBookingId, req.body, req.files || [], req.user)
 
   sendSuccess(res, {
     message: 'Gửi yêu cầu bồi thường thành công',
     statusCode: 201,
+    data: { rentalClaim },
+  })
+})
+
+export const submitRentalClaimEvidence = asyncHandler(async (req, res) => {
+  const rentalClaim = await rentalService.submitRentalClaimEvidence(req.params.rentalBookingId, req.body, req.files || [], req.user)
+
+  sendSuccess(res, {
+    message: 'Đã gửi bằng chứng giao sản phẩm để quản trị viên kiểm tra',
     data: { rentalClaim },
   })
 })
